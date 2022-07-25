@@ -4,7 +4,7 @@
 
 All sensitive parameters, such as rpc urls and deployer private keys are managed through `.env` file in this directory.
 
-Make sure to copy an `.env.example` and modify each required from it.
+Make sure to copy an `.env.example` and modify each required parameter from it.
 
 ## Configuration
 
@@ -23,14 +23,20 @@ source ./deploy/.env
 This command will simulate deployment of the token contract in the local fork.
 It will also check any post-deployment constraints specified in the script.
 ```shell
-forge script --fork-url $GC_URL --private-key $PRIVATE_KEY -vvv ./deploy/scripts/BobToken.s.sol:DeployBobToken
+forge script -vvv \
+  --fork-url $GC_RPC_URL \
+  --private-key $PRIVATE_KEY \
+  ./deploy/scripts/BobToken.s.sol:DeployBobToken
 ```
 If deployment simulation succeeded, you will see the total gas used, expected total gas payment.
 Detailed list of all simulated transactions can be found in the printed path at `./broadcast` directory.
 
 If everything looks good, you can re-run the same command with the `--broadcast` flag, this will eventually send transactions on-chain.
 ```shell
-forge script --fork-url $GC_URL --private-key $PRIVATE_KEY -vvv ./deploy/scripts/BobToken.s.sol:DeployBobToken --broadcast
+forge script -vvv --broadcast \
+  --fork-url $GC_RPC_URL \
+  --private-key $PRIVATE_KEY \
+  ./deploy/scripts/BobToken.s.sol:DeployBobToken
 ```
 
 You will see the deployment status, transaction hashes and their receipts in the `./broadcast` directory.
