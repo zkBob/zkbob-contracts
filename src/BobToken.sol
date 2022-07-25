@@ -7,11 +7,12 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./interfaces/IERC677.sol";
 import "./interfaces/IERC677Receiver.sol";
 import "./proxy/EIP1967Admin.sol";
+import "./Blacklistable.sol";
 
 /**
  * @title BobToken
  */
-contract BobToken is IERC677, ERC20, EIP1967Admin {
+contract BobToken is IERC677, ERC20, EIP1967Admin, Blacklistable {
     // EIP712 niceties
     bytes32 public immutable DOMAIN_SEPARATOR;
     bytes32 public constant PERMIT_TYPEHASH =
@@ -92,5 +93,21 @@ contract BobToken is IERC677, ERC20, EIP1967Admin {
         require(_holder == ECDSA.recover(digest, _v, _r, _s), "BOB: invalid signature");
 
         _approve(_holder, _spender, _value);
+    }
+
+    function _spendAllowance(address _owner, address _spender, uint256 _amount) internal override {
+        require(!blacklisted[_spender], "BOB: spender blacklisted");
+        super._spendAllowance(_owner, _spender, _amount);
+    }
+
+    function _approve(address _owner, address _spender, uint256 _amount) internal override {
+        require(!blacklisted[_owner], "BOB: owner blacklisted");
+        require(!blacklisted[_spender], "BOB: spender blacklisted");
+        super._approve(_owner, _spender, _amount);
+    }
+
+    function _beforeTokenTransfer(address _from, address _to, uint256 _amount) internal override {
+        require(!blacklisted[_from], "BOB: sender blacklisted");
+        require(!blacklisted[_to], "BOB: receiver blacklisted");
     }
 }

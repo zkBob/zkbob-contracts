@@ -114,4 +114,42 @@ contract BobTokenTest is Test, EIP2470Test {
         vm.expectRevert("BOB: invalid signature");
         bob.permit(user1, user2, 1 ether, expiry, v, r, s);
     }
+
+    function testBlacklist() public {
+        vm.prank(deployer);
+        bob.setMinter(address(this));
+        bob.mint(user1, 1 ether);
+
+        vm.prank(user1);
+        bob.approve(user2, 1 ether);
+        vm.prank(user2);
+        bob.approve(user1, 1 ether);
+        vm.prank(user1);
+        bob.transfer(user2, 0.1 ether);
+        vm.prank(user2);
+        bob.transferFrom(user1, user2, 0.1 ether);
+        vm.prank(user1);
+        bob.transferFrom(user2, user1, 0.1 ether);
+
+        vm.expectRevert("Blacklistable: caller is not the blacklister");
+        bob.blacklist(user1);
+
+        vm.prank(deployer);
+        bob.updateBlacklister(address(this));
+
+        bob.blacklist(user1);
+
+        vm.prank(user1);
+        vm.expectRevert("BOB: owner blacklisted");
+        bob.approve(user2, 1 ether);
+        vm.prank(user1);
+        vm.expectRevert("BOB: sender blacklisted");
+        bob.transfer(user2, 0.1 ether);
+        vm.prank(user2);
+        vm.expectRevert("BOB: owner blacklisted");
+        bob.transferFrom(user1, address(this), 0.1 ether);
+        vm.prank(user1);
+        vm.expectRevert("BOB: spender blacklisted");
+        bob.transferFrom(user2, address(this), 0.1 ether);
+    }
 }
