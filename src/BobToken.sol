@@ -13,8 +13,9 @@ import "./Blacklistable.sol";
  * @title BobToken
  */
 contract BobToken is IERC677, ERC20, EIP1967Admin, Blacklistable {
-    // EIP712 niceties
+    // EIP712 domain separator
     bytes32 public immutable DOMAIN_SEPARATOR;
+    // EIP2612 permit typehash
     bytes32 public constant PERMIT_TYPEHASH =
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
 
@@ -22,38 +23,66 @@ contract BobToken is IERC677, ERC20, EIP1967Admin, Blacklistable {
     mapping(address => uint256) public nonces;
     mapping(address => mapping(address => uint256)) public expirations;
 
-    constructor(address self) ERC20("", "") {
+    /**
+     * @dev Creates a proxy implementation for BobToken.
+     * @param _self address of the proxy contract, linked to the deployed implementation,
+     * required for correct EIP712 domain derivation.
+     */
+    constructor(address _self) ERC20("", "") {
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
                 keccak256(bytes(name())),
                 keccak256("1"),
                 block.chainid,
-                self
+                _self
             )
         );
     }
 
+    /**
+     * @dev Returns the name of the token.
+     */
     function name() public view override returns (string memory) {
         return "BOB";
     }
 
+    /**
+     * @dev Returns the symbol of the token.
+     */
     function symbol() public view override returns (string memory) {
         return "BOB";
     }
 
+    /**
+     * @dev Updates the address of the minter account.
+     * Callable only by the proxy admin.
+     * @param _minter address of the new minter EOA or contract.
+     */
     function setMinter(address _minter) external onlyAdmin {
         minter = _minter;
     }
 
+    /**
+     * @dev Mints the specified amount of tokens.
+     * Callable only by the current minter address.
+     * @param _to address of the tokens receiver.
+     * @param _amount amount of tokens to mint.
+     */
     function mint(address _to, uint256 _amount) external {
         require(_msgSender() == minter, "BOB: not a minter");
 
         _mint(_to, _amount);
     }
 
+    /**
+     * @dev ERC677 extension to ERC20 transfer. Will notify receiver after transfer completion.
+     * @param _to address of the tokens receiver.
+     * @param _amount amount of tokens to mint.
+     * @param _data extra data to pass in the notification callback.
+     */
     function transferAndCall(address _to, uint256 _amount, bytes calldata _data) external override {
-        address sender = msg.sender;
+        address sender = _msgSender();
         _transfer(sender, _to, _amount);
         require(IERC677Receiver(_to).onTokenTransfer(sender, _amount, _data), "BOB: ERC677 callback failed");
     }

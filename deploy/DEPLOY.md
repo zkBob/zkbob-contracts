@@ -24,7 +24,7 @@ This command will simulate deployment of the token contract in the local fork.
 It will also check any post-deployment constraints specified in the script.
 ```shell
 forge script -vvv \
-  --fork-url $GC_RPC_URL \
+  --rpc-url $GC_RPC_URL \
   --private-key $PRIVATE_KEY \
   ./deploy/scripts/BobToken.s.sol:DeployBobToken
 ```
@@ -34,7 +34,7 @@ Detailed list of all simulated transactions can be found in the printed path at 
 If everything looks good, you can re-run the same command with the `--broadcast` flag, this will eventually send transactions on-chain.
 ```shell
 forge script -vvv --broadcast \
-  --fork-url $GC_RPC_URL \
+  --rpc-url $GC_RPC_URL \
   --private-key $PRIVATE_KEY \
   ./deploy/scripts/BobToken.s.sol:DeployBobToken
 ```

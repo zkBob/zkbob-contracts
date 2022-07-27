@@ -22,24 +22,48 @@ contract EIP1967Proxy is EIP1967Admin {
         _setImplementation(_implementation);
     }
 
+    /**
+     * @dev Tells the proxy admin account address.
+     * @return proxy admin address.
+     */
     function admin() public view returns (address) {
         return _admin();
     }
 
+    /**
+     * @dev Tells the proxy implementation contract address.
+     * @return res implementation address.
+     */
     function implementation() public view returns (address res) {
         assembly {
             res := sload(EIP1967_IMPLEMENTATION_STORAGE)
         }
     }
 
+    /**
+     * @dev Updates address of the proxy owner.
+     * Callable only by the proxy admin.
+     * @param _admin address of the new proxy admin.
+     */
     function setAdmin(address _admin) external onlyAdmin {
         _setAdmin(_admin);
     }
 
+    /**
+     * @dev Updates proxy implementation address.
+     * Callable only by the proxy admin.
+     * @param _implementation address of the new proxy implementation.
+     */
     function upgradeTo(address _implementation) external onlyAdmin {
         _setImplementation(_implementation);
     }
 
+    /**
+     * @dev Updates proxy implementation address and makes an initialization call to new implementation.
+     * Callable only by the proxy admin.
+     * @param _implementation address of the new proxy implementation.
+     * @param _data calldata to pass through the new implementation after the upgrade.
+     */
     function upgradeToAndCall(address _implementation, bytes calldata _data) external payable onlyAdmin {
         _setImplementation(_implementation);
         // solhint-disable-next-line avoid-call-value

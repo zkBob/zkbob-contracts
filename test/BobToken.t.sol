@@ -17,17 +17,21 @@ contract BobTokenTest is Test, EIP2470Test {
     address user2 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
     uint256 pk1 = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
 
+    address vanityAddr = address(0xB0B6642Dae3fD16EE70E25497a6f85e339857B0B);
+    address mockImpl = address(0xdead);
+    bytes32 salt = bytes32(uint256(227661472));
+
     function setUp() public {
         setUpFactory();
         bytes memory creationCode =
-            abi.encodePacked(type(EIP1967Proxy).creationCode, uint256(uint160(deployer)), uint256(uint160(address(0xdead))));
-        proxy = EIP1967Proxy(factory.deploy(creationCode, bytes32(uint256(17725258))));
+            abi.encodePacked(type(EIP1967Proxy).creationCode, uint256(uint160(deployer)), uint256(uint160(mockImpl)));
+        proxy = EIP1967Proxy(factory.deploy(creationCode, salt));
         BobToken impl = new BobToken(address(proxy));
         vm.prank(deployer);
         proxy.upgradeTo(address(impl));
         bob = BobToken(address(proxy));
 
-        assertEq(address(proxy), address(0xB0Bf1847E7CD691A2Dbc619a515FE2FaE8f69B0B));
+        assertEq(address(proxy), vanityAddr);
     }
 
     function testMetadata() public {
@@ -58,6 +62,9 @@ contract BobTokenTest is Test, EIP2470Test {
         vm.prank(deployer);
         bob.setMinter(user1);
         assertEq(bob.minter(), address(user1));
+        vm.prank(deployer);
+        bob.setMinter(user2);
+        assertEq(bob.minter(), address(user2));
     }
 
     function testMultiMinter() public {
@@ -66,7 +73,7 @@ contract BobTokenTest is Test, EIP2470Test {
         vm.prank(deployer);
         bob.setMinter(address(minter));
 
-        vm.expectRevert("MultiMinter: not an admin");
+        vm.expectRevert("Ownable: caller is not the owner");
         minter.setMinter(user1, true);
 
         vm.prank(deployer);
@@ -99,18 +106,22 @@ contract BobTokenTest is Test, EIP2470Test {
         );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, digest);
 
+        // different message
         vm.expectRevert("BOB: invalid signature");
         bob.permit(user1, user2, 2 ether, expiry, v, r, s);
 
+        // expired message
         vm.warp(expiry + 1 days);
         vm.expectRevert("BOB: expired permit");
         bob.permit(user1, user2, 1 ether, expiry, v, r, s);
         vm.warp(expiry - 1 days);
 
+        // correct permit with nonce 0
         assertEq(bob.allowance(user1, user2), 0 ether);
         bob.permit(user1, user2, 1 ether, expiry, v, r, s);
         assertEq(bob.allowance(user1, user2), 1 ether);
 
+        // expired nonce
         vm.expectRevert("BOB: invalid signature");
         bob.permit(user1, user2, 1 ether, expiry, v, r, s);
     }
@@ -137,19 +148,37 @@ contract BobTokenTest is Test, EIP2470Test {
         vm.prank(deployer);
         bob.updateBlacklister(address(this));
 
+        assertEq(bob.isBlacklisted(user1), false);
         bob.blacklist(user1);
+        assertEq(bob.isBlacklisted(user1), true);
 
+        // cannot create new approvals
         vm.prank(user1);
         vm.expectRevert("BOB: owner blacklisted");
         bob.approve(user2, 1 ether);
+
+        // cannot transfer
         vm.prank(user1);
         vm.expectRevert("BOB: sender blacklisted");
         bob.transfer(user2, 0.1 ether);
+
+        // cannot receiver transfer
+        vm.prank(user2);
+        vm.expectRevert("BOB: receiver blacklisted");
+        bob.transfer(user1, 0.1 ether);
+
+        // cannot use existing approvals
         vm.prank(user2);
         vm.expectRevert("BOB: owner blacklisted");
         bob.transferFrom(user1, address(this), 0.1 ether);
+
+        // cannot spend third-party approvals
         vm.prank(user1);
         vm.expectRevert("BOB: spender blacklisted");
         bob.transferFrom(user2, address(this), 0.1 ether);
+
+        assertEq(bob.isBlacklisted(user1), true);
+        bob.unBlacklist(user1);
+        assertEq(bob.isBlacklisted(user1), false);
     }
 }
