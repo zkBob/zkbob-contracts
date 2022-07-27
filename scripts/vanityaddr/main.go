@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -17,6 +18,7 @@ var (
 	deployer = flag.String("deployer", "0xBF3d6f830CE263CAE987193982192Cd990442B53", "")
 	mockImpl = flag.String("mockImpl", "0xdead", "")
 	pattern  = flag.String("pattern", "(?i)^0xB0B.*B0B$", "")
+	threads  = flag.Int("threads", 10, "")
 )
 
 func main() {
@@ -41,21 +43,30 @@ func main() {
 	initCode = append(initCode, arg2...)
 	initCodeHash := crypto.Keccak256Hash(initCode)
 
-	// keccak256( 0xff ++ address ++ salt ++ keccak256(init_code))[12:]
-	msg := make([]byte, 85)
-	msg[0] = 0xff
-	copy(msg[1:21], common.HexToAddress("0xce0042B868300000d44A59004Da54A005ffdcf9f").Bytes())
-	copy(msg[53:85], initCodeHash.Bytes())
-	for i := 0; ; i++ {
-		if i%500000 == 0 {
-			log.Println("progress", i)
-		}
-		binary.BigEndian.PutUint64(msg[45:], uint64(i))
-		hash := crypto.Keccak256Hash(msg)
-		addr := common.BytesToAddress(hash.Bytes())
-		if regex.MatchString(addr.String()) {
-			log.Println(i, common.BytesToHash(msg[21:53]), addr.String())
-			break
-		}
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	for n := 0; n < *threads; n++ {
+		go func(n int) {
+			defer wg.Done()
+			// keccak256( 0xff ++ address ++ salt ++ keccak256(init_code))[12:]
+			msg := make([]byte, 85)
+			msg[0] = 0xff
+			copy(msg[1:21], common.HexToAddress("0xce0042B868300000d44A59004Da54A005ffdcf9f").Bytes())
+			copy(msg[53:85], initCodeHash.Bytes())
+			for i := n; ; i += *threads {
+				if (i / *threads)%5000000 == 0 {
+					log.Printf("progress (%d/%d) - %d\n", n+1, *threads, i)
+				}
+				binary.BigEndian.PutUint64(msg[45:], uint64(i))
+				hash := crypto.Keccak256Hash(msg)
+				addr := common.BytesToAddress(hash.Bytes())
+				if regex.MatchString(addr.String()) {
+					log.Println(i, common.BytesToHash(msg[21:53]), addr.String())
+					break
+				}
+			}
+		}(n)
 	}
+
+	wg.Wait()
 }
