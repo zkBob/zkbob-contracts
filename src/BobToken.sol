@@ -9,11 +9,12 @@ import "./interfaces/IERC677Receiver.sol";
 import "./proxy/EIP1967Admin.sol";
 import "./utils/Blocklist.sol";
 import "./utils/Claimable.sol";
+import "./utils/Recovery.sol";
 
 /**
  * @title BobToken
  */
-contract BobToken is IERC677, ERC20, EIP1967Admin, Blocklist, Claimable {
+contract BobToken is IERC677, ERC20, EIP1967Admin, Recovery, Blocklist, Claimable {
     // EIP712 domain separator
     bytes32 public immutable DOMAIN_SEPARATOR;
     // EIP2612 permit typehash
@@ -125,19 +126,16 @@ contract BobToken is IERC677, ERC20, EIP1967Admin, Blocklist, Claimable {
         _approve(_holder, _spender, _value);
     }
 
-    function _spendAllowance(address _owner, address _spender, uint256 _amount) internal override {
-        require(!blocked[_spender], "BOB: spender blocked");
-        super._spendAllowance(_owner, _spender, _amount);
+    function transfer(address _to, uint256 _amount) public override returns (bool) {
+        require(!blocked[_msgSender()], "BOB: sender blocked");
+        require(!blocked[_to], "BOB: receiver blocked");
+        return super.transfer(_to, _amount);
     }
 
-    function _approve(address _owner, address _spender, uint256 _amount) internal override {
-        require(!blocked[_owner], "BOB: owner blocked");
-        require(!blocked[_spender], "BOB: spender blocked");
-        super._approve(_owner, _spender, _amount);
-    }
-
-    function _beforeTokenTransfer(address _from, address _to, uint256 _amount) internal override {
+    function transferFrom(address _from, address _to, uint256 _amount) public override returns (bool) {
+        require(!blocked[_msgSender()], "BOB: spender blocked");
         require(!blocked[_from], "BOB: sender blocked");
         require(!blocked[_to], "BOB: receiver blocked");
+        return super.transferFrom(_from, _to, _amount);
     }
 }

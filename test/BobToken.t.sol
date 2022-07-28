@@ -153,9 +153,8 @@ contract BobTokenTest is Test, EIP2470Test {
         bob.blockAccount(user1);
         assertEq(bob.isBlocked(user1), true);
 
-        // cannot create new approvals
+        // new approvals still work
         vm.prank(user1);
-        vm.expectRevert("BOB: owner blocked");
         bob.approve(user2, 1 ether);
 
         // cannot transfer
@@ -170,7 +169,7 @@ contract BobTokenTest is Test, EIP2470Test {
 
         // cannot use existing approvals
         vm.prank(user2);
-        vm.expectRevert("BOB: owner blocked");
+        vm.expectRevert("BOB: sender blocked");
         bob.transferFrom(user1, address(this), 0.1 ether);
 
         // cannot spend third-party approvals
@@ -189,18 +188,133 @@ contract BobTokenTest is Test, EIP2470Test {
         vm.deal(address(bob), 1 ether);
         vm.deal(address(user1), 0 ether);
 
-        vm.expectRevert();
+        vm.prank(deployer);
+        bob.setClaimingAdmin(user1);
+
+        vm.expectRevert("Claimable: not authorized for claiming");
         bob.claimTokens(address(0), user1);
-        vm.expectRevert();
+        vm.expectRevert("Claimable: not authorized for claiming");
         bob.claimTokens(address(token), user1);
 
+        // test with proxy admin
         vm.startPrank(deployer);
         bob.claimTokens(address(0), user1);
         bob.claimTokens(address(token), user1);
+        vm.stopPrank();
 
         assertEq(token.balanceOf(address(bob)), 0 ether);
         assertEq(token.balanceOf(user1), 1 ether);
         assertEq(address(bob).balance, 0 ether);
         assertEq(user1.balance, 1 ether);
+
+        // test with claiming admin
+        token.mint(address(bob), 1 ether);
+        vm.deal(address(bob), 1 ether);
+        vm.deal(address(user1), 0 ether);
+
+        vm.startPrank(user1);
+        bob.claimTokens(address(0), user1);
+        bob.claimTokens(address(token), user1);
+        vm.stopPrank();
+
+        assertEq(token.balanceOf(address(bob)), 0 ether);
+        assertEq(token.balanceOf(user1), 2 ether);
+        assertEq(address(bob).balance, 0 ether);
+        assertEq(user1.balance, 1 ether);
+    }
+
+    function testRecoverySettings() public {
+        vm.expectRevert();
+        bob.setRecoveryAdmin(user1);
+        vm.expectRevert();
+        bob.setRecoveredFundsReceiver(user2);
+        vm.expectRevert();
+        bob.setRecoveryLimitPercent(0.1 ether);
+        vm.expectRevert();
+        bob.setRecoveryRequestTimelockPeriod(1 days);
+
+        _setUpRecoveryConfig();
+
+        vm.startPrank(user1);
+        vm.expectRevert();
+        bob.setRecoveryAdmin(user1);
+        vm.expectRevert();
+        bob.setRecoveredFundsReceiver(user2);
+        vm.expectRevert();
+        bob.setRecoveryLimitPercent(0.1 ether);
+        vm.expectRevert();
+        bob.setRecoveryRequestTimelockPeriod(1 days);
+        vm.stopPrank();
+
+        assertEq(bob.recoveryAdmin(), user1);
+        assertEq(bob.recoveredFundsReceiver(), user2);
+        assertEq(bob.recoveryLimitPercent(), 0.1 ether);
+        assertEq(bob.recoveryRequestTimelockPeriod(), 1 days);
+    }
+
+    function testRecoverySuccessPath() public {
+        _setUpRecoveryConfig();
+
+        vm.startPrank(user1);
+
+        address[] memory accounts = new address[](2);
+        uint256[] memory values = new uint256[](2);
+        accounts[0] = address(0xdead);
+        values[0] = 2 ether;
+        accounts[1] = address(0xbeaf);
+        values[1] = 2 ether;
+        bob.requestRecovery(accounts, values);
+        values[1] = 1 ether;
+
+        vm.warp(block.timestamp + 1 days);
+
+        assertEq(bob.totalRecovered(), 0 ether);
+        assertEq(bob.balanceOf(address(0xdead)), 100 ether);
+        assertEq(bob.balanceOf(address(0xbeaf)), 1 ether);
+        assertEq(bob.balanceOf(user2), 0 ether);
+
+        bob.executeRecovery(accounts, values);
+
+        assertEq(bob.totalRecovered(), 3 ether);
+        assertEq(bob.balanceOf(address(0xdead)), 98 ether);
+        assertEq(bob.balanceOf(address(0xbeaf)), 0 ether);
+        assertEq(bob.balanceOf(user2), 3 ether);
+    }
+
+    function testCancelRecoveryRequest() public {
+        _setUpRecoveryConfig();
+
+        vm.startPrank(user1);
+
+        address[] memory accounts = new address[](2);
+        uint256[] memory values = new uint256[](2);
+        accounts[0] = address(0xdead);
+        values[0] = 2 ether;
+        accounts[1] = address(0xbeaf);
+        values[1] = 2 ether;
+
+        assert(bob.recoveryRequestHash() == bytes32(0));
+        bob.requestRecovery(accounts, values);
+        assert(bob.recoveryRequestHash() != bytes32(0));
+        bob.cancelRecovery();
+        assert(bob.recoveryRequestHash() == bytes32(0));
+    }
+
+    function testIsRecoveryEnabled() public {
+        assertEq(bob.isRecoveryEnabled(), false);
+        _setUpRecoveryConfig();
+        assertEq(bob.isRecoveryEnabled(), true);
+    }
+
+    function _setUpRecoveryConfig() internal {
+        vm.startPrank(deployer);
+        bob.setMinter(deployer);
+        bob.setRecoveryAdmin(user1);
+        bob.setRecoveredFundsReceiver(user2);
+        bob.setRecoveryLimitPercent(0.1 ether);
+        bob.setRecoveryRequestTimelockPeriod(1 days);
+        bob.mint(address(0xdead), 100 ether);
+        bob.mint(address(0xbeaf), 1 ether);
+        vm.stopPrank();
     }
 }
