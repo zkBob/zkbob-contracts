@@ -126,7 +126,7 @@ contract BobTokenTest is Test, EIP2470Test {
         bob.permit(user1, user2, 1 ether, expiry, v, r, s);
     }
 
-    function testBlacklist() public {
+    function testBlocklist() public {
         vm.prank(deployer);
         bob.setMinter(address(this));
         bob.mint(user1, 1 ether);
@@ -142,43 +142,43 @@ contract BobTokenTest is Test, EIP2470Test {
         vm.prank(user1);
         bob.transferFrom(user2, user1, 0.1 ether);
 
-        vm.expectRevert("Blacklistable: caller is not the blacklister");
-        bob.blacklist(user1);
+        vm.expectRevert("Blocklist: caller is not the blocklister");
+        bob.blockAccount(user1);
 
         vm.prank(deployer);
-        bob.updateBlacklister(address(this));
+        bob.updateBlocklister(address(this));
 
-        assertEq(bob.isBlacklisted(user1), false);
-        bob.blacklist(user1);
-        assertEq(bob.isBlacklisted(user1), true);
+        assertEq(bob.isBlocked(user1), false);
+        bob.blockAccount(user1);
+        assertEq(bob.isBlocked(user1), true);
 
         // cannot create new approvals
         vm.prank(user1);
-        vm.expectRevert("BOB: owner blacklisted");
+        vm.expectRevert("BOB: owner blocked");
         bob.approve(user2, 1 ether);
 
         // cannot transfer
         vm.prank(user1);
-        vm.expectRevert("BOB: sender blacklisted");
+        vm.expectRevert("BOB: sender blocked");
         bob.transfer(user2, 0.1 ether);
 
         // cannot receiver transfer
         vm.prank(user2);
-        vm.expectRevert("BOB: receiver blacklisted");
+        vm.expectRevert("BOB: receiver blocked");
         bob.transfer(user1, 0.1 ether);
 
         // cannot use existing approvals
         vm.prank(user2);
-        vm.expectRevert("BOB: owner blacklisted");
+        vm.expectRevert("BOB: owner blocked");
         bob.transferFrom(user1, address(this), 0.1 ether);
 
         // cannot spend third-party approvals
         vm.prank(user1);
-        vm.expectRevert("BOB: spender blacklisted");
+        vm.expectRevert("BOB: spender blocked");
         bob.transferFrom(user2, address(this), 0.1 ether);
 
-        assertEq(bob.isBlacklisted(user1), true);
-        bob.unBlacklist(user1);
-        assertEq(bob.isBlacklisted(user1), false);
+        assertEq(bob.isBlocked(user1), true);
+        bob.unblockAccount(user1);
+        assertEq(bob.isBlocked(user1), false);
     }
 }
