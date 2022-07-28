@@ -3,10 +3,11 @@
 pragma solidity 0.8.15;
 
 import "forge-std/Test.sol";
+import "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
 import "./shared/EIP2470.t.sol";
 import "../src/BobToken.sol";
 import "../src/proxy/EIP1967Proxy.sol";
-import "../src/utils/MultiMinter.sol";
+import "../src/MultiMinter.sol";
 
 contract BobTokenTest is Test, EIP2470Test {
     EIP1967Proxy proxy;
@@ -180,5 +181,26 @@ contract BobTokenTest is Test, EIP2470Test {
         assertEq(bob.isBlocked(user1), true);
         bob.unblockAccount(user1);
         assertEq(bob.isBlocked(user1), false);
+    }
+
+    function testClaimTokens() public {
+        ERC20PresetMinterPauser token = new ERC20PresetMinterPauser("Test", "TEST");
+        token.mint(address(bob), 1 ether);
+        vm.deal(address(bob), 1 ether);
+        vm.deal(address(user1), 0 ether);
+
+        vm.expectRevert();
+        bob.claimTokens(address(0), user1);
+        vm.expectRevert();
+        bob.claimTokens(address(token), user1);
+
+        vm.startPrank(deployer);
+        bob.claimTokens(address(0), user1);
+        bob.claimTokens(address(token), user1);
+
+        assertEq(token.balanceOf(address(bob)), 0 ether);
+        assertEq(token.balanceOf(user1), 1 ether);
+        assertEq(address(bob).balance, 0 ether);
+        assertEq(user1.balance, 1 ether);
     }
 }

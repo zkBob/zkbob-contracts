@@ -3,7 +3,7 @@
 pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "../interfaces/IMintableERC20.sol";
+import "./interfaces/IMintableERC20.sol";
 
 /**
  * @title MultiMinter

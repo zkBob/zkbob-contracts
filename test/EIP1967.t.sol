@@ -4,19 +4,7 @@ pragma solidity 0.8.15;
 
 import "forge-std/Test.sol";
 import "../src/proxy/EIP1967Proxy.sol";
-
-contract DummyImpl {
-    uint256 public value;
-    uint256 public immutable const;
-
-    constructor(uint256 _const) {
-        const = _const;
-    }
-
-    function increment() external {
-        value++;
-    }
-}
+import "./mocks/DummyImpl.sol";
 
 contract EIP1967Test is Test {
     address user1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;

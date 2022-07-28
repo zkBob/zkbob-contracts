@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.15;
 
-import "./proxy/EIP1967Admin.sol";
+import "../proxy/EIP1967Admin.sol";
 
 /**
  * @title Blocklist

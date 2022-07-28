@@ -7,12 +7,13 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./interfaces/IERC677.sol";
 import "./interfaces/IERC677Receiver.sol";
 import "./proxy/EIP1967Admin.sol";
-import "./Blocklist.sol";
+import "./utils/Blocklist.sol";
+import "./utils/Claimable.sol";
 
 /**
  * @title BobToken
  */
-contract BobToken is IERC677, ERC20, EIP1967Admin, Blocklist {
+contract BobToken is IERC677, ERC20, EIP1967Admin, Blocklist, Claimable {
     // EIP712 domain separator
     bytes32 public immutable DOMAIN_SEPARATOR;
     // EIP2612 permit typehash
