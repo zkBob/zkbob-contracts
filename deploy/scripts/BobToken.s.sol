@@ -12,9 +12,9 @@ contract DeployBobToken is Script {
     address private constant minter = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
     address private constant admin = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
 
-    address private constant vanityAddr = address(0xB0B6642Dae3fD16EE70E25497a6f85e339857B0B);
+    address private constant vanityAddr = address(0xB0B1eda1Df5D4F14Ea631cf462Ba3c029fFC1B0B);
     address private constant mockImpl = address(0xdead);
-    bytes32 private constant salt = bytes32(uint256(227661472));
+    bytes32 private constant salt = bytes32(uint256(59416163231));
 
     SingletonFactory private constant factory = SingletonFactory(0xce0042B868300000d44A59004Da54A005ffdcf9f);
 
