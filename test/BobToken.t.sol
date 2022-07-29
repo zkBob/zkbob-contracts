@@ -306,6 +306,95 @@ contract BobTokenTest is Test, EIP2470Test {
         assertEq(bob.isRecoveryEnabled(), true);
     }
 
+    function testRecoveryLimit() public {
+        _setUpRecoveryConfig();
+
+        vm.startPrank(user1);
+
+        address[] memory accounts = new address[](2);
+        uint256[] memory values = new uint256[](2);
+        accounts[0] = address(0xdead);
+        values[0] = 2 ether;
+        accounts[1] = address(0xbeaf);
+        values[1] = 2 ether;
+        bob.requestRecovery(accounts, values);
+        values[1] = 1 ether;
+
+        vm.warp(block.timestamp + 1 days);
+
+        vm.stopPrank();
+        vm.prank(deployer);
+        bob.setRecoveryLimitPercent(0.01 ether);
+        vm.prank(user1);
+        vm.expectRevert("Recovery: exceed recovery limit percent");
+        bob.executeRecovery(accounts, values);
+        vm.prank(deployer);
+        bob.setRecoveryLimitPercent(0.1 ether);
+        vm.prank(user1);
+        bob.executeRecovery(accounts, values);
+
+        assertEq(bob.totalRecovered(), 3 ether);
+    }
+
+    function testRecoveryTimelock() public {
+        _setUpRecoveryConfig();
+
+        vm.startPrank(user1);
+
+        address[] memory accounts = new address[](2);
+        uint256[] memory values = new uint256[](2);
+        accounts[0] = address(0xdead);
+        values[0] = 2 ether;
+        accounts[1] = address(0xbeaf);
+        values[1] = 2 ether;
+        bob.requestRecovery(accounts, values);
+        values[1] = 1 ether;
+
+        vm.warp(block.timestamp + 0.5 days);
+
+        vm.expectRevert("Recovery: request still timelocked");
+        bob.executeRecovery(accounts, values);
+
+        vm.warp(block.timestamp + 0.5 days);
+
+        bob.executeRecovery(accounts, values);
+
+        assertEq(bob.totalRecovered(), 3 ether);
+    }
+
+    function testRecoveryEscape() public {
+        _setUpRecoveryConfig();
+
+        vm.startPrank(user1);
+
+        address[] memory accounts = new address[](2);
+        uint256[] memory values = new uint256[](2);
+        accounts[0] = address(0xdead);
+        values[0] = 2 ether;
+        accounts[1] = address(0xbeaf);
+        values[1] = 2 ether;
+        bob.requestRecovery(accounts, values);
+        values[1] = 1 ether;
+
+        vm.warp(block.timestamp + 1 days);
+
+        vm.stopPrank();
+        vm.prank(address(0xdead));
+        bob.transfer(address(0xdeaddead), 100 ether);
+        vm.prank(address(0xbeaf));
+        bob.transfer(address(0xbeafbeaf), 0.5 ether);
+        vm.startPrank(user1);
+
+        bob.executeRecovery(accounts, values);
+
+        assertEq(bob.totalRecovered(), 0.5 ether);
+        assertEq(bob.balanceOf(address(0xdead)), 0 ether);
+        assertEq(bob.balanceOf(address(0xdeaddead)), 100 ether);
+        assertEq(bob.balanceOf(address(0xbeaf)), 0 ether);
+        assertEq(bob.balanceOf(address(0xbeafbeaf)), 0.5 ether);
+        assertEq(bob.balanceOf(user2), 0.5 ether);
+    }
+
     function _setUpRecoveryConfig() internal {
         vm.startPrank(deployer);
         bob.setMinter(deployer);
