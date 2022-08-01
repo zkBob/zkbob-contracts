@@ -8,6 +8,7 @@ import "./shared/EIP2470.t.sol";
 import "../src/BobToken.sol";
 import "../src/proxy/EIP1967Proxy.sol";
 import "../src/MultiMinter.sol";
+import "./mocks/ERC677Receiver.sol";
 
 contract BobTokenTest is Test, EIP2470Test {
     EIP1967Proxy proxy;
@@ -102,6 +103,18 @@ contract BobTokenTest is Test, EIP2470Test {
 
         bob.mint(user1, 1 ether);
         uint256 expiry = block.timestamp + 1 days;
+        assertEq(
+            bob.DOMAIN_SEPARATOR(),
+            keccak256(
+                abi.encode(
+                    keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                    keccak256("BOB"),
+                    keccak256("1"),
+                    block.chainid,
+                    address(bob)
+                )
+            )
+        );
         bytes32 digest = ECDSA.toTypedDataHash(
             bob.DOMAIN_SEPARATOR(), keccak256(abi.encode(bob.PERMIT_TYPEHASH(), user1, user2, 1 ether, 0, expiry))
         );
@@ -132,12 +145,16 @@ contract BobTokenTest is Test, EIP2470Test {
         bob.setMinter(address(this));
         bob.mint(user1, 1 ether);
 
+        address erc677Receiver = address(new ERC677Receiver());
+
         vm.prank(user1);
         bob.approve(user2, 1 ether);
         vm.prank(user2);
         bob.approve(user1, 1 ether);
         vm.prank(user1);
         bob.transfer(user2, 0.1 ether);
+        vm.prank(user1);
+        bob.transferAndCall(erc677Receiver, 0.1 ether, "");
         vm.prank(user2);
         bob.transferFrom(user1, user2, 0.1 ether);
         vm.prank(user1);
@@ -161,6 +178,11 @@ contract BobTokenTest is Test, EIP2470Test {
         vm.prank(user1);
         vm.expectRevert("BOB: sender blocked");
         bob.transfer(user2, 0.1 ether);
+
+        // cannot transfer and call
+        vm.prank(user1);
+        vm.expectRevert("BOB: sender blocked");
+        bob.transferAndCall(erc677Receiver, 0.1 ether, "");
 
         // cannot receiver transfer
         vm.prank(user2);

@@ -32,7 +32,7 @@ abstract contract Recovery is ERC20, EIP1967Admin {
      * @dev Throws if called by any account other than the proxy admin or recovery admin.
      */
     modifier onlyRecoveryAdmin() {
-        require(_msgSender() == recoveryAdmin || msg.sender == _admin(), "Recovery: not authorized for recovery");
+        require(_msgSender() == recoveryAdmin || _msgSender() == _admin(), "Recovery: not authorized for recovery");
         _;
     }
 
