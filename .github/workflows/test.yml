@@ -24,6 +24,7 @@ jobs:
 
       - name: Run Forge fmt src
         run: |
+          rm ./src/proxy/EIP1967Proxy.sol
           forge fmt --check ./src
         id: fmt_src
         if: ${{ steps.init.conclusion == 'success' }}
