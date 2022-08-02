@@ -36,7 +36,7 @@ contract Claimable is Context, EIP1967Admin {
      * @param _token address of the token contract, or 0x00..00 for transferring native coins.
      * @param _to locked tokens receiver address.
      */
-    function claimTokens(address _token, address _to) external onlyClaimingAdmin {
+    function claimTokens(address _token, address _to) external virtual onlyClaimingAdmin {
         if (_token == address(0)) {
             payable(_to).transfer(address(this).balance);
         } else {

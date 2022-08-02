@@ -3,7 +3,7 @@
 pragma solidity 0.8.15;
 
 import "forge-std/Script.sol";
-import "../../src/BobVoucherToken.sol";
+import "../../src/XPBobToken.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 
 contract DeployBobVoucherToken is Script {
@@ -17,11 +17,11 @@ contract DeployBobVoucherToken is Script {
 
         EIP1967Proxy proxy = new EIP1967Proxy(tx.origin, mockImpl);
 
-        BobVoucherToken impl = new BobVoucherToken(address(proxy));
+        XPBobToken impl = new XPBobToken(address(proxy));
 
         proxy.upgradeTo(address(impl));
 
-        BobVoucherToken vbob = BobVoucherToken(address(proxy));
+        XPBobToken vbob = XPBobToken(address(proxy));
         vbob.setMinter(minter);
 
         if (tx.origin != admin) {

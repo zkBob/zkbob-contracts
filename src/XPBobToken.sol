@@ -9,11 +9,11 @@ import "./token/MintableERC20.sol";
 import "./utils/Claimable.sol";
 
 /**
- * @title BobVoucherToken
+ * @title XPBobToken
  */
-contract BobVoucherToken is ERC20, ERC677, ERC2612, MintableERC20, Claimable {
+contract XPBobToken is ERC20, ERC677, ERC2612, MintableERC20, Claimable {
     /**
-     * @dev Creates a proxy implementation for BobVoucherToken.
+     * @dev Creates a proxy implementation for XPBobToken.
      * @param _self address of the proxy contract, linked to the deployed implementation,
      * required for correct EIP712 domain derivation.
      */
@@ -23,13 +23,13 @@ contract BobVoucherToken is ERC20, ERC677, ERC2612, MintableERC20, Claimable {
      * @dev Returns the name of the token.
      */
     function name() public view override returns (string memory) {
-        return "BOB Voucher Token";
+        return "XP BOB Token";
     }
 
     /**
      * @dev Returns the symbol of the token.
      */
     function symbol() public view override returns (string memory) {
-        return "vBOB";
+        return "xpBOB";
     }
 }
