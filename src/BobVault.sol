@@ -15,7 +15,7 @@ contract BobVault is EIP1967Admin, YieldConnector {
 
     address public yieldAdmin;
     address public investAdmin;
-    IERC20 public bobToken;
+    IERC20 public constant bobToken = IERC20(0xB0B1eda1Df5D4F14Ea631cf462Ba3c029fFC1B0B);
 
     mapping(address => Collateral) public collateral;
 
@@ -262,7 +262,7 @@ contract BobVault is EIP1967Admin, YieldConnector {
             requiredBalance += token.dust;
         }
 
-        if (requiredBalance <= currentBalance) {
+        if (requiredBalance >= currentBalance) {
             return 0;
         }
 
@@ -279,7 +279,7 @@ contract BobVault is EIP1967Admin, YieldConnector {
         Collateral memory token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
 
-        _delegateFarmExtra(token.yield, msg.sender, _data);
+        _delegateFarmExtra(token.yield, _token, msg.sender, _data);
 
         emit FarmExtra(_token, token.yield);
 

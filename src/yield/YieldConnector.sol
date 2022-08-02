@@ -31,8 +31,8 @@ contract YieldConnector {
         return abi.decode(data, (uint256));
     }
 
-    function _delegateFarmExtra(address _impl, address _to, bytes calldata _data) internal {
-        _delegate(_impl, abi.encodeWithSelector(IYieldImplementation.farmExtra.selector, _to, _data));
+    function _delegateFarmExtra(address _impl, address _token, address _to, bytes calldata _data) internal {
+        _delegate(_impl, abi.encodeWithSelector(IYieldImplementation.farmExtra.selector, _token, _to, _data));
     }
 
     function _delegate(address _impl, bytes memory _data) private returns (bytes memory) {

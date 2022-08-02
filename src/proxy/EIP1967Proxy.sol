@@ -92,9 +92,9 @@ contract EIP1967Proxy is EIP1967Admin {
             returndatacopy(0, 0, returndatasize())
 
             switch result
-                // delegatecall returns 0 on error.
-                case 0 { revert(0, returndatasize()) }
-                default { return(0, returndatasize()) }
+            // delegatecall returns 0 on error.
+            case 0 { revert(0, returndatasize()) }
+            default { return(0, returndatasize()) }
         }
     }
 

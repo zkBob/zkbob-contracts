@@ -23,13 +23,6 @@ contract CompoundYieldImplementation is IYieldImplementation {
 
     mapping(address => address) internal interestToken;
 
-    constructor(address[] memory _cTokens) {
-        for (uint256 i = 0; i < _cTokens.length; i++) {
-            address token = ICToken(_cTokens[i]).underlying();
-            interestToken[token] = _cTokens[i];
-        }
-    }
-
     /**
      * @dev Tells the address of the COMP token in the Ethereum Mainnet.
      */
@@ -46,6 +39,13 @@ contract CompoundYieldImplementation is IYieldImplementation {
 
     function initialize(address _token) external {
         address cToken = interestToken[_token];
+        if (cToken == address(0)) {
+            interestToken[0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48] = 0x39AA39c021dfbaE8faC545936693aC917d5E7563;
+            interestToken[0xdAC17F958D2ee523a2206206994597C13D831ec7] = 0xf650C3d88D12dB855b8bf7D11Be6C55A4e07dCC9;
+            interestToken[0x6B175474E89094C44Da98b954EedeAC495271d0F] = 0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643;
+            cToken = interestToken[_token];
+        }
+        require(cToken != address(0), "CompoundYieldImplementation: unsupported token");
 
         // SafeERC20.safeApprove does not work here in case of possible interest reinitialization,
         // since it does not allow positive->positive allowance change. However, it would be safe to make such change here.
