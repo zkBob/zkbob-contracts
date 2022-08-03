@@ -31,7 +31,7 @@ contract AAVEYieldImplementation is IYieldImplementation {
     function initialize(address _token) external {
         address aToken = lendingPool().getReserveData(_token)[7];
         require(IAToken(aToken).UNDERLYING_ASSET_ADDRESS() == _token);
-        interestToken[_token] == aToken;
+        interestToken[_token] = aToken;
 
         // SafeERC20.safeApprove does not work here in case of possible interest reinitialization,
         // since it does not allow positive->positive allowance change. However, it would be safe to make such change here.
