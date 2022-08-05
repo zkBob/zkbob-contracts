@@ -25,9 +25,9 @@ contract BobVaultTest is Test, EIP2470Test {
     address user2 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
     uint256 pk1 = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
 
-    address vanityAddr = address(0xB0B1eda1Df5D4F14Ea631cf462Ba3c029fFC1B0B);
+    address vanityAddr = address(0xB0B65813DD450B7c98Fed97404fAbAe179A00B0B);
     address mockImpl = address(0xdead);
-    bytes32 salt = bytes32(uint256(59416163231));
+    bytes32 salt = bytes32(uint256(298396503));
 
     IERC20 usdc = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
     IERC20 usdt = IERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7);

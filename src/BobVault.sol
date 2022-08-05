@@ -15,7 +15,7 @@ contract BobVault is EIP1967Admin, YieldConnector {
 
     address public yieldAdmin;
     address public investAdmin;
-    IERC20 public constant bobToken = IERC20(0xB0B1eda1Df5D4F14Ea631cf462Ba3c029fFC1B0B);
+    IERC20 public constant bobToken = IERC20(0xB0B65813DD450B7c98Fed97404fAbAe179A00B0B);
 
     mapping(address => Collateral) public collateral;
 
