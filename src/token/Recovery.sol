@@ -78,7 +78,8 @@ abstract contract Recovery is ERC20, EIP1967Admin {
      * @param _recoveryRequestTimelockPeriod new timelock period in seconds.
      */
     function setRecoveryRequestTimelockPeriod(uint32 _recoveryRequestTimelockPeriod) external onlyAdmin {
-        require(_recoveryRequestTimelockPeriod <= 30 days, "Recovery: invalid timelock period");
+        require(_recoveryRequestTimelockPeriod >= 1 days, "Recovery: too low timelock period");
+        require(_recoveryRequestTimelockPeriod <= 30 days, "Recovery: too high timelock period");
         recoveryRequestTimelockPeriod = _recoveryRequestTimelockPeriod;
     }
 
@@ -87,7 +88,22 @@ abstract contract Recovery is ERC20, EIP1967Admin {
      * @return true, if at least 1 wei of tokens could be recovered within the available limit.
      */
     function isRecoveryEnabled() external view returns (bool) {
-        return totalRecovered < totalSupply() * recoveryLimitPercent / 1 ether;
+        return _remainingRecoveryLimit() > 0;
+    }
+
+    /**
+     * @dev Internal function telling the remaining available limit for recovery.
+     * @return available recovery limit.
+     */
+    function _remainingRecoveryLimit() internal view returns (uint256) {
+        if (recoveredFundsReceiver == address(0)) {
+            return 0;
+        }
+        uint256 limit = totalSupply() * recoveryLimitPercent / 1 ether;
+        if (limit > totalRecovered) {
+            return limit - totalRecovered;
+        }
+        return 0;
     }
 
     /**
@@ -100,6 +116,8 @@ abstract contract Recovery is ERC20, EIP1967Admin {
     function requestRecovery(address[] calldata _accounts, uint256[] calldata _values) external onlyRecoveryAdmin {
         require(_accounts.length == _values.length, "Recovery: different lengths");
         require(_accounts.length > 0, "Recovery: empty accounts");
+        uint256 limit = _remainingRecoveryLimit();
+        require(limit > 0, "Recovery: not enabled");
 
         bytes32 hash = recoveryRequestHash;
         if (hash != bytes32(0)) {
@@ -108,10 +126,14 @@ abstract contract Recovery is ERC20, EIP1967Admin {
 
         uint256[] memory values = new uint256[](_values.length);
 
+        uint256 total = 0;
         for (uint256 i = 0; i < _values.length; i++) {
             uint256 balance = balanceOf(_accounts[i]);
-            values[i] = balance < _values[i] ? balance : _values[i];
+            uint256 value = balance < _values[i] ? balance : _values[i];
+            values[i] = value;
+            total += value;
         }
+        require(total <= limit, "Recovery: exceed recovery limit");
 
         uint256 executionTimestamp = block.timestamp + recoveryRequestTimelockPeriod;
         hash = keccak256(abi.encode(executionTimestamp, _accounts, values));
@@ -134,6 +156,8 @@ abstract contract Recovery is ERC20, EIP1967Admin {
         uint256 executionTimestamp = recoveryRequestExecutionTimestamp;
         require(executionTimestamp > 0, "Recovery: no active recovery request");
         require(executionTimestamp <= block.timestamp, "Recovery: request still timelocked");
+        uint256 limit = _remainingRecoveryLimit();
+        require(limit > 0, "Recovery: not enabled");
 
         bytes32 storedHash = recoveryRequestHash;
         bytes32 receivedHash = keccak256(abi.encode(executionTimestamp, _accounts, _values));
@@ -142,9 +166,7 @@ abstract contract Recovery is ERC20, EIP1967Admin {
         uint256 value = _recoverTokens(_accounts, _values);
         totalRecovered += value;
 
-        require(
-            totalRecovered < totalSupply() * recoveryLimitPercent / 1 ether, "Recovery: exceed recovery limit percent"
-        );
+        require(value <= limit, "Recovery: exceed recovery limit");
 
         delete recoveryRequestHash;
         delete recoveryRequestExecutionTimestamp;

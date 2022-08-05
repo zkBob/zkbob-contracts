@@ -348,7 +348,7 @@ contract BobTokenTest is Test, EIP2470Test {
         vm.prank(deployer);
         bob.setRecoveryLimitPercent(0.01 ether);
         vm.prank(user1);
-        vm.expectRevert("Recovery: exceed recovery limit percent");
+        vm.expectRevert("Recovery: exceed recovery limit");
         bob.executeRecovery(accounts, values);
         vm.prank(deployer);
         bob.setRecoveryLimitPercent(0.1 ether);
