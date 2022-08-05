@@ -4,3 +4,6 @@
 [submodule "lib/@openzeppelin/contracts"]
 	path = lib/@openzeppelin/contracts
 	url = https://github.com/openzeppelin/openzeppelin-contracts
+[submodule "lib/@gnosis/auction"]
+	path = lib/@gnosis/auction
+	url = https://github.com/gnosis/ido-contracts

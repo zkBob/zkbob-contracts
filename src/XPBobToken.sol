@@ -32,4 +32,12 @@ contract XPBobToken is ERC20, ERC677, ERC2612, MintableERC20, Claimable {
     function symbol() public view override returns (string memory) {
         return "xpBOB";
     }
+
+    /**
+     * @dev Burns tokens from the caller.
+     * @param _value amount of tokens to burn. Should be less than or equal to caller balance.
+     */
+    function burn(uint256 _value) external {
+        _burn(_msgSender(), _value);
+    }
 }
