@@ -37,11 +37,7 @@ contract DeployXPBobToken is Script {
 
         require(proxy.implementation() == address(impl), "Invalid implementation address");
         require(proxy.admin() == admin, "Proxy admin is not configured");
-        if (admin == owner) {
-            require(vbob.owner() == address(0), "Owner is not configured");
-        } else {
-            require(vbob.owner() == owner, "Owner is not configured");
-        }
+        require(vbob.owner() == owner == admin ? address(0) : owner, "Owner is not configured");
         require(vbob.minter() == minter, "Minter is not configured");
     }
 }

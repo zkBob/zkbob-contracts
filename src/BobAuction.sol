@@ -24,7 +24,7 @@ contract BobAuction is Ownable {
     event NewBobAuction(address indexed provider, uint256 indexed id, address indexed token);
 
     modifier onlyManager() {
-        require(_msgSender() == manager || _msgSender() == owner(), "BobAuction: not a manager");
+        require(_msgSender() == manager || _isOwner(), "BobAuction: not a manager");
         _;
     }
 
@@ -61,8 +61,8 @@ contract BobAuction is Ownable {
 
     function _setFee(uint96 _fee, address _feeReceiver) internal {
         if (_fee > 0) {
-            require(_fee <= 0.02 ether, "DutchAuction: fee too high");
-            require(_feeReceiver != address(0), "DutchAuction: empty fee receiver");
+            require(_fee <= 0.5 ether, "BobAuction: fee too high");
+            require(_feeReceiver != address(0), "BobAuction: empty fee receiver");
         }
         feeAmount = _fee;
         feeReceiver = _feeReceiver;

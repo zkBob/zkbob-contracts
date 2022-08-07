@@ -48,11 +48,7 @@ contract DeployBobToken is Script {
         require(address(bob) == vanityAddr, "Invalid vanity address");
         require(proxy.implementation() == address(impl), "Invalid implementation address");
         require(proxy.admin() == admin, "Proxy admin is not configured");
-        if (admin == owner) {
-            require(bob.owner() == address(0), "Owner is not configured");
-        } else {
-            require(bob.owner() == owner, "Owner is not configured");
-        }
+        require(bob.owner() == owner == admin ? address(0) : owner, "Owner is not configured");
         require(bob.minter() == minter, "Minter is not configured");
     }
 }
