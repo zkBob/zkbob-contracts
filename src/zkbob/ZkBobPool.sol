@@ -139,14 +139,14 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters {
             }
         } else if (_tx_type() == 3) {
             // Permittable token deposit
-            require(token_amount >= 0 && energy_amount == 0 && msg.value == 0, "incorrect deposit amounts");
+            require(token_amount >= 0 && energy_amount == 0 && msg.value == 0, "ZkBobPool: incorrect deposit amounts");
             (uint8 v, bytes32 r, bytes32 s) = _permittable_deposit_signature();
             address holder = _memo_permit_holder();
             uint256 amount = uint256(token_amount) * denominator;
             IERC20Permit(token).permit(holder, address(this), amount, _memo_permit_deadline(), v, r, s);
             IERC20(token).safeTransferFrom(holder, address(this), amount);
         } else {
-            revert("Incorrect transaction type");
+            revert("ZkBobPool: Incorrect transaction type");
         }
 
         if (fee > 0) {
