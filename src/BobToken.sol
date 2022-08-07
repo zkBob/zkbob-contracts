@@ -3,6 +3,7 @@
 pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "./proxy/EIP1967Admin.sol";
 import "./token/ERC677.sol";
 import "./token/ERC2612.sol";
 import "./token/MintableERC20.sol";
@@ -13,7 +14,7 @@ import "./utils/Claimable.sol";
 /**
  * @title BobToken
  */
-contract BobToken is ERC20, ERC677, ERC2612, MintableERC20, Recovery, Blocklist, Claimable {
+contract BobToken is EIP1967Admin, ERC20, ERC677, ERC2612, MintableERC20, Recovery, Blocklist, Claimable {
     /**
      * @dev Creates a proxy implementation for BobToken.
      * @param _self address of the proxy contract, linked to the deployed implementation,
@@ -60,5 +61,14 @@ contract BobToken is ERC20, ERC677, ERC2612, MintableERC20, Recovery, Blocklist,
         require(!blocked[_from], "BOB: sender blocked");
         require(!blocked[_to], "BOB: receiver blocked");
         return super.transferFrom(_from, _to, _amount);
+    }
+
+    /**
+     * @dev Tells if caller is the contract owner.
+     * Gives ownership rights to the proxy admin as well.
+     * @return true, if caller is the contract owner or proxy admin.
+     */
+    function _isOwner() internal view override returns (bool) {
+        return super._isOwner() || _admin() == _msgSender();
     }
 }

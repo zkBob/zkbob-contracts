@@ -4,13 +4,13 @@ pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "../proxy/EIP1967Admin.sol";
+import "../utils/Ownable.sol";
 import "../interfaces/IERC677Receiver.sol";
 
 /**
  * @title Recovery
  */
-abstract contract Recovery is ERC20, EIP1967Admin {
+abstract contract Recovery is Ownable, ERC20 {
     event ExecutedRecovery(bytes32 indexed hash, uint256 value);
     event CancelledRecovery(bytes32 indexed hash);
     event RequestedRecovery(
@@ -29,44 +29,44 @@ abstract contract Recovery is ERC20, EIP1967Admin {
     uint256 public recoveryRequestExecutionTimestamp;
 
     /**
-     * @dev Throws if called by any account other than the proxy admin or recovery admin.
+     * @dev Throws if called by any account other than the contract owner or recovery admin.
      */
     modifier onlyRecoveryAdmin() {
-        require(_msgSender() == recoveryAdmin || _msgSender() == _admin(), "Recovery: not authorized for recovery");
+        require(_msgSender() == recoveryAdmin || _isOwner(), "Recovery: not authorized for recovery");
         _;
     }
 
     /**
      * @dev Updates the address of the recovery admin account.
-     * Callable only by the proxy admin.
+     * Callable only by the contract owner.
      * Recovery admin is only authorized to request/execute/cancel recovery operations.
-     * The availability, parameters and impact limits of recovery is controlled by the proxy admin.
+     * The availability, parameters and impact limits of recovery is controlled by the contract owner.
      * @param _recoveryAdmin address of the new recovery admin account.
      */
-    function setRecoveryAdmin(address _recoveryAdmin) external onlyAdmin {
+    function setRecoveryAdmin(address _recoveryAdmin) external onlyOwner {
         recoveryAdmin = _recoveryAdmin;
     }
 
     /**
      * @dev Updates the address of the recovered funds receiver.
-     * Callable only by the proxy admin.
+     * Callable only by the contract owner.
      * Recovered funds receiver will receive ERC20, recovered from lost/unused accounts.
      * If receiver is a smart contract, it must correctly process a ERC677 callback, sent once on the recovery execution.
      * @param _recoveredFundsReceiver address of the new recovered funds receiver.
      */
-    function setRecoveredFundsReceiver(address _recoveredFundsReceiver) external onlyAdmin {
+    function setRecoveredFundsReceiver(address _recoveredFundsReceiver) external onlyOwner {
         recoveredFundsReceiver = _recoveredFundsReceiver;
     }
 
     /**
      * @dev Updates the max allowed percentage of total supply, which can be recovered.
      * Limits the impact that could be caused by the recovery admin.
-     * Callable only by the proxy admin.
+     * Callable only by the contract owner.
      * @param _recoveryLimitPercent percentage, as a fraction of 1 ether, should be at most 100%.
      * In theory, recovery can exceed total supply, if recovered funds are then lost once again,
      * but in practice, we do not expect totalRecovered to reach such extreme values.
      */
-    function setRecoveryLimitPercent(uint64 _recoveryLimitPercent) external onlyAdmin {
+    function setRecoveryLimitPercent(uint64 _recoveryLimitPercent) external onlyOwner {
         require(_recoveryLimitPercent <= 1 ether, "Recovery: invalid percentage");
         recoveryLimitPercent = _recoveryLimitPercent;
     }
@@ -74,10 +74,10 @@ abstract contract Recovery is ERC20, EIP1967Admin {
     /**
      * @dev Updates the timelock period between submission of the recovery request and its execution.
      * Any user, who is not willing to accept the recovery, can safely withdraw his tokens within such period.
-     * Callable only by the proxy admin.
+     * Callable only by the contract owner.
      * @param _recoveryRequestTimelockPeriod new timelock period in seconds.
      */
-    function setRecoveryRequestTimelockPeriod(uint32 _recoveryRequestTimelockPeriod) external onlyAdmin {
+    function setRecoveryRequestTimelockPeriod(uint32 _recoveryRequestTimelockPeriod) external onlyOwner {
         require(_recoveryRequestTimelockPeriod >= 1 days, "Recovery: too low timelock period");
         require(_recoveryRequestTimelockPeriod <= 30 days, "Recovery: too high timelock period");
         recoveryRequestTimelockPeriod = _recoveryRequestTimelockPeriod;
@@ -109,7 +109,7 @@ abstract contract Recovery is ERC20, EIP1967Admin {
     /**
      * @dev Creates a request to recover funds from abandoned/unused accounts.
      * Only one request could be active at a time. Any pending request would be cancelled and won't take any effect.
-     * Callable only by the proxy admin or recovery admin.
+     * Callable only by the contract owner or recovery admin.
      * @param _accounts list of accounts to recover funds from.
      * @param _values list of max values to recover from each of the specified account.
      */
@@ -148,7 +148,7 @@ abstract contract Recovery is ERC20, EIP1967Admin {
      * Executed request should have exactly the same parameters, as emitted in the RequestedRecovery event.
      * Request could only be executed once configured timelock was surpassed.
      * After execution of the request, total amount of recovered funds should not exceed the configured percentage.
-     * Callable only by the proxy admin or recovery admin.
+     * Callable only by the contract owner or recovery admin.
      * @param _accounts list of accounts to recover funds from.
      * @param _values list of max values to recover from each of the specified account.
      */
@@ -175,7 +175,7 @@ abstract contract Recovery is ERC20, EIP1967Admin {
 
     /**
      * @dev Cancels pending recovery request.
-     * Callable only by the proxy admin or recovery admin.
+     * Callable only by the contract owner or recovery admin.
      */
     function cancelRecovery() external onlyRecoveryAdmin {
         bytes32 hash = recoveryRequestHash;

@@ -2,12 +2,12 @@
 
 pragma solidity 0.8.15;
 
-import "../proxy/EIP1967Admin.sol";
+import "./Ownable.sol";
 
 /**
  * @title Blocklist
  */
-contract Blocklist is EIP1967Admin {
+contract Blocklist is Ownable {
     address public blocklister;
     mapping(address => bool) internal blocked;
 
@@ -51,10 +51,10 @@ contract Blocklist is EIP1967Admin {
 
     /**
      * @dev Updates address of the blocklister account.
-     * Callable only by the proxy admin.
+     * Callable only by the contract owner.
      * @param _newBlocklister address of new blocklister account.
      */
-    function updateBlocklister(address _newBlocklister) external onlyAdmin {
+    function updateBlocklister(address _newBlocklister) external onlyOwner {
         blocklister = _newBlocklister;
         emit BlocklisterChanged(_newBlocklister);
     }

@@ -9,6 +9,7 @@ import "../../src/BobVault.sol";
 contract DeployBobVault is Script {
     address private constant minter = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
     address private constant admin = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
+    address private constant owner = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
     address private constant yieldAdmin = 0x0000000000000000000000000000000000000000;
     address private constant investAdmin = 0x0000000000000000000000000000000000000000;
 
@@ -28,14 +29,23 @@ contract DeployBobVault is Script {
             vault.setInvestAdmin(investAdmin);
         }
 
+        if (admin != owner) {
+            vault.transferOwnership(owner);
+        }
+
         if (tx.origin != admin) {
             proxy.setAdmin(admin);
         }
 
         vm.stopBroadcast();
 
-        require(proxy.admin() == admin, "Invalid admin account");
         require(proxy.implementation() == address(impl), "Invalid implementation address");
+        require(proxy.admin() == admin, "Proxy admin is not configured");
+        if (admin == owner) {
+            require(vault.owner() == address(0), "Owner is not configured");
+        } else {
+            require(vault.owner() == owner, "Owner is not configured");
+        }
         require(vault.yieldAdmin() == yieldAdmin, "Yield admin is not configured");
         require(vault.investAdmin() == investAdmin, "Invest admin is not configured");
     }

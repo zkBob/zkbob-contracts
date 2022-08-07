@@ -6,9 +6,10 @@ import "forge-std/Script.sol";
 import "../../src/XPBobToken.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 
-contract DeployBobVoucherToken is Script {
+contract DeployXPBobToken is Script {
     address private constant minter = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
     address private constant admin = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
+    address private constant owner = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
 
     address private constant mockImpl = address(0xdead);
 
@@ -24,14 +25,23 @@ contract DeployBobVoucherToken is Script {
         XPBobToken vbob = XPBobToken(address(proxy));
         vbob.setMinter(minter);
 
+        if (admin != owner) {
+            vbob.transferOwnership(owner);
+        }
+
         if (tx.origin != admin) {
             proxy.setAdmin(admin);
         }
 
         vm.stopBroadcast();
 
-        require(proxy.admin() == admin, "Invalid admin account");
         require(proxy.implementation() == address(impl), "Invalid implementation address");
+        require(proxy.admin() == admin, "Proxy admin is not configured");
+        if (admin == owner) {
+            require(vbob.owner() == address(0), "Owner is not configured");
+        } else {
+            require(vbob.owner() == owner, "Owner is not configured");
+        }
         require(vbob.minter() == minter, "Minter is not configured");
     }
 }

@@ -2,9 +2,9 @@
 
 pragma solidity 0.8.15;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/IAllowList.sol";
+import "../utils/Ownable.sol";
 
 contract EnglishAuction is Ownable {
     enum Status {

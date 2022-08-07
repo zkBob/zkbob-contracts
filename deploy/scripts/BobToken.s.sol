@@ -9,8 +9,9 @@ import "../../src/proxy/EIP1967Proxy.sol";
 
 contract DeployBobToken is Script {
     address private constant deployer = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
-    address private constant minter = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
     address private constant admin = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
+    address private constant owner = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
+    address private constant minter = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
 
     address private constant vanityAddr = address(0xB0B65813DD450B7c98Fed97404fAbAe179A00B0B);
     address private constant mockImpl = address(0xdead);
@@ -34,6 +35,10 @@ contract DeployBobToken is Script {
         BobToken bob = BobToken(address(proxy));
         bob.setMinter(minter);
 
+        if (admin != owner) {
+            bob.transferOwnership(owner);
+        }
+
         if (deployer != admin) {
             proxy.setAdmin(admin);
         }
@@ -41,8 +46,13 @@ contract DeployBobToken is Script {
         vm.stopBroadcast();
 
         require(address(bob) == vanityAddr, "Invalid vanity address");
-        require(proxy.admin() == admin, "Invalid admin account");
         require(proxy.implementation() == address(impl), "Invalid implementation address");
+        require(proxy.admin() == admin, "Proxy admin is not configured");
+        if (admin == owner) {
+            require(bob.owner() == address(0), "Owner is not configured");
+        } else {
+            require(bob.owner() == owner, "Owner is not configured");
+        }
         require(bob.minter() == minter, "Minter is not configured");
     }
 }

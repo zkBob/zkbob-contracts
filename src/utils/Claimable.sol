@@ -3,36 +3,35 @@
 pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/Context.sol";
-import "../proxy/EIP1967Admin.sol";
+import "./Ownable.sol";
 
 /**
  * @title Claimable
  */
-contract Claimable is Context, EIP1967Admin {
+contract Claimable is Ownable {
     address claimingAdmin;
 
     /**
-     * @dev Throws if called by any account other than the proxy admin or claiming admin.
+     * @dev Throws if called by any account other than the contract owner or claiming admin.
      */
     modifier onlyClaimingAdmin() {
-        require(_msgSender() == claimingAdmin || msg.sender == _admin(), "Claimable: not authorized for claiming");
+        require(_msgSender() == claimingAdmin || _isOwner(), "Claimable: not authorized for claiming");
         _;
     }
 
     /**
      * @dev Updates the address of the claiming admin account.
-     * Callable only by the proxy admin.
+     * Callable only by the contract owner.
      * Claiming admin is only authorized to claim ERC20 tokens or native tokens mistakenly sent to the token contract address.
      * @param _claimingAdmin address of the new claiming admin account.
      */
-    function setClaimingAdmin(address _claimingAdmin) external onlyAdmin {
+    function setClaimingAdmin(address _claimingAdmin) external onlyOwner {
         claimingAdmin = _claimingAdmin;
     }
 
     /**
      * @dev Allows to transfer any locked token from this contract.
-     * Callable only by the proxy admin or claiming admin.
+     * Callable only by the contract owner or claiming admin.
      * @param _token address of the token contract, or 0x00..00 for transferring native coins.
      * @param _to locked tokens receiver address.
      */

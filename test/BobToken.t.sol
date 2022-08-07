@@ -46,7 +46,7 @@ contract BobTokenTest is Test, EIP2470Test {
         vm.prank(deployer);
         bob.setMinter(user1);
 
-        vm.expectRevert("BOB: not a minter");
+        vm.expectRevert("MintableERC20: not a minter");
         bob.mint(user2, 1 ether);
 
         vm.prank(user1);
@@ -57,7 +57,7 @@ contract BobTokenTest is Test, EIP2470Test {
     }
 
     function testMinterChange() public {
-        vm.expectRevert();
+        vm.expectRevert("Ownable: caller is not the owner");
         bob.setMinter(user1);
 
         assertEq(bob.minter(), address(0));
@@ -246,25 +246,25 @@ contract BobTokenTest is Test, EIP2470Test {
     }
 
     function testRecoverySettings() public {
-        vm.expectRevert();
+        vm.expectRevert("Ownable: caller is not the owner");
         bob.setRecoveryAdmin(user1);
-        vm.expectRevert();
+        vm.expectRevert("Ownable: caller is not the owner");
         bob.setRecoveredFundsReceiver(user2);
-        vm.expectRevert();
+        vm.expectRevert("Ownable: caller is not the owner");
         bob.setRecoveryLimitPercent(0.1 ether);
-        vm.expectRevert();
+        vm.expectRevert("Ownable: caller is not the owner");
         bob.setRecoveryRequestTimelockPeriod(1 days);
 
         _setUpRecoveryConfig();
 
         vm.startPrank(user1);
-        vm.expectRevert();
+        vm.expectRevert("Ownable: caller is not the owner");
         bob.setRecoveryAdmin(user1);
-        vm.expectRevert();
+        vm.expectRevert("Ownable: caller is not the owner");
         bob.setRecoveredFundsReceiver(user2);
-        vm.expectRevert();
+        vm.expectRevert("Ownable: caller is not the owner");
         bob.setRecoveryLimitPercent(0.1 ether);
-        vm.expectRevert();
+        vm.expectRevert("Ownable: caller is not the owner");
         bob.setRecoveryRequestTimelockPeriod(1 days);
         vm.stopPrank();
 

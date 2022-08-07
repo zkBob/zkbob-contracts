@@ -6,11 +6,12 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./yield/YieldConnector.sol";
 import "./proxy/EIP1967Admin.sol";
+import "./utils/Ownable.sol";
 
 /**
  * @title BobVault
  */
-contract BobVault is EIP1967Admin, YieldConnector {
+contract BobVault is EIP1967Admin, Ownable, YieldConnector {
     using SafeERC20 for IERC20;
 
     address public yieldAdmin;
@@ -71,7 +72,7 @@ contract BobVault is EIP1967Admin, YieldConnector {
         res.farmed = res.total - res.required;
     }
 
-    function addCollateral(address _token, Collateral calldata _collateral) external onlyAdmin {
+    function addCollateral(address _token, Collateral calldata _collateral) external onlyOwner {
         Collateral storage token = collateral[_token];
         require(token.price == 0, "BobVault: already initialized collateral");
 
@@ -90,7 +91,7 @@ contract BobVault is EIP1967Admin, YieldConnector {
         emit AddCollateral(_token, _collateral.price);
     }
 
-    function enableCollateralYield(address _token, address _yield, uint128 _buffer, uint96 _dust) external onlyAdmin {
+    function enableCollateralYield(address _token, address _yield, uint128 _buffer, uint96 _dust) external onlyOwner {
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
         require(token.yield == address(0), "BobVault: yield already enabled");
@@ -111,7 +112,7 @@ contract BobVault is EIP1967Admin, YieldConnector {
         emit EnableYield(_token, _yield, _buffer, _dust);
     }
 
-    function disableCollateralYield(address _token) external onlyAdmin {
+    function disableCollateralYield(address _token) external onlyOwner {
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
         address yield = token.yield;
@@ -126,7 +127,7 @@ contract BobVault is EIP1967Admin, YieldConnector {
         emit DisableYield(_token, yield);
     }
 
-    function setCollateralFees(address _token, uint64 _inFee, uint64 _outFee) external onlyAdmin {
+    function setCollateralFees(address _token, uint64 _inFee, uint64 _outFee) external onlyOwner {
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
 
@@ -138,11 +139,11 @@ contract BobVault is EIP1967Admin, YieldConnector {
         emit UpdateFees(_token, _inFee, _outFee);
     }
 
-    function setYieldAdmin(address _yieldAdmin) external onlyAdmin {
+    function setYieldAdmin(address _yieldAdmin) external onlyOwner {
         yieldAdmin = _yieldAdmin;
     }
 
-    function setInvestAdmin(address _investAdmin) external onlyAdmin {
+    function setInvestAdmin(address _investAdmin) external onlyOwner {
         investAdmin = _investAdmin;
     }
 
@@ -222,7 +223,7 @@ contract BobVault is EIP1967Admin, YieldConnector {
     }
 
     function invest(address _token) external {
-        require(msg.sender == investAdmin || msg.sender == _admin(), "BobVault: not authorized");
+        require(_msgSender() == investAdmin || _isOwner(), "BobVault: not authorized");
 
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
@@ -241,7 +242,7 @@ contract BobVault is EIP1967Admin, YieldConnector {
     }
 
     function farm(address[] memory _tokens) external returns (uint256[] memory) {
-        require(msg.sender == yieldAdmin || msg.sender == _admin(), "BobVault: not authorized");
+        require(_msgSender() == yieldAdmin || _isOwner(), "BobVault: not authorized");
 
         uint256[] memory result = new uint256[](_tokens.length);
         for (uint256 i = 0; i < _tokens.length; i++) {
@@ -274,12 +275,12 @@ contract BobVault is EIP1967Admin, YieldConnector {
     }
 
     function farmExtra(address _token, bytes calldata _data) external {
-        require(msg.sender == yieldAdmin || msg.sender == _admin(), "BobVault: not authorized");
+        require(_msgSender() == yieldAdmin || _isOwner(), "BobVault: not authorized");
 
         Collateral memory token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
 
-        _delegateFarmExtra(token.yield, _token, msg.sender, _data);
+        _delegateFarmExtra(token.yield, _token, _msgSender(), _data);
 
         emit FarmExtra(_token, token.yield);
 
@@ -300,7 +301,7 @@ contract BobVault is EIP1967Admin, YieldConnector {
         emit Give(_token, _amount);
     }
 
-    function reclaim(address _to, uint256 _value) external onlyAdmin {
+    function reclaim(address _to, uint256 _value) external onlyOwner {
         uint256 balance = bobToken.balanceOf(address(this));
         uint256 value = balance > _value ? _value : balance;
         if (value > 0) {
@@ -327,5 +328,14 @@ contract BobVault is EIP1967Admin, YieldConnector {
         }
 
         IERC20(_token).safeTransfer(_to, _value);
+    }
+
+    /**
+     * @dev Tells if caller is the contract owner.
+     * Gives ownership rights to the proxy admin as well.
+     * @return true, if caller is the contract owner or proxy admin.
+     */
+    function _isOwner() internal view override returns (bool) {
+        return super._isOwner() || _admin() == _msgSender();
     }
 }

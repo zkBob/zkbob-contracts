@@ -2,11 +2,11 @@
 
 pragma solidity 0.8.15;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "./auction/DutchAuction.sol";
-import "./XPBobToken.sol";
-import "./auction/EnglishAuction.sol";
 import "./interfaces/IBatchAuction.sol";
+import "./auction/DutchAuction.sol";
+import "./auction/EnglishAuction.sol";
+import "./utils/Ownable.sol";
+import "./XPBobToken.sol";
 
 contract BobAuction is Ownable {
     uint96 public feeAmount;

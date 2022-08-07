@@ -3,20 +3,20 @@
 pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "../proxy/EIP1967Admin.sol";
+import "../utils/Ownable.sol";
 
 /**
  * @title MintableERC20
  */
-abstract contract MintableERC20 is ERC20, EIP1967Admin {
+abstract contract MintableERC20 is Ownable, ERC20 {
     address public minter;
 
     /**
      * @dev Updates the address of the minter account.
-     * Callable only by the proxy admin.
+     * Callable only by the contract owner.
      * @param _minter address of the new minter EOA or contract.
      */
-    function setMinter(address _minter) external onlyAdmin {
+    function setMinter(address _minter) external onlyOwner {
         minter = _minter;
     }
 
@@ -27,7 +27,7 @@ abstract contract MintableERC20 is ERC20, EIP1967Admin {
      * @param _amount amount of tokens to mint.
      */
     function mint(address _to, uint256 _amount) external {
-        require(msg.sender == minter, "BOB: not a minter");
+        require(msg.sender == minter, "MintableERC20: not a minter");
 
         _mint(_to, _amount);
     }
