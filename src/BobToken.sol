@@ -64,6 +64,40 @@ contract BobToken is EIP1967Admin, ERC20, ERC677, ERC2612, MintableERC20, Recove
     }
 
     /**
+     * @dev Makes receiveWithPermit, if none of participants is blocklisted.
+     */
+    function receiveWithPermit(address _holder, uint256 _value, uint256 _deadline, uint8 _v, bytes32 _r, bytes32 _s)
+        public
+        override
+    {
+        require(!blocked[_msgSender()], "BOB: spender blocked");
+        require(!blocked[_holder], "BOB: sender blocked");
+        return super.receiveWithPermit(_holder, _value, _deadline, _v, _r, _s);
+    }
+
+    /**
+     * @dev Makes transferFromWithPermit, if none of participants is blocklisted.
+     */
+    function transferFromWithPermit(
+        address _from,
+        address _to,
+        uint256 _amount,
+        uint256 _value,
+        uint256 _deadline,
+        uint8 _v,
+        bytes32 _r,
+        bytes32 _s
+    )
+        public
+        override
+    {
+        require(!blocked[_msgSender()], "BOB: spender blocked");
+        require(!blocked[_from], "BOB: sender blocked");
+        require(!blocked[_to], "BOB: sender blocked");
+        return super.transferFromWithPermit(_from, _to, _amount, _value, _deadline, _v, _r, _s);
+    }
+
+    /**
      * @dev Tells if caller is the contract owner.
      * Gives ownership rights to the proxy admin as well.
      * @return true, if caller is the contract owner or proxy admin.

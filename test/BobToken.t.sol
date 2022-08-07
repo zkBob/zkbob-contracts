@@ -102,7 +102,76 @@ contract BobTokenTest is Test, EIP2470Test {
         bob.setMinter(address(this));
 
         bob.mint(user1, 1 ether);
+
         uint256 expiry = block.timestamp + 1 days;
+        (uint8 v, bytes32 r, bytes32 s) = _signPermit(pk1, user1, user2, 1 ether, 0, expiry);
+
+        // different message
+        vm.expectRevert("ERC2612: invalid signature");
+        bob.permit(user1, user2, 2 ether, expiry, v, r, s);
+
+        // expired message
+        vm.warp(expiry + 1 days);
+        vm.expectRevert("ERC2612: expired permit");
+        bob.permit(user1, user2, 1 ether, expiry, v, r, s);
+        vm.warp(expiry - 1 days);
+
+        // correct permit with nonce 0
+        assertEq(bob.allowance(user1, user2), 0 ether);
+        bob.permit(user1, user2, 1 ether, expiry, v, r, s);
+        assertEq(bob.allowance(user1, user2), 1 ether);
+
+        // expired nonce
+        vm.expectRevert("ERC2612: invalid signature");
+        bob.permit(user1, user2, 1 ether, expiry, v, r, s);
+    }
+
+    function testReceiveWithPermit() public {
+        vm.prank(deployer);
+        bob.setMinter(address(this));
+
+        bob.mint(user1, 1 ether);
+
+        uint256 expiry = block.timestamp + 1 days;
+        (uint8 v, bytes32 r, bytes32 s) = _signPermit(pk1, user1, user2, 1 ether, 0, expiry);
+
+        vm.expectRevert("ERC2612: invalid signature");
+        bob.receiveWithPermit(user1, 1 ether, expiry, v, r, s);
+        vm.prank(user2);
+        bob.receiveWithPermit(user1, 1 ether, expiry, v, r, s);
+        assertEq(bob.balanceOf(user1), 0 ether);
+        assertEq(bob.balanceOf(user2), 1 ether);
+    }
+
+    function testTransferFromWithPermit() public {
+        vm.prank(deployer);
+        bob.setMinter(address(this));
+
+        bob.mint(user1, 1 ether);
+
+        uint256 expiry = block.timestamp + 1 days;
+        (uint8 v, bytes32 r, bytes32 s) = _signPermit(pk1, user1, user2, 1 ether, 0, expiry);
+
+        vm.expectRevert("ERC2612: invalid signature");
+        bob.transferFromWithPermit(user1, address(this), 0.9 ether, 1 ether, expiry, v, r, s);
+        vm.prank(user2);
+        bob.transferFromWithPermit(user1, address(this), 0.9 ether, 1 ether, expiry, v, r, s);
+        assertEq(bob.balanceOf(user1), 0.1 ether);
+        assertEq(bob.balanceOf(user2), 0 ether);
+        assertEq(bob.balanceOf(address(this)), 0.9 ether);
+    }
+
+    function _signPermit(
+        uint256 _pk,
+        address _holder,
+        address _spender,
+        uint256 _value,
+        uint256 _nonce,
+        uint256 _expiry
+    )
+        internal
+        returns (uint8 v, bytes32 r, bytes32 s)
+    {
         assertEq(
             bob.DOMAIN_SEPARATOR(),
             keccak256(
@@ -116,28 +185,10 @@ contract BobTokenTest is Test, EIP2470Test {
             )
         );
         bytes32 digest = ECDSA.toTypedDataHash(
-            bob.DOMAIN_SEPARATOR(), keccak256(abi.encode(bob.PERMIT_TYPEHASH(), user1, user2, 1 ether, 0, expiry))
+            bob.DOMAIN_SEPARATOR(),
+            keccak256(abi.encode(bob.PERMIT_TYPEHASH(), _holder, _spender, _value, _nonce, _expiry))
         );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, digest);
-
-        // different message
-        vm.expectRevert("BOB: invalid signature");
-        bob.permit(user1, user2, 2 ether, expiry, v, r, s);
-
-        // expired message
-        vm.warp(expiry + 1 days);
-        vm.expectRevert("BOB: expired permit");
-        bob.permit(user1, user2, 1 ether, expiry, v, r, s);
-        vm.warp(expiry - 1 days);
-
-        // correct permit with nonce 0
-        assertEq(bob.allowance(user1, user2), 0 ether);
-        bob.permit(user1, user2, 1 ether, expiry, v, r, s);
-        assertEq(bob.allowance(user1, user2), 1 ether);
-
-        // expired nonce
-        vm.expectRevert("BOB: invalid signature");
-        bob.permit(user1, user2, 1 ether, expiry, v, r, s);
+        return vm.sign(_pk, digest);
     }
 
     function testBlocklist() public {
