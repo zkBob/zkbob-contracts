@@ -25,11 +25,11 @@ contract DeployXPBobToken is Script {
         XPBobToken vbob = XPBobToken(address(proxy));
         vbob.setMinter(minter);
 
-        if (admin != owner) {
+        if (owner != address(0)) {
             vbob.transferOwnership(owner);
         }
 
-        if (tx.origin != admin) {
+        if (admin != address(0) && tx.origin != admin) {
             proxy.setAdmin(admin);
         }
 
@@ -37,7 +37,7 @@ contract DeployXPBobToken is Script {
 
         require(proxy.implementation() == address(impl), "Invalid implementation address");
         require(proxy.admin() == admin, "Proxy admin is not configured");
-        require(vbob.owner() == owner == admin ? address(0) : owner, "Owner is not configured");
+        require(vbob.owner() == owner, "Owner is not configured");
         require(vbob.minter() == minter, "Minter is not configured");
     }
 }
