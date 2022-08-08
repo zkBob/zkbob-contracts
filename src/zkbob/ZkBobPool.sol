@@ -3,12 +3,12 @@
 pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/draft-IERC20Permit.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../interfaces/ITransferVerifier.sol";
 import "../interfaces/ITreeVerifier.sol";
 import "../interfaces/IMintableERC20.sol";
 import "../interfaces/IOperatorManager.sol";
+import "../interfaces/IERC20Permit.sol";
 import "./utils/Parameters.sol";
 import "./utils/ZkBobPoolStats.sol";
 import "../utils/Ownable.sol";
@@ -85,14 +85,14 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobPoolStats {
     function transact() external payable onlyOperator {
         (uint32 weekMaxTvl, uint32 weekCount, uint256 poolIndex) = _updateStats();
 
+        uint256 nullifier = _transfer_nullifier();
         {
             require(transfer_verifier.verifyProof(_transfer_pub(), _transfer_proof()), "ZkBobPool: bad transfer proof");
-            require(nullifiers[_transfer_nullifier()] == 0, "ZkBobPool: doublespend detected");
+            require(nullifiers[nullifier] == 0, "ZkBobPool: doublespend detected");
             require(_transfer_index() <= poolIndex, "ZkBobPool: transfer index out of bounds");
             require(tree_verifier.verifyProof(_tree_pub(roots[poolIndex]), _tree_proof()), "ZkBobPool: bad tree proof");
 
-            nullifiers[_transfer_nullifier()] =
-                uint256(keccak256(abi.encodePacked(_transfer_out_commit(), _transfer_delta())));
+            nullifiers[nullifier] = uint256(keccak256(abi.encodePacked(_transfer_out_commit(), _transfer_delta())));
             poolIndex += 128;
             roots[poolIndex] = _tree_root_after();
             bytes memory message = _memo_message();
@@ -143,8 +143,9 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobPoolStats {
             (uint8 v, bytes32 r, bytes32 s) = _permittable_deposit_signature();
             address holder = _memo_permit_holder();
             uint256 amount = uint256(token_amount) * denominator;
-            IERC20Permit(token).permit(holder, address(this), amount, _memo_permit_deadline(), v, r, s);
-            IERC20(token).safeTransferFrom(holder, address(this), amount);
+            IERC20Permit(token).receiveWithSaltedPermit(
+                holder, amount, _memo_permit_deadline(), bytes32(nullifier), v, r, s
+            );
         } else {
             revert("ZkBobPool: Incorrect transaction type");
         }

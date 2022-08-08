@@ -3,18 +3,23 @@
 pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/draft-IERC20Permit.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "../interfaces/IERC20Permit.sol";
 
 /**
- * @title ERC2612
+ * @title ERC20Permit
  */
-abstract contract ERC2612 is ERC20, IERC20Permit {
+abstract contract ERC20Permit is ERC20, IERC20Permit {
     // EIP712 domain separator
     bytes32 public immutable DOMAIN_SEPARATOR;
     // EIP2612 permit typehash
     bytes32 public constant PERMIT_TYPEHASH =
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+    // Custom "salted" permit typehash
+    // Works exactly the same as EIP2612 permit, except that includes an additional salt,
+    // which should be explicitly signed by the user, as part of the permit message.
+    bytes32 public constant SALTED_PERMIT_TYPEHASH =
+        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline,bytes32 salt)");
 
     mapping(address => uint256) public nonces;
 
@@ -77,14 +82,32 @@ abstract contract ERC2612 is ERC20, IERC20Permit {
     }
 
     /**
-     * @dev Cheap shortcut for making sequential calls to permit() + transferFrom() functions for different amount/address.
+     * @dev Salted permit modification.
      */
-    function transferFromWithPermit(
-        address _from,
-        address _to,
-        uint256 _amount,
+    function saltedPermit(
+        address _holder,
+        address _spender,
         uint256 _value,
         uint256 _deadline,
+        bytes32 _salt,
+        uint8 _v,
+        bytes32 _r,
+        bytes32 _s
+    )
+        external
+    {
+        _checkSaltedPermit(_holder, _spender, _value, _deadline, _salt, _v, _r, _s);
+        _approve(_holder, _spender, _value);
+    }
+
+    /**
+     * @dev Cheap shortcut for making sequential calls to saltedPermit() + transferFrom() functions.
+     */
+    function receiveWithSaltedPermit(
+        address _holder,
+        uint256 _value,
+        uint256 _deadline,
+        bytes32 _salt,
         uint8 _v,
         bytes32 _r,
         bytes32 _s
@@ -92,19 +115,14 @@ abstract contract ERC2612 is ERC20, IERC20Permit {
         public
         virtual
     {
-        _checkPermit(_from, _msgSender(), _value, _deadline, _v, _r, _s);
+        _checkSaltedPermit(_holder, _msgSender(), _value, _deadline, _salt, _v, _r, _s);
 
-        // we don't make call to _approve to avoid unnecessary storage write
+        // we don't make calls to _approve to avoid unnecessary storage writes
         // however, emitting ERC20 events is still desired
-        emit Approval(_from, _msgSender(), _value);
-        if (_value < type(uint256).max) {
-            require(_value >= _amount, "ERC20: insufficient allowance");
-            unchecked {
-                _approve(_from, _msgSender(), _value - _amount);
-            }
-        }
+        emit Approval(_holder, _msgSender(), _value);
+        emit Approval(_holder, _msgSender(), 0);
 
-        _transfer(_from, _to, _amount);
+        _transfer(_holder, _msgSender(), _value);
     }
 
     function _checkPermit(
@@ -118,13 +136,36 @@ abstract contract ERC2612 is ERC20, IERC20Permit {
     )
         private
     {
-        require(block.timestamp <= _deadline, "ERC2612: expired permit");
+        require(block.timestamp <= _deadline, "ERC20Permit: expired permit");
 
         uint256 nonce = nonces[_holder]++;
         bytes32 digest = ECDSA.toTypedDataHash(
             DOMAIN_SEPARATOR, keccak256(abi.encode(PERMIT_TYPEHASH, _holder, _spender, _value, nonce, _deadline))
         );
 
-        require(_holder == ECDSA.recover(digest, _v, _r, _s), "ERC2612: invalid signature");
+        require(_holder == ECDSA.recover(digest, _v, _r, _s), "ERC20Permit: invalid ERC2612 signature");
+    }
+
+    function _checkSaltedPermit(
+        address _holder,
+        address _spender,
+        uint256 _value,
+        uint256 _deadline,
+        bytes32 _salt,
+        uint8 _v,
+        bytes32 _r,
+        bytes32 _s
+    )
+        private
+    {
+        require(block.timestamp <= _deadline, "ERC20Permit: expired permit");
+
+        uint256 nonce = nonces[_holder]++;
+        bytes32 digest = ECDSA.toTypedDataHash(
+            DOMAIN_SEPARATOR,
+            keccak256(abi.encode(SALTED_PERMIT_TYPEHASH, _holder, _spender, _value, nonce, _deadline, _salt))
+        );
+
+        require(_holder == ECDSA.recover(digest, _v, _r, _s), "ERC20Permit: invalid signature");
     }
 }
