@@ -11,7 +11,6 @@ abstract contract Parameters is CustomABIDecoder {
     bytes constant MESSAGE_PREFIX = "\x19Ethereum Signed Message:\n32";
 
     function _root() internal view virtual returns (uint256);
-    function _root_before() internal view virtual returns (uint256);
     function _pool_id() internal view virtual returns (uint256);
 
     function _transfer_pub() internal view returns (uint256[5] memory r) {
@@ -22,8 +21,8 @@ abstract contract Parameters is CustomABIDecoder {
         r[4] = uint256(keccak256(_memo_data())) % R;
     }
 
-    function _tree_pub() internal view returns (uint256[3] memory r) {
-        r[0] = _root_before();
+    function _tree_pub(uint256 _root_before) internal view returns (uint256[3] memory r) {
+        r[0] = _root_before;
         r[1] = _tree_root_after();
         r[2] = _transfer_out_commit();
     }

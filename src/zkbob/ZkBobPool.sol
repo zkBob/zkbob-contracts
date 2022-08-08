@@ -10,10 +10,11 @@ import "../interfaces/ITreeVerifier.sol";
 import "../interfaces/IMintableERC20.sol";
 import "../interfaces/IOperatorManager.sol";
 import "./utils/Parameters.sol";
+import "./utils/ZkBobPoolStats.sol";
 import "../utils/Ownable.sol";
 import "../proxy/EIP1967Admin.sol";
 
-contract ZkBobPool is EIP1967Admin, Ownable, Parameters {
+contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobPoolStats {
     using SafeERC20 for IERC20;
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
@@ -69,10 +70,6 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters {
         operatorManager = _operatorManager;
     }
 
-    function _root_before() internal view override returns (uint256) {
-        return roots[pool_index];
-    }
-
     function _root() internal view override returns (uint256) {
         return roots[_transfer_index()];
     }
@@ -81,25 +78,28 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters {
         return pool_id;
     }
 
-    function transact() external payable onlyOperator {
-        {
-            uint256 _pool_index = pool_index;
+    function _tvl() internal view override returns (uint256) {
+        return IERC20(token).balanceOf(address(this));
+    }
 
+    function transact() external payable onlyOperator {
+        (uint32 weekMaxTvl, uint32 weekCount, uint256 poolIndex) = _updateStats();
+
+        {
             require(transfer_verifier.verifyProof(_transfer_pub(), _transfer_proof()), "ZkBobPool: bad transfer proof");
             require(nullifiers[_transfer_nullifier()] == 0, "ZkBobPool: doublespend detected");
-            require(_transfer_index() <= _pool_index, "ZkBobPool: transfer index out of bounds");
-            require(tree_verifier.verifyProof(_tree_pub(), _tree_proof()), "ZkBobPool: bad tree proof");
+            require(_transfer_index() <= poolIndex, "ZkBobPool: transfer index out of bounds");
+            require(tree_verifier.verifyProof(_tree_pub(roots[poolIndex]), _tree_proof()), "ZkBobPool: bad tree proof");
 
             nullifiers[_transfer_nullifier()] =
                 uint256(keccak256(abi.encodePacked(_transfer_out_commit(), _transfer_delta())));
-            _pool_index += 128;
-            roots[_pool_index] = _tree_root_after();
-            pool_index = _pool_index;
+            poolIndex += 128;
+            roots[poolIndex] = _tree_root_after();
             bytes memory message = _memo_message();
             bytes32 message_hash = keccak256(message);
             bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
             all_messages_hash = _all_messages_hash;
-            emit Message(_pool_index, _all_messages_hash, message);
+            emit Message(poolIndex, _all_messages_hash, message);
         }
 
         uint256 fee = _memo_fee();
