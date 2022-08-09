@@ -83,7 +83,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobPoolStats {
     }
 
     function transact() external payable onlyOperator {
-        (uint32 weekMaxTvl, uint32 weekCount, uint256 poolIndex) = _updateStats();
+        (uint56 weekMaxTvl, uint32 weekCount, uint256 poolIndex) = _updateStats();
 
         uint256 nullifier = _transfer_nullifier();
         {

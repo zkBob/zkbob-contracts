@@ -6,7 +6,7 @@ import "../../src/zkbob/utils/ZkBobPoolStats.sol";
 
 contract ZkBobStatsMock is ZkBobPoolStats {
     uint256 tvl;
-    uint32 public weekMaxTvl;
+    uint56 public weekMaxTvl;
     uint32 public weekMaxCount;
     uint256 public poolIndex;
 
