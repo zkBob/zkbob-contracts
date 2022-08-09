@@ -28,13 +28,11 @@ contract ZkBobPoolStatsTest is Test {
         emit log_bytes32(pool.slot0());
 
         for (uint256 i = 0; i < 200; i++) {
-            // not hour module 0
             pool.transact((100 + i) * 1 ether);
             vm.warp(block.timestamp + 20 minutes);
         }
 
-        assertGe(pool.weekMaxTvl(), 137);
-        assertLe(pool.weekMaxTvl(), 148);
+        assertEq(pool.weekMaxTvl(), 137);
         assertEq(pool.weekMaxCount(), 504);
         assertEq(pool.poolIndex(), 1199 * 128);
         emit log_bytes32(pool.slot0());
@@ -44,8 +42,7 @@ contract ZkBobPoolStatsTest is Test {
             vm.warp(block.timestamp + 10 minutes);
         }
 
-        assertGe(pool.weekMaxTvl(), 198);
-        assertLe(pool.weekMaxTvl(), 199);
+        assertEq(pool.weekMaxTvl(), 198);
         assertEq(pool.weekMaxCount(), 603);
         assertEq(pool.poolIndex(), 1399 * 128);
         emit log_bytes32(pool.slot0());
@@ -55,8 +52,7 @@ contract ZkBobPoolStatsTest is Test {
             vm.warp(block.timestamp + 30 minutes);
         }
 
-        assertGe(pool.weekMaxTvl(), 213);
-        assertLe(pool.weekMaxTvl(), 214);
+        assertEq(pool.weekMaxTvl(), 213);
         assertEq(pool.weekMaxCount(), 604);
         assertEq(pool.poolIndex(), 2399 * 128);
         emit log_bytes32(pool.slot0());

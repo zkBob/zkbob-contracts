@@ -36,6 +36,8 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobPoolStats {
     uint256 public pool_index;
     bytes32 public all_messages_hash;
 
+    mapping(address => uint256) public accumulatedFee;
+
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
 
     constructor(
@@ -87,9 +89,9 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobPoolStats {
 
         uint256 nullifier = _transfer_nullifier();
         {
-            require(transfer_verifier.verifyProof(_transfer_pub(), _transfer_proof()), "ZkBobPool: bad transfer proof");
             require(nullifiers[nullifier] == 0, "ZkBobPool: doublespend detected");
             require(_transfer_index() <= poolIndex, "ZkBobPool: transfer index out of bounds");
+            require(transfer_verifier.verifyProof(_transfer_pub(), _transfer_proof()), "ZkBobPool: bad transfer proof");
             require(tree_verifier.verifyProof(_tree_pub(roots[poolIndex]), _tree_proof()), "ZkBobPool: bad tree proof");
 
             nullifiers[nullifier] = uint256(keccak256(abi.encodePacked(_transfer_out_commit(), _transfer_delta())));
@@ -102,14 +104,14 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobPoolStats {
             emit Message(poolIndex, _all_messages_hash, message);
         }
 
-        uint256 fee = _memo_fee();
-        int256 token_amount = _transfer_token_amount() + int256(fee);
+        uint256 fee = _memo_fee() * denominator;
+        int256 token_amount = _transfer_token_amount() * int256(denominator) + int256(fee);
         int256 energy_amount = _transfer_energy_amount();
 
         if (_tx_type() == 0) {
             // Deposit
             require(token_amount >= 0 && energy_amount == 0 && msg.value == 0, "ZkBobPool: incorrect deposit amounts");
-            IERC20(token).safeTransferFrom(_deposit_spender(), address(this), uint256(token_amount) * denominator);
+            IERC20(token).safeTransferFrom(_deposit_spender(), address(this), uint256(token_amount));
         } else if (_tx_type() == 1) {
             // Transfer
             require(token_amount == 0 && energy_amount == 0 && msg.value == 0, "ZkBobPool: incorrect transfer amounts");
@@ -123,7 +125,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobPoolStats {
             address receiver = _memo_receiver();
 
             if (token_amount < 0) {
-                IERC20(token).safeTransfer(receiver, uint256(-token_amount) * denominator);
+                IERC20(token).safeTransfer(receiver, uint256(-token_amount));
             }
 
             if (energy_amount < 0) {
@@ -133,16 +135,14 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobPoolStats {
             }
 
             if (msg.value > 0) {
-                // TODO safe send via Sacrifice ?
-                (bool success,) = payable(receiver).call{value: msg.value}("");
-                require(success);
+                payable(receiver).transfer(msg.value);
             }
         } else if (_tx_type() == 3) {
             // Permittable token deposit
             require(token_amount >= 0 && energy_amount == 0 && msg.value == 0, "ZkBobPool: incorrect deposit amounts");
             (uint8 v, bytes32 r, bytes32 s) = _permittable_deposit_signature();
             address holder = _memo_permit_holder();
-            uint256 amount = uint256(token_amount) * denominator;
+            uint256 amount = uint256(token_amount);
             IERC20Permit(token).receiveWithSaltedPermit(
                 holder, amount, _memo_permit_deadline(), bytes32(nullifier), v, r, s
             );
@@ -151,8 +151,15 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobPoolStats {
         }
 
         if (fee > 0) {
-            IERC20(token).safeTransfer(msg.sender, fee * denominator);
+            accumulatedFee[msg.sender] += fee;
         }
+    }
+
+    function withdrawFee() external {
+        uint256 fee = accumulatedFee[msg.sender];
+        require(fee > 0, "ZkBobPool: no fee to withdraw");
+        IERC20(token).safeTransfer(msg.sender, fee);
+        accumulatedFee[msg.sender] = 0;
     }
 
     /**
