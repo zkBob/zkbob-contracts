@@ -35,6 +35,6 @@ contract DeployMultiMinter is Script {
 
         vm.stopBroadcast();
 
-        require(minter.owner() == owner == address(0) ? tx.origin : owner, "Owner is not configured");
+        require(minter.owner() == (owner == address(0) ? tx.origin : owner), "Owner is not configured");
     }
 }
