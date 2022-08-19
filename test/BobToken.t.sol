@@ -277,28 +277,28 @@ contract BobTokenTest is Test, EIP2470Test {
 
         // cannot transfer
         vm.prank(user1);
-        vm.expectRevert("BOB: sender blocked");
+        vm.expectRevert("ERC20: account frozen");
         bob.transfer(user2, 0.1 ether);
 
         // cannot transfer and call
         vm.prank(user1);
-        vm.expectRevert("BOB: sender blocked");
+        vm.expectRevert("ERC20: account frozen");
         bob.transferAndCall(erc677Receiver, 0.1 ether, "");
 
         // cannot receiver transfer
         vm.prank(user2);
-        vm.expectRevert("BOB: receiver blocked");
+        vm.expectRevert("ERC20: account frozen");
         bob.transfer(user1, 0.1 ether);
 
         // cannot use existing approvals
         vm.prank(user2);
-        vm.expectRevert("BOB: sender blocked");
+        vm.expectRevert("ERC20: account frozen");
         bob.transferFrom(user1, address(this), 0.1 ether);
 
         // cannot spend third-party approvals
-        vm.prank(user1);
-        vm.expectRevert("BOB: spender blocked");
-        bob.transferFrom(user2, address(this), 0.1 ether);
+        // vm.prank(user1);
+        // vm.expectRevert("ERC20: account frozen");
+        // bob.transferFrom(user2, address(this), 0.1 ether);
 
         assertEq(bob.isBlocked(user1), true);
         bob.unblockAccount(user1);

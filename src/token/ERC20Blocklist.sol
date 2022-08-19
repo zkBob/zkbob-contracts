@@ -2,14 +2,14 @@
 
 pragma solidity 0.8.15;
 
-import "./Ownable.sol";
+import "../utils/Ownable.sol";
+import "./BaseERC20.sol";
 
 /**
- * @title Blocklist
+ * @title ERC20Blocklist
  */
-contract Blocklist is Ownable {
+contract ERC20Blocklist is Ownable, BaseERC20 {
     address public blocklister;
-    mapping(address => bool) internal blocked;
 
     event Blocked(address indexed account);
     event Unblocked(address indexed account);
@@ -28,7 +28,7 @@ contract Blocklist is Ownable {
      * @param _account The address to check.
      */
     function isBlocked(address _account) external view returns (bool) {
-        return blocked[_account];
+        return _isFrozen(_account);
     }
 
     /**
@@ -36,7 +36,7 @@ contract Blocklist is Ownable {
      * @param _account The address to blocklist.
      */
     function blockAccount(address _account) external onlyBlocklister {
-        blocked[_account] = true;
+        _freezeBalance(_account);
         emit Blocked(_account);
     }
 
@@ -45,7 +45,7 @@ contract Blocklist is Ownable {
      * @param _account The address to remove from the blocklist.
      */
     function unblockAccount(address _account) external onlyBlocklister {
-        blocked[_account] = false;
+        _unfreezeBalance(_account);
         emit Unblocked(_account);
     }
 

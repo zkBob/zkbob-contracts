@@ -2,15 +2,15 @@
 
 pragma solidity 0.8.15;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "../utils/Ownable.sol";
 import "../interfaces/IERC677Receiver.sol";
+import "./BaseERC20.sol";
 
 /**
- * @title Recovery
+ * @title ERC20Recovery
  */
-abstract contract Recovery is Ownable, ERC20 {
+abstract contract ERC20Recovery is Ownable, BaseERC20 {
     event ExecutedRecovery(bytes32 indexed hash, uint256 value);
     event CancelledRecovery(bytes32 indexed hash);
     event RequestedRecovery(
@@ -99,7 +99,7 @@ abstract contract Recovery is Ownable, ERC20 {
         if (recoveredFundsReceiver == address(0)) {
             return 0;
         }
-        uint256 limit = totalSupply() * recoveryLimitPercent / 1 ether;
+        uint256 limit = totalSupply * recoveryLimitPercent / 1 ether;
         if (limit > totalRecovered) {
             return limit - totalRecovered;
         }

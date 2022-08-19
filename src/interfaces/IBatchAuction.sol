@@ -41,4 +41,16 @@ interface IBatchAuction {
     function settleAuction(uint256 auctionId) external returns (bytes32);
 
     function auctionData(uint256 auctionId) external view returns (AuctionData memory);
+
+    function setFeeParameters(uint256 newFeeNumerator, address newfeeReceiverAddress) external;
+
+    function placeSellOrders(
+        uint256 auctionId,
+        uint96[] memory _minBuyAmounts,
+        uint96[] memory _sellAmounts,
+        bytes32[] memory _prevSellOrders,
+        bytes calldata allowListCallData
+    )
+        external
+        returns (uint64 userId);
 }

@@ -2,14 +2,14 @@
 
 pragma solidity 0.8.15;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "../interfaces/IERC20Permit.sol";
+import "./BaseERC20.sol";
 
 /**
  * @title ERC20Permit
  */
-abstract contract ERC20Permit is ERC20, IERC20Permit {
+abstract contract ERC20Permit is BaseERC20, IERC20Permit {
     // EIP712 domain separator
     bytes32 public immutable DOMAIN_SEPARATOR;
     // EIP2612 permit typehash
@@ -71,14 +71,14 @@ abstract contract ERC20Permit is ERC20, IERC20Permit {
         public
         virtual
     {
-        _checkPermit(_holder, _msgSender(), _value, _deadline, _v, _r, _s);
+        _checkPermit(_holder, msg.sender, _value, _deadline, _v, _r, _s);
 
         // we don't make calls to _approve to avoid unnecessary storage writes
         // however, emitting ERC20 events is still desired
-        emit Approval(_holder, _msgSender(), _value);
-        emit Approval(_holder, _msgSender(), 0);
+        emit Approval(_holder, msg.sender, _value);
+        emit Approval(_holder, msg.sender, 0);
 
-        _transfer(_holder, _msgSender(), _value);
+        _transfer(_holder, msg.sender, _value);
     }
 
     /**
@@ -115,14 +115,14 @@ abstract contract ERC20Permit is ERC20, IERC20Permit {
         public
         virtual
     {
-        _checkSaltedPermit(_holder, _msgSender(), _value, _deadline, _salt, _v, _r, _s);
+        _checkSaltedPermit(_holder, msg.sender, _value, _deadline, _salt, _v, _r, _s);
 
         // we don't make calls to _approve to avoid unnecessary storage writes
         // however, emitting ERC20 events is still desired
-        emit Approval(_holder, _msgSender(), _value);
-        emit Approval(_holder, _msgSender(), 0);
+        emit Approval(_holder, msg.sender, _value);
+        emit Approval(_holder, msg.sender, 0);
 
-        _transfer(_holder, _msgSender(), _value);
+        _transfer(_holder, msg.sender, _value);
     }
 
     function _checkPermit(
