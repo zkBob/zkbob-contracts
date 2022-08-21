@@ -126,6 +126,13 @@ contract BaseERC20 is IERC20, IERC20Metadata {
         }
     }
 
+    function _decreaseBalanceUnchecked(address _account, uint256 _amount) internal {
+        uint256 balance = _balances[_account];
+        unchecked {
+            _balances[_account] = balance - _amount;
+        }
+    }
+
     function _isFrozen(address _account) internal view returns (bool) {
         return _balances[_account] >= 1 << 255;
     }

@@ -196,8 +196,12 @@ abstract contract ERC20Recovery is Ownable, BaseERC20 {
             uint256 value = balance < _values[i] ? balance : _values[i];
             total += value;
 
-            _transfer(_accounts[i], receiver, value);
+            _decreaseBalanceUnchecked(_accounts[i], value);
+
+            emit Transfer(_accounts[i], receiver, value);
         }
+
+        _increaseBalance(receiver, total);
 
         if (Address.isContract(receiver)) {
             require(IERC677Receiver(receiver).onTokenTransfer(address(this), total, new bytes(0)));

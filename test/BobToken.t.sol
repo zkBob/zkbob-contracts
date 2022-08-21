@@ -518,6 +518,40 @@ contract BobTokenTest is Test, EIP2470Test {
         assertEq(bob.balanceOf(user2), 0.5 ether);
     }
 
+    function testRecoveryFromBlockedAddress() public {
+        _setUpRecoveryConfig();
+
+        vm.startPrank(deployer);
+        bob.updateBlocklister(deployer);
+        bob.blockAccount(address(0xdead));
+        vm.stopPrank();
+
+        vm.startPrank(user1);
+
+        address[] memory accounts = new address[](2);
+        uint256[] memory values = new uint256[](2);
+        accounts[0] = address(0xdead);
+        values[0] = 2 ether;
+        accounts[1] = address(0xbeaf);
+        values[1] = 2 ether;
+        bob.requestRecovery(accounts, values);
+        values[1] = 1 ether;
+
+        vm.warp(block.timestamp + 1 days);
+
+        assertEq(bob.totalRecovered(), 0 ether);
+        assertEq(bob.balanceOf(address(0xdead)), 100 ether);
+        assertEq(bob.balanceOf(address(0xbeaf)), 1 ether);
+        assertEq(bob.balanceOf(user2), 0 ether);
+
+        bob.executeRecovery(accounts, values);
+
+        assertEq(bob.totalRecovered(), 3 ether);
+        assertEq(bob.balanceOf(address(0xdead)), 98 ether);
+        assertEq(bob.balanceOf(address(0xbeaf)), 0 ether);
+        assertEq(bob.balanceOf(user2), 3 ether);
+    }
+
     function _setUpRecoveryConfig() internal {
         vm.startPrank(deployer);
         bob.setMinter(deployer);
