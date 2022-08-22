@@ -53,4 +53,10 @@ interface IBatchAuction {
     )
         external
         returns (uint64 userId);
+
+    function claimFromParticipantOrder(uint256 auctionId, bytes32[] memory orders)
+        external
+        returns (uint256 sumAuctioningTokenAmount, uint256 sumBiddingTokenAmount);
+
+    function getUserId(address user) external view returns (uint64 userId);
 }

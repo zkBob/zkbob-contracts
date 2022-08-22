@@ -78,6 +78,7 @@ contract BobAuction is Ownable {
     )
         external
         onlyManager
+        returns (uint256)
     {
         require(
             _startTime >= block.timestamp + 1 hours && _startTime < block.timestamp + 1 weeks,
@@ -86,7 +87,8 @@ contract BobAuction is Ownable {
 
         uint256 amount = _collectProtocolFee(_token, _amount);
 
-        IERC20(_token).approve(address(dutch), amount);
+        // extra 10% to account for possible fees
+        IERC20(_token).approve(address(dutch), amount * 11 / 10);
 
         uint256 id = dutch.start(
             DutchAuction.AuctionData({
@@ -109,6 +111,8 @@ contract BobAuction is Ownable {
         );
 
         emit NewBobAuction(address(dutch), id, _token);
+
+        return id;
     }
 
     function claimDutchAuction(uint256 _id) external onlyManager {
@@ -126,6 +130,7 @@ contract BobAuction is Ownable {
     )
         external
         onlyManager
+        returns (uint256)
     {
         require(
             _startTime >= block.timestamp + 1 hours && _startTime < block.timestamp + 1 weeks,
@@ -134,7 +139,7 @@ contract BobAuction is Ownable {
 
         uint256 amount = _collectProtocolFee(_token, _amount);
 
-        IERC20(_token).approve(address(english), amount);
+        IERC20(_token).approve(address(english), amount * 11 / 10);
 
         uint256 id = english.start(
             EnglishAuction.AuctionData({
@@ -157,6 +162,8 @@ contract BobAuction is Ownable {
         );
 
         emit NewBobAuction(address(english), id, _token);
+
+        return id;
     }
 
     function claimEnglishAuction(uint256 _id) external onlyManager {
@@ -167,10 +174,11 @@ contract BobAuction is Ownable {
     function startBatchAuction(address _token, uint256 _amount, uint96 _minBuyAmount, uint96 _minBidAmount)
         external
         onlyManager
+        returns (uint256)
     {
         uint256 amount = _collectProtocolFee(_token, _amount);
 
-        IERC20(_token).approve(address(english), amount);
+        IERC20(_token).approve(address(batch), amount * 11 / 10);
 
         uint256 id = batch.initiateAuction(
             IERC20(_token),
@@ -187,6 +195,8 @@ contract BobAuction is Ownable {
         );
 
         emit NewBobAuction(address(batch), id, _token);
+
+        return id;
     }
 
     function claimBatchAuction(uint256 _id) external onlyManager {
@@ -201,7 +211,7 @@ contract BobAuction is Ownable {
         if (protocolFee > 0) {
             IERC20(_token).transfer(feeReceiver, protocolFee);
         }
-        return _amount - protocolFee;
+        return _amount;
     }
 
     function _burnXP() internal {

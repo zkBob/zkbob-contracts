@@ -141,7 +141,7 @@ contract DutchAuction is Ownable {
         AuctionData storage auction = auctions[_id];
         require(msg.sender == auction.auctioneer, "DutchAuction: not authorized");
         require(auction.status == Status.New, "DutchAuction: not new");
-        require(block.timestamp < auction.startTime, "DutchAuction: already closed");
+        require(block.timestamp < auction.startTime, "DutchAuction: already started");
 
         auction.status = Status.Cancelled;
         IERC20(auction.sellToken).transfer(msg.sender, auction.total);
@@ -153,14 +153,12 @@ contract DutchAuction is Ownable {
         AuctionData storage auction = auctions[_id];
         require(msg.sender == auction.auctioneer || msg.sender == auction.fundsReceiver, "DutchAuction: not authorized");
         require(auction.status == Status.New, "DutchAuction: not new");
-        require(
-            auction.totalSold == auction.total || block.timestamp >= auction.finalTime, "DutchAuction: already closed"
-        );
+        require(auction.totalSold == auction.total || block.timestamp >= auction.finalTime, "DutchAuction: not closed");
 
         uint256 unsold = auction.total - auction.totalSold;
         if (unsold > 0) {
             auction.status = Status.PartiallyFilled;
-            IERC20(auction.sellToken).transfer(auction.fundsReceiver, auction.totalSold);
+            IERC20(auction.sellToken).transfer(auction.fundsReceiver, unsold);
         } else {
             auction.status = Status.Filled;
         }
