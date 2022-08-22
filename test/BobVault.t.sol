@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
 import "forge-std/Test.sol";
+import "./shared/Env.t.sol";
 import "./shared/EIP2470.t.sol";
 import "../src/BobToken.sol";
 import "../src/proxy/EIP1967Proxy.sol";
@@ -20,25 +21,15 @@ contract BobVaultTest is Test, EIP2470Test {
     BobToken bob;
     BobVault vault;
 
-    address deployer = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
-    address user1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
-    address user2 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
-    uint256 pk1 = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
-
-    address vanityAddr = address(0xB0B65813DD450B7c98Fed97404fAbAe179A00B0B);
-    address mockImpl = address(0xdead);
-    bytes32 salt = bytes32(uint256(298396503));
-
     IERC20 usdc = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
     IERC20 usdt = IERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7);
     IERC20 dai = IERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
 
     function setUp() public {
-        vm.createSelectFork("https://rpc.ankr.com/eth");
+        vm.createSelectFork(forkRpcUrl);
 
-        bytes memory creationCode =
-            abi.encodePacked(type(EIP1967Proxy).creationCode, uint256(uint160(deployer)), uint256(uint160(mockImpl)));
-        bobProxy = EIP1967Proxy(factory.deploy(creationCode, salt));
+        bytes memory creationCode = bytes.concat(type(EIP1967Proxy).creationCode, abi.encode(deployer, mockImpl, ""));
+        bobProxy = EIP1967Proxy(factory.deploy(creationCode, bobTokenSalt));
         BobToken impl = new BobToken(address(bobProxy));
         vm.prank(deployer);
         bobProxy.upgradeTo(address(impl));
@@ -46,10 +37,10 @@ contract BobVaultTest is Test, EIP2470Test {
         vm.prank(deployer);
         bob.setMinter(deployer);
 
-        assertEq(address(bobProxy), vanityAddr);
+        assertEq(address(bobProxy), bobTokenVanityAddr);
 
         vault = new BobVault();
-        vaultProxy = new EIP1967Proxy(deployer, address(vault));
+        vaultProxy = new EIP1967Proxy(deployer, address(vault), "");
         vault = BobVault(address(vaultProxy));
 
         assertEq(address(vault.bobToken()), address(bob));

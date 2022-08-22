@@ -17,9 +17,16 @@ contract EIP1967Proxy is EIP1967Admin {
     event Upgraded(address indexed implementation);
     event AdminChanged(address previousAdmin, address newAdmin);
 
-    constructor(address _admin, address _implementation) {
+    constructor(address _admin, address _implementation, bytes memory _data) payable {
         _setAdmin(_admin);
         _setImplementation(_implementation);
+        if (_data.length > 0) {
+            bool status;
+            assembly {
+                status := callcode(gas(), _implementation, callvalue(), add(_data, 32), mload(_data), 0, 0)
+            }
+            require(status, "EIP1967Proxy: initialize call failed");
+        }
     }
 
     /**
@@ -66,7 +73,6 @@ contract EIP1967Proxy is EIP1967Admin {
      */
     function upgradeToAndCall(address _implementation, bytes calldata _data) external payable onlyAdmin {
         _setImplementation(_implementation);
-        // solhint-disable-next-line avoid-call-value
         (bool status,) = address(this).call{value: msg.value}(_data);
         require(status, "EIP1967Proxy: update call failed");
     }

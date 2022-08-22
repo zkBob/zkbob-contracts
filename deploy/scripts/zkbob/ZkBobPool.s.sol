@@ -14,8 +14,6 @@ contract DeployZkBobPool is Script {
     address private constant relayer = 0xBA6f711e1D4dB0CBfbC09D1d11C5Fb7445160673;
     string private constant relayerURL = "https://example.com";
 
-    address private constant mockImpl = address(0xdead);
-
     uint256 private constant initialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
 
     function run() external {
@@ -30,16 +28,13 @@ contract DeployZkBobPool is Script {
             treeVerifier := create(0, add(code2, 0x20), mload(code2))
         }
 
-        EIP1967Proxy proxy = new EIP1967Proxy(tx.origin, mockImpl);
-
         ZkBobPool impl = new ZkBobPool(
             1,
             token,
             transferVerifier,
             treeVerifier
         );
-
-        proxy.upgradeToAndCall(address(impl), abi.encodeWithSelector(ZkBobPool.initialize.selector, initialRoot));
+        EIP1967Proxy proxy = new EIP1967Proxy(tx.origin, address(impl), abi.encodeWithSelector(ZkBobPool.initialize.selector, initialRoot));
         ZkBobPool pool = ZkBobPool(address(proxy));
 
         IOperatorManager operatorManager = new MutableOperatorManager(relayer, relayerURL);

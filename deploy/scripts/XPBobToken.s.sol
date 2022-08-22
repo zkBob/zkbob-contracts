@@ -16,7 +16,7 @@ contract DeployXPBobToken is Script {
     function run() external {
         vm.startBroadcast();
 
-        EIP1967Proxy proxy = new EIP1967Proxy(tx.origin, mockImpl);
+        EIP1967Proxy proxy = new EIP1967Proxy(tx.origin, mockImpl, "");
 
         XPBobToken impl = new XPBobToken(address(proxy));
 

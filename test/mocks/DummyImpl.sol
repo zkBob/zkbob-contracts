@@ -10,6 +10,11 @@ contract DummyImpl {
         const = _const;
     }
 
+    function initialize() external {
+        require(msg.sender == address(this));
+        value++;
+    }
+
     function increment() external {
         value++;
     }

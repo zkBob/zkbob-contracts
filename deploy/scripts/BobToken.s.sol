@@ -24,8 +24,7 @@ contract DeployBobToken is Script {
 
         vm.startBroadcast();
 
-        bytes memory creationCode =
-            abi.encodePacked(type(EIP1967Proxy).creationCode, uint256(uint160(deployer)), uint256(uint160(mockImpl)));
+        bytes memory creationCode = bytes.concat(type(EIP1967Proxy).creationCode, abi.encode(deployer, mockImpl, ""));
         EIP1967Proxy proxy = EIP1967Proxy(factory.deploy(creationCode, salt));
 
         BobToken impl = new BobToken(address(proxy));

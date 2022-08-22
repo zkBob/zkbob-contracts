@@ -8,18 +8,14 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 /**
  * @title BaseERC20
  */
-contract BaseERC20 is IERC20, IERC20Metadata {
+abstract contract BaseERC20 is IERC20, IERC20Metadata {
     mapping(address => uint256) internal _balances;
     mapping(address => mapping(address => uint256)) public allowance;
     uint256 public totalSupply;
 
-    function name() public view virtual override returns (string memory) {
-        return "Base ERC20";
-    }
+    function name() public view virtual override returns (string memory);
 
-    function symbol() public view virtual override returns (string memory) {
-        return "Base ERC20";
-    }
+    function symbol() public view virtual override returns (string memory);
 
     function decimals() public view override returns (uint8) {
         return 18;

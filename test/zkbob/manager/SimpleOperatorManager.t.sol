@@ -3,13 +3,10 @@
 pragma solidity 0.8.15;
 
 import "forge-std/Test.sol";
+import "../../shared/Env.t.sol";
 import "../../../src/zkbob/manager/SimpleOperatorManager.sol";
 
 contract SimpleOperatorManagerTest is Test {
-    address user1 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
-    address user2 = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
-    address user3 = 0x90F79bf6EB2c4f870365E785982E1f101E93b906;
-
     function testSimpleOperatorChanges() public {
         SimpleOperatorManager manager = new SimpleOperatorManager(user1, "https://user1.example.com");
 

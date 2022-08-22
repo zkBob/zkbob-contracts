@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 
 import "forge-std/Test.sol";
 import "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
+import "./shared/Env.t.sol";
 import "./shared/EIP2470.t.sol";
 import "../src/BobToken.sol";
 import "../src/proxy/EIP1967Proxy.sol";
@@ -14,26 +15,16 @@ contract BobTokenTest is Test, EIP2470Test {
     EIP1967Proxy proxy;
     BobToken bob;
 
-    address deployer = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
-    address user1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
-    address user2 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
-    uint256 pk1 = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
-
-    address vanityAddr = address(0xB0B65813DD450B7c98Fed97404fAbAe179A00B0B);
-    address mockImpl = address(0xdead);
-    bytes32 salt = bytes32(uint256(298396503));
-
     function setUp() public {
         setUpFactory();
-        bytes memory creationCode =
-            abi.encodePacked(type(EIP1967Proxy).creationCode, uint256(uint160(deployer)), uint256(uint160(mockImpl)));
-        proxy = EIP1967Proxy(factory.deploy(creationCode, salt));
+        bytes memory creationCode = bytes.concat(type(EIP1967Proxy).creationCode, abi.encode(deployer, mockImpl, ""));
+        proxy = EIP1967Proxy(factory.deploy(creationCode, bobTokenSalt));
         BobToken impl = new BobToken(address(proxy));
         vm.prank(deployer);
         proxy.upgradeTo(address(impl));
         bob = BobToken(address(proxy));
 
-        assertEq(address(proxy), vanityAddr);
+        assertEq(address(proxy), bobTokenVanityAddr);
 
         assertEq(
             bob.DOMAIN_SEPARATOR(),
@@ -561,6 +552,74 @@ contract BobTokenTest is Test, EIP2470Test {
         bob.setRecoveryRequestTimelockPeriod(1 days);
         bob.mint(address(0xdead), 100 ether);
         bob.mint(address(0xbeaf), 1 ether);
+        vm.stopPrank();
+    }
+
+    function testAccessRights() public {
+        vm.startPrank(user1);
+        vm.expectRevert("EIP1967Admin: not an admin");
+        proxy.upgradeTo(address(0xdead));
+        vm.expectRevert("Ownable: caller is not the owner");
+        bob.transferOwnership(user1);
+        vm.expectRevert("Ownable: caller is not the owner");
+        bob.setMinter(user1);
+        vm.expectRevert("Ownable: caller is not the owner");
+        bob.setClaimingAdmin(user1);
+        vm.expectRevert("Ownable: caller is not the owner");
+        bob.setRecoveryAdmin(user1);
+        vm.expectRevert("Ownable: caller is not the owner");
+        bob.setRecoveredFundsReceiver(user1);
+        vm.expectRevert("Ownable: caller is not the owner");
+        bob.setRecoveryLimitPercent(0.1 ether);
+        vm.expectRevert("Ownable: caller is not the owner");
+        bob.setRecoveryRequestTimelockPeriod(3 days);
+        vm.expectRevert("Ownable: caller is not the owner");
+        bob.updateBlocklister(user1);
+        vm.expectRevert("Blocklist: caller is not the blocklister");
+        bob.blockAccount(user1);
+        vm.expectRevert("Blocklist: caller is not the blocklister");
+        bob.unblockAccount(user1);
+        vm.expectRevert("MintableERC20: not a minter");
+        bob.mint(user1, 1 ether);
+        vm.expectRevert("Claimable: not authorized for claiming");
+        bob.claimTokens(address(0), user1);
+        vm.expectRevert("Recovery: not authorized for recovery");
+        bob.requestRecovery(new address[](1), new uint256[](1));
+        vm.expectRevert("Recovery: not authorized for recovery");
+        bob.executeRecovery(new address[](1), new uint256[](1));
+        vm.expectRevert("Recovery: not authorized for recovery");
+        bob.cancelRecovery();
+        vm.stopPrank();
+
+        vm.startPrank(deployer);
+        proxy.upgradeTo(address(new BobToken(address(bob))));
+        bob.transferOwnership(user1);
+        bob.setMinter(user1);
+        bob.setClaimingAdmin(user1);
+        bob.setRecoveryAdmin(user1);
+        bob.setRecoveredFundsReceiver(user1);
+        bob.setRecoveryLimitPercent(0.1 ether);
+        bob.setRecoveryRequestTimelockPeriod(3 days);
+        bob.updateBlocklister(user1);
+        vm.expectRevert("Blocklist: caller is not the blocklister");
+        bob.blockAccount(user1);
+        vm.expectRevert("Blocklist: caller is not the blocklister");
+        bob.unblockAccount(user1);
+        vm.expectRevert("MintableERC20: not a minter");
+        bob.mint(user1, 1 ether);
+        bob.claimTokens(address(0), user1);
+        vm.expectRevert("Recovery: not enabled");
+        bob.requestRecovery(new address[](1), new uint256[](1));
+        vm.expectRevert("Recovery: no active recovery request");
+        bob.executeRecovery(new address[](1), new uint256[](1));
+        vm.expectRevert("Recovery: no active recovery request");
+        bob.cancelRecovery();
+        vm.stopPrank();
+
+        vm.startPrank(user1);
+        bob.blockAccount(user2);
+        bob.unblockAccount(user2);
+        bob.mint(user1, 1 ether);
         vm.stopPrank();
     }
 }

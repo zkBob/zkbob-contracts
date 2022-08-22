@@ -12,7 +12,7 @@ contract EIP1967Admin {
     uint256 internal constant EIP1967_ADMIN_STORAGE = 0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103;
 
     modifier onlyAdmin() {
-        require(msg.sender == _admin());
+        require(msg.sender == _admin(), "EIP1967Admin: not an admin");
         _;
     }
 

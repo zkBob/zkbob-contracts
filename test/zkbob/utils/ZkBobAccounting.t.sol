@@ -3,13 +3,11 @@
 pragma solidity 0.8.15;
 
 import "forge-std/Test.sol";
+import "../../shared/Env.t.sol";
 import "../../mocks/ZkBobAccountingMock.sol";
 
 contract ZkBobAccountingTest is Test {
     ZkBobAccountingMock pool;
-
-    address user1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
-    address user2 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
 
     function setUp() public {
         pool = new ZkBobAccountingMock();

@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
 import "forge-std/Test.sol";
+import "./shared/Env.t.sol";
 import "./shared/EIP2470.t.sol";
 import "../src/proxy/EIP1967Proxy.sol";
 import "../src/BobToken.sol";
@@ -20,28 +21,19 @@ contract BobAuctionTest is Test, EIP2470Test {
     EnglishAuction english;
     IBatchAuction batch;
 
-    address deployer = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
-    address user1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
-    address user2 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
-    uint256 pk1 = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
-
-    address mockImpl = address(0xdead);
-    bytes32 salt = bytes32(uint256(298396503));
-
     function setUp() public {
-        vm.createSelectFork("https://rpc.ankr.com/eth");
+        vm.createSelectFork(forkRpcUrl);
 
         vm.startPrank(deployer);
 
-        bytes memory creationCode =
-            abi.encodePacked(type(EIP1967Proxy).creationCode, uint256(uint160(deployer)), uint256(uint160(mockImpl)));
-        bobProxy = EIP1967Proxy(factory.deploy(creationCode, salt));
+        bytes memory creationCode = bytes.concat(type(EIP1967Proxy).creationCode, abi.encode(deployer, mockImpl, ""));
+        bobProxy = EIP1967Proxy(factory.deploy(creationCode, bobTokenSalt));
         BobToken impl = new BobToken(address(bobProxy));
         bobProxy.upgradeTo(address(impl));
         bob = BobToken(address(bobProxy));
         bob.setMinter(deployer);
 
-        EIP1967Proxy proxy = new EIP1967Proxy(deployer, address(mockImpl));
+        EIP1967Proxy proxy = new EIP1967Proxy(deployer, address(mockImpl), "");
         xpToken = new XPBobToken(address(proxy));
         proxy.upgradeTo(address(xpToken));
         xpToken = XPBobToken(address(proxy));

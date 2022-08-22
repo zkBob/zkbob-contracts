@@ -17,7 +17,7 @@ contract DeployBobVault is Script {
         vm.startBroadcast();
 
         BobVault impl = new BobVault();
-        EIP1967Proxy proxy = new EIP1967Proxy(tx.origin, address(impl));
+        EIP1967Proxy proxy = new EIP1967Proxy(tx.origin, address(impl), "");
 
         BobVault vault = BobVault(address(proxy));
 

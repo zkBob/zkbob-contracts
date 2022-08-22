@@ -8,7 +8,7 @@ import "./BaseERC20.sol";
 /**
  * @title ERC20Blocklist
  */
-contract ERC20Blocklist is Ownable, BaseERC20 {
+abstract contract ERC20Blocklist is Ownable, BaseERC20 {
     address public blocklister;
 
     event Blocked(address indexed account);

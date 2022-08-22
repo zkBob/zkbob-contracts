@@ -12,7 +12,7 @@ contract DeployEIP1967Proxy is Script {
     function run() external {
         vm.startBroadcast();
 
-        EIP1967Proxy proxy = new EIP1967Proxy(tx.origin, impl);
+        EIP1967Proxy proxy = new EIP1967Proxy(tx.origin, impl, "");
 
         if (admin != address(0) && tx.origin != admin) {
             proxy.setAdmin(admin);

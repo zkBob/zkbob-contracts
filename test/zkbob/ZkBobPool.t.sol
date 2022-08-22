@@ -3,6 +3,7 @@
 pragma solidity 0.8.15;
 
 import "forge-std/Test.sol";
+import "../shared/Env.t.sol";
 import "../mocks/TransferVerifierMock.sol";
 import "../mocks/TreeUpdateVerifierMock.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
@@ -13,23 +14,19 @@ import "../../src/zkbob/manager/SimpleOperatorManager.sol";
 contract ZkBobPoolTest is Test {
     uint256 private constant initialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
 
-    uint256 pk1 = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
-    address user1 = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
-    address user2 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
-
     ZkBobPool pool;
     BobToken bob;
 
     function setUp() public {
-        EIP1967Proxy bobProxy = new EIP1967Proxy(address(this), address(0xdead));
+        EIP1967Proxy bobProxy = new EIP1967Proxy(address(this), mockImpl, "");
         BobToken bobImpl = new BobToken(address(bobProxy));
         bobProxy.upgradeTo(address(bobImpl));
         bob = BobToken(address(bobProxy));
         bob.setMinter(address(this));
 
-        EIP1967Proxy poolProxy = new EIP1967Proxy(address(this), address(0xdead));
         ZkBobPool impl = new ZkBobPool(1, address(bob), new TransferVerifierMock(), new TreeUpdateVerifierMock());
-        poolProxy.upgradeToAndCall(address(impl), abi.encodeWithSelector(ZkBobPool.initialize.selector, initialRoot));
+        EIP1967Proxy poolProxy =
+        new EIP1967Proxy(address(this), address(impl), abi.encodeWithSelector(ZkBobPool.initialize.selector, initialRoot));
         pool = ZkBobPool(address(poolProxy));
 
         pool.setOperatorManager(new SimpleOperatorManager(user2, "https://example.com"));
