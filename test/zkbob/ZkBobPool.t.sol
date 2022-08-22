@@ -28,7 +28,7 @@ contract ZkBobPoolTest is Test {
         bob.setMinter(address(this));
 
         EIP1967Proxy poolProxy = new EIP1967Proxy(address(this), address(0xdead));
-        ZkBobPool impl = new ZkBobPool(1, address(bob), 1e9, new TransferVerifierMock(), new TreeUpdateVerifierMock());
+        ZkBobPool impl = new ZkBobPool(1, address(bob), new TransferVerifierMock(), new TreeUpdateVerifierMock());
         poolProxy.upgradeToAndCall(address(impl), abi.encodeWithSelector(ZkBobPool.initialize.selector, initialRoot));
         pool = ZkBobPool(address(poolProxy));
 

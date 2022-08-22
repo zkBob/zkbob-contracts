@@ -232,7 +232,7 @@ contract BobVaultTest is Test, EIP2470Test {
         assertGt(usdc.balanceOf(user2), 1e6);
         assertGt(usdt.balanceOf(user2), 1e6);
         assertGt(dai.balanceOf(user2), 1 ether);
-        assertGt(cImpl.compToken().balanceOf(user2), 0.10 ether);
+        assertGt(cImpl.compToken().balanceOf(user2), 0.1 ether);
 
         vm.stopPrank();
         vm.startPrank(deployer);

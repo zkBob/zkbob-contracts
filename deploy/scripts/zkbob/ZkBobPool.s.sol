@@ -35,7 +35,6 @@ contract DeployZkBobPool is Script {
         ZkBobPool impl = new ZkBobPool(
             1,
             token,
-            1e9,
             transferVerifier,
             treeVerifier
         );

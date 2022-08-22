@@ -16,20 +16,17 @@ import "../proxy/EIP1967Admin.sol";
 
 uint256 constant MAX_POOL_ID = 0xffffff;
 uint256 constant TOKEN_DENOMINATOR = 1 gwei;
+uint256 constant NATIVE_DENOMINATOR = 1 gwei;
 
 contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     using SafeERC20 for IERC20;
 
     uint256 public immutable pool_id;
-    uint256 public immutable native_denominator;
     ITransferVerifier public immutable transfer_verifier;
     ITreeVerifier public immutable tree_verifier;
     address public immutable token;
 
     IOperatorManager public operatorManager;
-
-    address public xpToken;
-    uint96 public xpDenominator;
 
     mapping(uint256 => uint256) public nullifiers;
     mapping(uint256 => uint256) public roots;
@@ -40,17 +37,10 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
 
-    constructor(
-        uint256 __pool_id,
-        address _token,
-        uint256 _native_denominator,
-        ITransferVerifier _transfer_verifier,
-        ITreeVerifier _tree_verifier
-    ) {
+    constructor(uint256 __pool_id, address _token, ITransferVerifier _transfer_verifier, ITreeVerifier _tree_verifier) {
         require(__pool_id <= MAX_POOL_ID);
         pool_id = __pool_id;
         token = _token;
-        native_denominator = _native_denominator;
         transfer_verifier = _transfer_verifier;
         tree_verifier = _tree_verifier;
     }
@@ -119,7 +109,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         } else if (txType == 2) {
             // Withdraw
             require(
-                token_amount <= 0 && energy_amount <= 0 && msg.value == _memo_native_amount() * native_denominator,
+                token_amount <= 0 && energy_amount <= 0 && msg.value == _memo_native_amount() * NATIVE_DENOMINATOR,
                 "ZkBobPool: incorrect withdraw amounts"
             );
 
@@ -130,9 +120,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             }
 
             if (energy_amount < 0) {
-                require(xpToken != address(0), "ZkBobPool: XP claiming is not enabled");
-                uint256 xpAmount = uint256(-energy_amount) * xpDenominator / 1 ether;
-                IMintableERC20(xpToken).mint(receiver, xpAmount);
+                revert("ZkBobPool: XP claiming is not yet enabled");
             }
 
             if (msg.value > 0) {
