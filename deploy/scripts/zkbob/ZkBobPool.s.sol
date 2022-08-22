@@ -36,7 +36,6 @@ contract DeployZkBobPool is Script {
             1,
             token,
             1e9,
-            1e9,
             transferVerifier,
             treeVerifier
         );
