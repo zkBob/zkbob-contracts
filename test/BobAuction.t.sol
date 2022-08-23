@@ -27,7 +27,7 @@ contract BobAuctionTest is Test, EIP2470Test {
         vm.startPrank(deployer);
 
         bytes memory creationCode = bytes.concat(type(EIP1967Proxy).creationCode, abi.encode(deployer, mockImpl, ""));
-        bobProxy = EIP1967Proxy(factory.deploy(creationCode, bobTokenSalt));
+        bobProxy = EIP1967Proxy(factory.deploy(creationCode, bobSalt));
         BobToken impl = new BobToken(address(bobProxy));
         bobProxy.upgradeTo(address(impl));
         bob = BobToken(address(bobProxy));
@@ -46,9 +46,9 @@ contract BobAuctionTest is Test, EIP2470Test {
         english = new EnglishAuction(0.01 ether, deployer);
         batch = IBatchAuction(address(0x0b7fFc1f4AD541A4Ed16b40D8c37f0929158D101));
 
-        auction =
-            new BobAuction(0.1 ether, deployer, user1, address(xpToken), address(dutch), address(english), address(batch));
-        auction.setDuration(3 days);
+        auction = new BobAuction(
+            0.1 ether, deployer, user1, 3 days, address(xpToken), address(dutch), address(english), address(batch)
+        );
         vm.stopPrank();
 
         vm.startPrank(user2);

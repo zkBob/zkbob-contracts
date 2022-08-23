@@ -24,40 +24,48 @@ contract ZkBobPoolTest is Test {
         bob = BobToken(address(bobProxy));
         bob.setMinter(address(this));
 
-        ZkBobPool impl = new ZkBobPool(1, address(bob), new TransferVerifierMock(), new TreeUpdateVerifierMock());
-        EIP1967Proxy poolProxy =
-        new EIP1967Proxy(address(this), address(impl), abi.encodeWithSelector(ZkBobPool.initialize.selector, initialRoot));
+        ZkBobPool impl = new ZkBobPool(0, address(bob), new TransferVerifierMock(), new TreeUpdateVerifierMock());
+        EIP1967Proxy poolProxy = new EIP1967Proxy(address(this), address(impl), abi.encodeWithSelector(
+            ZkBobPool.initialize.selector, initialRoot,
+            1_000_000 ether, 100_000 ether, 10_000 ether, 10_000 ether
+        ));
         pool = ZkBobPool(address(poolProxy));
 
         pool.setOperatorManager(new SimpleOperatorManager(user2, "https://example.com"));
+
+        bob.mint(address(user1), 1 ether);
     }
 
     function testSimpleTransaction() public {
-        bob.mint(address(pool), 1 ether);
+        bytes memory data1 = _encodePermitDeposit(0.5 ether);
+        _transact(data1);
 
-        bytes memory data =
-            abi.encodePacked(ZkBobPool.transact.selector, _randFR(), _randFR(), uint48(0), uint112(0), int64(-1));
-        for (uint256 i = 0; i < 17; i++) {
-            data = abi.encodePacked(data, _randFR());
-        }
-        data = abi.encodePacked(data, uint16(1), uint16(48), uint64(1), _randFR(), bytes8(bytes32(_randFR())));
-        vm.prank(user2);
-        (bool status, bytes memory returnData) = address(pool).call(data);
-        require(status, "transact() reverted");
+        bytes memory data2 = _encodeTransfer();
+        _transact(data2);
 
         vm.prank(user2);
         pool.withdrawFee();
-        assertEq(bob.balanceOf(user2), 1e9);
+        assertEq(bob.balanceOf(user2), 0.02 ether);
     }
 
     function testPermitDeposit() public {
-        bob.mint(address(user1), 1 ether);
+        bytes memory data = _encodePermitDeposit(0.5 ether);
+        _transact(data);
 
+        vm.prank(user2);
+        pool.withdrawFee();
+        assertEq(bob.balanceOf(user1), 0.49 ether);
+        assertEq(bob.balanceOf(address(pool)), 0.5 ether);
+        assertEq(bob.balanceOf(user2), 0.01 ether);
+    }
+
+    function _encodePermitDeposit(uint256 _amount) internal returns (bytes memory) {
         uint256 expiry = block.timestamp + 1 hours;
         bytes32 nullifier = bytes32(_randFR());
-        (uint8 v, bytes32 r, bytes32 s) = _signSaltedPermit(pk1, user1, address(pool), 0.51 ether, 0, expiry, nullifier);
+        (uint8 v, bytes32 r, bytes32 s) =
+            _signSaltedPermit(pk1, user1, address(pool), _amount + 0.01 ether, bob.nonces(user1), expiry, nullifier);
         bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector, nullifier, _randFR(), uint48(0), uint112(0), int64(0.5 ether / 1 gwei)
+            ZkBobPool.transact.selector, nullifier, _randFR(), uint48(0), uint112(0), int64(int256(_amount / 1 gwei))
         );
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());
@@ -72,16 +80,25 @@ contract ZkBobPoolTest is Test {
             bytes32(_randFR()),
             bytes12(bytes32(_randFR()))
         );
-        data = abi.encodePacked(data, r, s);
-        vm.prank(user2);
-        (bool status, bytes memory returnData) = address(pool).call(data);
-        require(status, "transact() reverted");
+        return abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
+    }
 
+    function _encodeTransfer() internal returns (bytes memory) {
+        bytes memory data = abi.encodePacked(
+            ZkBobPool.transact.selector, _randFR(), _randFR(), uint48(0), uint112(0), int64(-0.01 ether / 1 gwei)
+        );
+        for (uint256 i = 0; i < 17; i++) {
+            data = abi.encodePacked(data, _randFR());
+        }
+        return abi.encodePacked(
+            data, uint16(1), uint16(48), uint64(0.01 ether / 1 gwei), _randFR(), bytes8(bytes32(_randFR()))
+        );
+    }
+
+    function _transact(bytes memory _data) internal {
         vm.prank(user2);
-        pool.withdrawFee();
-        assertEq(bob.balanceOf(user1), 0.49 ether);
-        assertEq(bob.balanceOf(address(pool)), 0.5 ether);
-        assertEq(bob.balanceOf(user2), 0.01 ether);
+        (bool status,) = address(pool).call(_data);
+        require(status, "transact() reverted");
     }
 
     function _signSaltedPermit(

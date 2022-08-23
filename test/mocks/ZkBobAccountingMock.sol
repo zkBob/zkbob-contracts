@@ -8,7 +8,7 @@ contract ZkBobAccountingMock is ZkBobAccounting {
     uint256 tvl;
     uint56 public weekMaxTvl;
     uint32 public weekMaxCount;
-    uint256 public poolIndex;
+    uint256 public txCount;
 
     function slot0() external view returns (bytes32 res) {
         assembly {
@@ -17,7 +17,7 @@ contract ZkBobAccountingMock is ZkBobAccounting {
     }
 
     function transact(int256 _amount) external {
-        (weekMaxTvl, weekMaxCount, poolIndex) = _updateStats(msg.sender, _amount / 1 gwei);
+        (weekMaxTvl, weekMaxCount, txCount) = _recordOperation(msg.sender, _amount / 1 gwei);
     }
 
     function setLimits(uint256 _tvlCap, uint256 _dailyDepositCap, uint256 _dailyUserDepositCap, uint256 _depositCap)

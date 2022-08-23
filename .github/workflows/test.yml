@@ -34,9 +34,9 @@ jobs:
         id: fmt_test
         if: ${{ steps.init.conclusion == 'success' }}
 
-      - name: Run Forge fmt test
+      - name: Run Forge fmt script
         run: |
-          forge fmt --check ./deploy
+          forge fmt --check ./script
         id: fmt_deploy
         if: ${{ steps.init.conclusion == 'success' }}
   test:

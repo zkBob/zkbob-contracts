@@ -50,10 +50,24 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         _;
     }
 
-    function initialize(uint256 _root) external {
+    function initialize(
+        uint256 _root,
+        uint256 _tvlCap,
+        uint256 _dailyDepositCap,
+        uint256 _dailyUserDepositCap,
+        uint256 _depositCap
+    )
+        external
+    {
         require(msg.sender == address(this), "ZkBobPool: not initializer");
         require(roots[0] == 0, "ZkBobPool: already initialized");
         roots[0] = _root;
+        _setLimits(
+            _tvlCap / TOKEN_DENOMINATOR,
+            _dailyDepositCap / TOKEN_DENOMINATOR,
+            _dailyUserDepositCap / TOKEN_DENOMINATOR,
+            _depositCap / TOKEN_DENOMINATOR
+        );
     }
 
     function setOperatorManager(IOperatorManager _operatorManager) external onlyOwner {
@@ -76,33 +90,37 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         } else if (txType == 3) {
             user = _memo_permit_holder();
         }
-        (uint56 weekMaxTvl, uint32 weekCount, uint256 poolIndex) = _updateStats(user, _transfer_token_amount());
+        (,, uint256 txCount) = _recordOperation(user, _transfer_token_amount());
 
         uint256 nullifier = _transfer_nullifier();
         {
+            uint256 _pool_index = txCount << 7;
+
             require(nullifiers[nullifier] == 0, "ZkBobPool: doublespend detected");
-            require(_transfer_index() <= poolIndex, "ZkBobPool: transfer index out of bounds");
+            require(_transfer_index() <= _pool_index, "ZkBobPool: transfer index out of bounds");
             require(transfer_verifier.verifyProof(_transfer_pub(), _transfer_proof()), "ZkBobPool: bad transfer proof");
-            require(tree_verifier.verifyProof(_tree_pub(roots[poolIndex]), _tree_proof()), "ZkBobPool: bad tree proof");
+            require(
+                tree_verifier.verifyProof(_tree_pub(roots[_pool_index]), _tree_proof()), "ZkBobPool: bad tree proof"
+            );
 
             nullifiers[nullifier] = uint256(keccak256(abi.encodePacked(_transfer_out_commit(), _transfer_delta())));
-            poolIndex += 128;
-            roots[poolIndex] = _tree_root_after();
+            _pool_index += 128;
+            roots[_pool_index] = _tree_root_after();
             bytes memory message = _memo_message();
             bytes32 message_hash = keccak256(message);
             bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
             all_messages_hash = _all_messages_hash;
-            emit Message(poolIndex, _all_messages_hash, message);
+            emit Message(_pool_index, _all_messages_hash, message);
         }
 
-        uint256 fee = _memo_fee() * TOKEN_DENOMINATOR;
-        int256 token_amount = _transfer_token_amount() * int256(TOKEN_DENOMINATOR) + int256(fee);
+        uint256 fee = _memo_fee();
+        int256 token_amount = _transfer_token_amount() + int256(fee);
         int256 energy_amount = _transfer_energy_amount();
 
         if (txType == 0) {
             // Deposit
             require(token_amount >= 0 && energy_amount == 0 && msg.value == 0, "ZkBobPool: incorrect deposit amounts");
-            IERC20(token).safeTransferFrom(user, address(this), uint256(token_amount));
+            IERC20(token).safeTransferFrom(user, address(this), uint256(token_amount) * TOKEN_DENOMINATOR);
         } else if (txType == 1) {
             // Transfer
             require(token_amount == 0 && energy_amount == 0 && msg.value == 0, "ZkBobPool: incorrect transfer amounts");
@@ -116,7 +134,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             address receiver = _memo_receiver();
 
             if (token_amount < 0) {
-                IERC20(token).safeTransfer(receiver, uint256(-token_amount));
+                IERC20(token).safeTransfer(receiver, uint256(-token_amount) * TOKEN_DENOMINATOR);
             }
 
             if (energy_amount < 0) {
@@ -130,9 +148,8 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             // Permittable token deposit
             require(token_amount >= 0 && energy_amount == 0 && msg.value == 0, "ZkBobPool: incorrect deposit amounts");
             (uint8 v, bytes32 r, bytes32 s) = _permittable_deposit_signature();
-            uint256 amount = uint256(token_amount);
             IERC20Permit(token).receiveWithSaltedPermit(
-                user, amount, _memo_permit_deadline(), bytes32(nullifier), v, r, s
+                user, uint256(token_amount) * TOKEN_DENOMINATOR, _memo_permit_deadline(), bytes32(nullifier), v, r, s
             );
         } else {
             revert("ZkBobPool: Incorrect transaction type");
@@ -146,7 +163,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     function withdrawFee() external {
         uint256 fee = accumulatedFee[msg.sender];
         require(fee > 0, "ZkBobPool: no fee to withdraw");
-        IERC20(token).safeTransfer(msg.sender, fee);
+        IERC20(token).safeTransfer(msg.sender, fee * TOKEN_DENOMINATOR);
         accumulatedFee[msg.sender] = 0;
     }
 

@@ -15,14 +15,12 @@ contract DeployEnglishAuction is Script {
 
         EnglishAuction auction = new EnglishAuction(feeAmount, feeReceiver);
 
-        if (owner != address(0) && tx.origin != owner) {
-            auction.transferOwnership(owner);
-        }
+        auction.transferOwnership(owner);
 
         vm.stopBroadcast();
 
         require(auction.feeAmount() == feeAmount, "Fee is not configured");
         require(auction.feeReceiver() == feeReceiver, "Fee receiver is not configured");
-        require(auction.owner() == owner == address(0) ? tx.origin : owner, "Owner is not configured");
+        require(auction.owner() == owner, "Owner is not configured");
     }
 }

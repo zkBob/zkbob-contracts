@@ -32,6 +32,7 @@ contract BobAuction is Ownable {
         uint96 _fee,
         address _feeReceiver,
         address _manager,
+        uint96 _duration,
         address _xpBobToken,
         address _dutch,
         address _english,
@@ -41,6 +42,7 @@ contract BobAuction is Ownable {
     {
         _setFee(_fee, _feeReceiver);
         manager = _manager;
+        duration = _duration;
         xpBobToken = XPBobToken(_xpBobToken);
         dutch = DutchAuction(_dutch);
         english = EnglishAuction(_english);

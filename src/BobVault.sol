@@ -16,7 +16,7 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
 
     address public yieldAdmin;
     address public investAdmin;
-    IERC20 public constant bobToken = IERC20(0xB0B65813DD450B7c98Fed97404fAbAe179A00B0B);
+    IERC20 public immutable bobToken;
 
     mapping(address => Collateral) public collateral;
 
@@ -53,6 +53,10 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
     event Sell(address indexed token, address indexed user, uint256 amountIn, uint256 amountOut);
     event Swap(address indexed inToken, address outToken, address indexed user, uint256 amountIn, uint256 amountOut);
     event Give(address indexed token, uint256 amount);
+
+    constructor(address _bobToken) {
+        bobToken = IERC20(_bobToken);
+    }
 
     function isCollateral(address _token) external view returns (bool) {
         return collateral[_token].price > 0;

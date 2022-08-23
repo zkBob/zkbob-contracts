@@ -12,7 +12,7 @@ address constant user3 = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
 uint256 constant pk1 = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
 
 address constant mockImpl = address(0xdead);
-address constant bobTokenVanityAddr = address(0xB0B65813DD450B7c98Fed97404fAbAe179A00B0B);
-bytes32 constant bobTokenSalt = bytes32(uint256(298396503));
+address constant bobVanityAddr = address(0xB0bF0014062a51a8a8431F52CBEe0B436E0C9b0b);
+bytes32 constant bobSalt = bytes32(uint256(47274243));
 
 string constant forkRpcUrl = "https://rpc.ankr.com/eth";

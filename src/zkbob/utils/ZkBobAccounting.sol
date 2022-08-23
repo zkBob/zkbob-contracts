@@ -7,23 +7,54 @@ uint256 constant SLOT_DURATION = 1 hours;
 uint256 constant DAY_SLOTS = 1 days / SLOT_DURATION;
 uint256 constant WEEK_SLOTS = 1 weeks / SLOT_DURATION;
 
+/**
+ * @title ZkBobAccounting
+ * @dev On chain accounting for zkBob operations, limits and stats.
+ * Units: 1 BOB = 1e18 wei = 1e9 zkBOB units
+ * Limitations: Contract will only work correctly as long as pool tvl does not exceed 4.7e12 BOB (4.7 trillion)
+ * and overall transaction count does not exceed 4.3e9 (4.3 billion). Pool usage limits cannot exceed 4.3e9 BOB (4.3 billion) per day.
+ */
 contract ZkBobAccounting {
     struct Slot0 {
-        uint56 maxWeeklyAvgTvl; // max seen average tvl over period of at least 1 week (granularity of 1e9), might not be precise
-        uint32 maxWeeklyTxCount; // max number of pool interactions over 1 week, might not be precise
-        uint24 tailSlot; // 1 week behind snapshot time slot (granularity of 1 hour)
-        uint24 headSlot; // active snapshot time slot (granularity of 1 hour)
-        uint88 cumTvl; // cumulative sum of tvl over txCount interactions (granularity of 1e9)
-        uint32 txCount; // number of successful pool interactions since launch
+        // max seen average tvl over period of at least 1 week (granularity of 1e9), might not be precise
+        // max possible tvl - type(uint56).max * 1e9 zkBOB units ~= 7.2e16 BOB
+        uint56 maxWeeklyAvgTvl;
+        // max number of pool interactions over 1 week, might not be precise
+        // max possible tx count - type(uint32).max ~= 4.3e9 transactions
+        uint32 maxWeeklyTxCount;
+        // 1 week behind snapshot time slot (granularity of 1 hour)
+        // max possible timestamp - Dec 08 3883
+        uint24 tailSlot;
+        // active snapshot time slot (granularity of 1 hour)
+        // max possible timestamp - Dec 08 3883
+        uint24 headSlot;
+        // cumulative sum of tvl over txCount interactions (granularity of 1e9)
+        // max possible cumulative tvl ~= type(uint32).max * type(uint56).max = 4.3e9 transactions * 7.2e16 BOB
+        uint88 cumTvl;
+        // number of successful pool interactions since launch
+        // max possible tx count - type(uint32).max ~= 4.3e9 transactions
+        uint32 txCount;
     }
 
     struct Slot1 {
-        uint72 tvl; // current pool tvl (granularity of 1)
-        uint56 tvlCap; // max cap on the entire pool tvl (granularity of 1e9)
-        uint32 dailyDeposit; // today deposit sum (granularity of 1e9)
-        uint32 dailyDepositCap; // max cap on the daily deposits sum (granularity of 1e9)
-        uint32 dailyUserDepositCap; // max cap on the daily deposits sum for single user (granularity of 1e9)
-        uint32 depositCap; // max cap on single deposit (granularity of 1e9)
+        // current pool tvl (granularity of 1)
+        // max possible tvl - type(uint72).max * 1 zkBOB units ~= 4.7e21 zkBOB units ~= 4.7e12 BOB
+        uint72 tvl;
+        // max cap on the entire pool tvl (granularity of 1e9)
+        // max possible cap - type(uint56).max * 1e9 zkBOB units ~= 7.2e16 BOB
+        uint56 tvlCap;
+        // today deposit sum (granularity of 1e9)
+        // max possible sum - type(uint32).max * 1e9 zkBOB units ~= 4.3e9 BOB
+        uint32 dailyDeposit;
+        // max cap on the daily deposits sum (granularity of 1e9)
+        // max possible cap - type(uint32).max * 1e9 zkBOB units ~= 4.3e9 BOB
+        uint32 dailyDepositCap;
+        // max cap on the daily deposits sum for single user (granularity of 1e9)
+        // max possible cap - type(uint32).max * 1e9 zkBOB units ~= 4.3e9 BOB
+        uint32 dailyUserDepositCap;
+        // max cap on single deposit (granularity of 1e9)
+        // max possible cap - type(uint32).max * 1e9 zkBOB units ~= 4.3e9 BOB
+        uint32 depositCap;
     }
 
     struct Snapshot {
@@ -42,15 +73,15 @@ contract ZkBobAccounting {
     mapping(uint256 => Snapshot) private snapshots; // single linked list of hourly snapshots
     mapping(address => UserDailyStats) private userStats;
 
-    function _updateStats(address _user, int256 _txAmount)
+    function _recordOperation(address _user, int256 _txAmount)
         internal
-        returns (uint56 maxWeeklyAvgTvl, uint32 maxWeeklyTxCount, uint256 poolIndex)
+        returns (uint56 maxWeeklyAvgTvl, uint32 maxWeeklyTxCount, uint256 txCount)
     {
         Slot0 memory s0 = slot0;
         Slot1 memory s1 = slot1;
         uint24 curSlot = uint24(block.timestamp / SLOT_DURATION);
         uint16 curDay = uint16(curSlot / DAY_SLOTS);
-        poolIndex = uint256(s0.txCount) << 7;
+        txCount = uint256(s0.txCount);
 
         if (s0.txCount > 0 && curSlot - s0.tailSlot > WEEK_SLOTS) {
             // if tail is more than 1 week behind, we move tail pointer to the next snapshot
@@ -81,6 +112,7 @@ contract ZkBobAccounting {
 
             // check all sorts of limits when processing a deposit
             require(depositAmount <= uint256(s1.depositCap) * PRECISION, "ZkBobAccounting: single deposit cap exceeded");
+            require(uint256(s1.tvl) <= uint256(s1.tvlCap) * PRECISION, "ZkBobAccounting: tvl cap exceeded");
 
             UserDailyStats memory us = userStats[_user];
             if (curDay > us.day) {
@@ -94,8 +126,6 @@ contract ZkBobAccounting {
                 );
                 userStats[_user] = us;
             }
-
-            require(uint256(s1.tvl) <= uint256(s1.tvlCap) * PRECISION, "ZkBobAccounting: tvl cap exceeded");
 
             if (curDay > s0.headSlot / DAY_SLOTS) {
                 // latest deposit was on an earlier day, reset daily deposit sum
@@ -112,7 +142,7 @@ contract ZkBobAccounting {
         }
         s0.headSlot = curSlot;
         slot0 = s0;
-        return (s0.maxWeeklyAvgTvl, s0.maxWeeklyTxCount, poolIndex);
+        return (s0.maxWeeklyAvgTvl, s0.maxWeeklyTxCount, txCount);
     }
 
     function getLimitsFor(address _user) external view returns (uint256[7] memory res) {

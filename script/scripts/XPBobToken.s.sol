@@ -3,16 +3,11 @@
 pragma solidity 0.8.15;
 
 import "forge-std/Script.sol";
+import "./Env.s.sol";
 import "../../src/XPBobToken.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 
 contract DeployXPBobToken is Script {
-    address private constant minter = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
-    address private constant admin = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
-    address private constant owner = 0xBF3d6f830CE263CAE987193982192Cd990442B53;
-
-    address private constant mockImpl = address(0xdead);
-
     function run() external {
         vm.startBroadcast();
 
@@ -22,14 +17,14 @@ contract DeployXPBobToken is Script {
 
         proxy.upgradeTo(address(impl));
 
-        XPBobToken vbob = XPBobToken(address(proxy));
-        vbob.setMinter(minter);
+        XPBobToken xp = XPBobToken(address(proxy));
+        xp.setMinter(xpMinter);
 
         if (owner != address(0)) {
-            vbob.transferOwnership(owner);
+            xp.transferOwnership(owner);
         }
 
-        if (admin != address(0) && tx.origin != admin) {
+        if (admin != tx.origin) {
             proxy.setAdmin(admin);
         }
 
@@ -37,7 +32,7 @@ contract DeployXPBobToken is Script {
 
         require(proxy.implementation() == address(impl), "Invalid implementation address");
         require(proxy.admin() == admin, "Proxy admin is not configured");
-        require(vbob.owner() == owner, "Owner is not configured");
-        require(vbob.minter() == minter, "Minter is not configured");
+        require(xp.owner() == owner, "Owner is not configured");
+        require(xp.minter() == xpMinter, "Minter is not configured");
     }
 }

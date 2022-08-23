@@ -29,7 +29,7 @@ contract BobVaultTest is Test, EIP2470Test {
         vm.createSelectFork(forkRpcUrl);
 
         bytes memory creationCode = bytes.concat(type(EIP1967Proxy).creationCode, abi.encode(deployer, mockImpl, ""));
-        bobProxy = EIP1967Proxy(factory.deploy(creationCode, bobTokenSalt));
+        bobProxy = EIP1967Proxy(factory.deploy(creationCode, bobSalt));
         BobToken impl = new BobToken(address(bobProxy));
         vm.prank(deployer);
         bobProxy.upgradeTo(address(impl));
@@ -37,9 +37,9 @@ contract BobVaultTest is Test, EIP2470Test {
         vm.prank(deployer);
         bob.setMinter(deployer);
 
-        assertEq(address(bobProxy), bobTokenVanityAddr);
+        assertEq(address(bobProxy), bobVanityAddr);
 
-        vault = new BobVault();
+        vault = new BobVault(bobVanityAddr);
         vaultProxy = new EIP1967Proxy(deployer, address(vault), "");
         vault = BobVault(address(vaultProxy));
 

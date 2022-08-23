@@ -47,8 +47,11 @@ func main() {
 	initCode := hexutil.MustDecode(artifact["bytecode"].(map[string]interface{})["object"].(string))
 	arg1 := common.HexToAddress(*deployer).Hash().Bytes()
 	arg2 := common.HexToAddress(*mockImpl).Hash().Bytes()
+	arg3 := make([]byte, 64)
+	arg3[31] = 0x60
 	initCode = append(initCode, arg1...)
 	initCode = append(initCode, arg2...)
+	initCode = append(initCode, arg3...)
 	initCodeHash := crypto.Keccak256Hash(initCode)
 
 	log.Printf("Code hash: %s\n", initCodeHash)
@@ -58,6 +61,9 @@ func main() {
 	for n := 0; n < *threads; n++ {
 		go func(n int) {
 			defer wg.Done()
+			state := crypto.NewKeccakState()
+			var hash common.Hash
+
 			// keccak256( 0xff ++ address ++ salt ++ keccak256(init_code))[12:]
 			msg := make([]byte, 85)
 			msg[0] = 0xff
@@ -68,7 +74,9 @@ func main() {
 					log.Printf("progress (%d/%d) - %d\n", n+1, *threads, i)
 				}
 				binary.BigEndian.PutUint64(msg[45:], uint64(i))
-				hash := crypto.Keccak256Hash(msg)
+				_, _ = state.Write(msg)
+				state.Read(hash[:])
+				state.Reset()
 				addr := common.BytesToAddress(hash.Bytes())
 				if regex.MatchString(addr.String()) {
 					log.Printf("Found, nonce: %d, salt: %s, address: %s\n", i, common.BytesToHash(msg[21:53]), addr.String())

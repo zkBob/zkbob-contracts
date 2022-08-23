@@ -27,7 +27,7 @@ contract ZkBobAccountingTest is Test {
         }
         assertEq(pool.weekMaxTvl(), 100);
         assertEq(pool.weekMaxCount(), 504);
-        assertEq(pool.poolIndex(), 999 * 128);
+        assertEq(pool.txCount(), 999);
         emit log_bytes32(pool.slot0());
 
         for (uint256 i = 0; i < 200; i++) {
@@ -37,7 +37,7 @@ contract ZkBobAccountingTest is Test {
 
         assertEq(pool.weekMaxTvl(), 138);
         assertEq(pool.weekMaxCount(), 504);
-        assertEq(pool.poolIndex(), 1199 * 128);
+        assertEq(pool.txCount(), 1199);
         emit log_bytes32(pool.slot0());
 
         for (uint256 i = 0; i < 200; i++) {
@@ -47,7 +47,7 @@ contract ZkBobAccountingTest is Test {
 
         assertEq(pool.weekMaxTvl(), 198);
         assertEq(pool.weekMaxCount(), 603);
-        assertEq(pool.poolIndex(), 1399 * 128);
+        assertEq(pool.txCount(), 1399);
         emit log_bytes32(pool.slot0());
 
         for (uint256 i = 0; i < 1000; i++) {
@@ -57,7 +57,7 @@ contract ZkBobAccountingTest is Test {
 
         assertEq(pool.weekMaxTvl(), 213);
         assertEq(pool.weekMaxCount(), 604);
-        assertEq(pool.poolIndex(), 2399 * 128);
+        assertEq(pool.txCount(), 2399);
         emit log_bytes32(pool.slot0());
     }
 
@@ -81,7 +81,7 @@ contract ZkBobAccountingTest is Test {
         }
         assertEq(pool.weekMaxTvl(), 130);
         assertEq(pool.weekMaxCount(), 524);
-        assertEq(pool.poolIndex(), 2099 * 128);
+        assertEq(pool.txCount(), 2099);
         emit log_bytes32(pool.slot0());
     }
 

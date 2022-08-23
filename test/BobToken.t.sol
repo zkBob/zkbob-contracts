@@ -15,16 +15,19 @@ contract BobTokenTest is Test, EIP2470Test {
     EIP1967Proxy proxy;
     BobToken bob;
 
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+
     function setUp() public {
         setUpFactory();
         bytes memory creationCode = bytes.concat(type(EIP1967Proxy).creationCode, abi.encode(deployer, mockImpl, ""));
-        proxy = EIP1967Proxy(factory.deploy(creationCode, bobTokenSalt));
+        proxy = EIP1967Proxy(factory.deploy(creationCode, bobSalt));
         BobToken impl = new BobToken(address(proxy));
         vm.prank(deployer);
         proxy.upgradeTo(address(impl));
         bob = BobToken(address(proxy));
 
-        assertEq(address(proxy), bobTokenVanityAddr);
+        assertEq(address(proxy), bobVanityAddr);
 
         assertEq(
             bob.DOMAIN_SEPARATOR(),
@@ -54,6 +57,8 @@ contract BobTokenTest is Test, EIP2470Test {
         bob.mint(user2, 1 ether);
 
         vm.prank(user1);
+        vm.expectEmit(true, true, false, true);
+        emit Transfer(address(0), user2, 1 ether);
         bob.mint(user2, 1 ether);
 
         assertEq(bob.totalSupply(), 1 ether);
@@ -122,6 +127,8 @@ contract BobTokenTest is Test, EIP2470Test {
 
         // correct permit with nonce 0
         assertEq(bob.allowance(user1, user2), 0 ether);
+        vm.expectEmit(true, true, false, true);
+        emit Approval(user1, user2, 1 ether);
         bob.permit(user1, user2, 1 ether, expiry, v, r, s);
         assertEq(bob.allowance(user1, user2), 1 ether);
 
@@ -142,6 +149,12 @@ contract BobTokenTest is Test, EIP2470Test {
         vm.expectRevert("ERC20Permit: invalid ERC2612 signature");
         bob.receiveWithPermit(user1, 1 ether, expiry, v, r, s);
         vm.prank(user2);
+        vm.expectEmit(true, true, false, true);
+        emit Approval(user1, user2, 1 ether);
+        vm.expectEmit(true, true, false, true);
+        emit Approval(user1, user2, 0);
+        vm.expectEmit(true, true, false, true);
+        emit Transfer(user1, user2, 1 ether);
         bob.receiveWithPermit(user1, 1 ether, expiry, v, r, s);
         assertEq(bob.balanceOf(user1), 0 ether);
         assertEq(bob.balanceOf(user2), 1 ether);
@@ -169,6 +182,8 @@ contract BobTokenTest is Test, EIP2470Test {
 
         // correct permit with nonce 0
         assertEq(bob.allowance(user1, user2), 0 ether);
+        vm.expectEmit(true, true, false, true);
+        emit Approval(user1, user2, 1 ether);
         bob.saltedPermit(user1, user2, 1 ether, expiry, salt, v, r, s);
         assertEq(bob.allowance(user1, user2), 1 ether);
 
@@ -190,6 +205,12 @@ contract BobTokenTest is Test, EIP2470Test {
         vm.expectRevert("ERC20Permit: invalid signature");
         bob.receiveWithSaltedPermit(user1, 1 ether, expiry, salt, v, r, s);
         vm.prank(user2);
+        vm.expectEmit(true, true, false, true);
+        emit Approval(user1, user2, 1 ether);
+        vm.expectEmit(true, true, false, true);
+        emit Approval(user1, user2, 0);
+        vm.expectEmit(true, true, false, true);
+        emit Transfer(user1, user2, 1 ether);
         bob.receiveWithSaltedPermit(user1, 1 ether, expiry, salt, v, r, s);
         assertEq(bob.balanceOf(user1), 0 ether);
         assertEq(bob.balanceOf(user2), 1 ether);
