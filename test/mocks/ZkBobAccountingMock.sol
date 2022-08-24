@@ -20,9 +20,21 @@ contract ZkBobAccountingMock is ZkBobAccounting {
         (weekMaxTvl, weekMaxCount, txCount) = _recordOperation(msg.sender, _amount / 1 gwei);
     }
 
-    function setLimits(uint256 _tvlCap, uint256 _dailyDepositCap, uint256 _dailyUserDepositCap, uint256 _depositCap)
+    function setLimits(
+        uint256 _tvlCap,
+        uint256 _dailyDepositCap,
+        uint256 _dailyWithdrawalCap,
+        uint256 _dailyUserDepositCap,
+        uint256 _depositCap
+    )
         external
     {
-        _setLimits(_tvlCap / 1 gwei, _dailyDepositCap / 1 gwei, _dailyUserDepositCap / 1 gwei, _depositCap / 1 gwei);
+        _setLimits(
+            _tvlCap / 1 gwei,
+            _dailyDepositCap / 1 gwei,
+            _dailyWithdrawalCap / 1 gwei,
+            _dailyUserDepositCap / 1 gwei,
+            _depositCap / 1 gwei
+        );
     }
 }

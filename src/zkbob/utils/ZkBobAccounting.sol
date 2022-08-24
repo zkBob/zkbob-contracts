@@ -40,15 +40,24 @@ contract ZkBobAccounting {
         // current pool tvl (granularity of 1)
         // max possible tvl - type(uint72).max * 1 zkBOB units ~= 4.7e21 zkBOB units ~= 4.7e12 BOB
         uint72 tvl;
-        // max cap on the entire pool tvl (granularity of 1e9)
-        // max possible cap - type(uint56).max * 1e9 zkBOB units ~= 7.2e16 BOB
-        uint56 tvlCap;
         // today deposit sum (granularity of 1e9)
         // max possible sum - type(uint32).max * 1e9 zkBOB units ~= 4.3e9 BOB
         uint32 dailyDeposit;
+        // today withdrawal sum (granularity of 1e9)
+        // max possible sum - type(uint32).max * 1e9 zkBOB units ~= 4.3e9 BOB
+        uint32 dailyWithdrawal;
+    }
+
+    struct Slot2 {
+        // max cap on the entire pool tvl (granularity of 1e9)
+        // max possible cap - type(uint56).max * 1e9 zkBOB units ~= 7.2e16 BOB
+        uint56 tvlCap;
         // max cap on the daily deposits sum (granularity of 1e9)
         // max possible cap - type(uint32).max * 1e9 zkBOB units ~= 4.3e9 BOB
         uint32 dailyDepositCap;
+        // max cap on the daily withdrawal sum (granularity of 1e9)
+        // max possible cap - type(uint32).max * 1e9 zkBOB units ~= 4.3e9 BOB
+        uint32 dailyWithdrawalCap;
         // max cap on the daily deposits sum for single user (granularity of 1e9)
         // max possible cap - type(uint32).max * 1e9 zkBOB units ~= 4.3e9 BOB
         uint32 dailyUserDepositCap;
@@ -68,10 +77,48 @@ contract ZkBobAccounting {
         uint72 dailyDeposit; // sum of user deposits during given day
     }
 
+    struct Limits {
+        uint256 tvlCap;
+        uint256 tvl;
+        uint256 dailyDepositCap;
+        uint256 dailyDepositCapUsage;
+        uint256 dailyWithdrawalCap;
+        uint256 dailyWithdrawalCapUsage;
+        uint256 dailyUserDepositCap;
+        uint256 dailyUserDepositCapUsage;
+        uint256 depositCap;
+    }
+
     Slot0 private slot0;
     Slot1 private slot1;
+    Slot2 private slot2;
     mapping(uint256 => Snapshot) private snapshots; // single linked list of hourly snapshots
     mapping(address => UserDailyStats) private userStats;
+
+    /**
+     * @dev Returns currently configured limits and remaining quotas for the given user as of the current block.
+     * @param _user user for which to retrieve limits.
+     * @return limits (denominated in zkBOB units = 1e-9 BOB)
+     */
+    function getLimitsFor(address _user) external view returns (Limits memory) {
+        Slot0 memory s0 = slot0;
+        Slot1 memory s1 = slot1;
+        Slot2 memory s2 = slot2;
+        uint24 curSlot = uint24(block.timestamp / SLOT_DURATION);
+        uint24 today = curSlot / uint24(DAY_SLOTS);
+        UserDailyStats memory us = userStats[_user];
+        return Limits({
+            tvlCap: s2.tvlCap * PRECISION,
+            tvl: s1.tvl,
+            dailyDepositCap: s2.dailyDepositCap * PRECISION,
+            dailyDepositCapUsage: (s0.headSlot / DAY_SLOTS == today) ? s1.dailyDeposit * PRECISION : 0,
+            dailyWithdrawalCap: s2.dailyWithdrawalCap * PRECISION,
+            dailyWithdrawalCapUsage: (s0.headSlot / DAY_SLOTS == today) ? s1.dailyWithdrawal * PRECISION : 0,
+            dailyUserDepositCap: s2.dailyUserDepositCap * PRECISION,
+            dailyUserDepositCapUsage: (us.day == today) ? us.dailyDeposit : 0,
+            depositCap: s2.depositCap * PRECISION
+        });
+    }
 
     function _recordOperation(address _user, int256 _txAmount)
         internal
@@ -80,7 +127,6 @@ contract ZkBobAccounting {
         Slot0 memory s0 = slot0;
         Slot1 memory s1 = slot1;
         uint24 curSlot = uint24(block.timestamp / SLOT_DURATION);
-        uint16 curDay = uint16(curSlot / DAY_SLOTS);
         txCount = uint256(s0.txCount);
 
         if (s0.txCount > 0 && curSlot - s0.tailSlot > WEEK_SLOTS) {
@@ -106,13 +152,28 @@ contract ZkBobAccounting {
         s0.cumTvl += s1.tvl / uint72(PRECISION);
         s0.txCount++;
 
+        _processTVLChange(s0, s1, _user, _txAmount);
+
+        s0.headSlot = curSlot;
+        slot0 = s0;
+        return (s0.maxWeeklyAvgTvl, s0.maxWeeklyTxCount, txCount);
+    }
+
+    function _processTVLChange(Slot0 memory s0, Slot1 memory s1, address _user, int256 _txAmount) internal {
+        if (_txAmount == 0) {
+            return;
+        }
+
+        Slot2 memory s2 = slot2;
+        uint16 curDay = uint16(block.timestamp / SLOT_DURATION / DAY_SLOTS);
+
         if (_txAmount > 0) {
             uint256 depositAmount = uint256(_txAmount);
             s1.tvl += uint72(depositAmount);
 
             // check all sorts of limits when processing a deposit
-            require(depositAmount <= uint256(s1.depositCap) * PRECISION, "ZkBobAccounting: single deposit cap exceeded");
-            require(uint256(s1.tvl) <= uint256(s1.tvlCap) * PRECISION, "ZkBobAccounting: tvl cap exceeded");
+            require(depositAmount <= uint256(s2.depositCap) * PRECISION, "ZkBobAccounting: single deposit cap exceeded");
+            require(uint256(s1.tvl) <= uint256(s2.tvlCap) * PRECISION, "ZkBobAccounting: tvl cap exceeded");
 
             UserDailyStats memory us = userStats[_user];
             if (curDay > us.day) {
@@ -121,7 +182,7 @@ contract ZkBobAccounting {
             } else {
                 us.dailyDeposit += uint72(depositAmount);
                 require(
-                    uint256(us.dailyDeposit) <= uint256(s1.dailyUserDepositCap) * PRECISION,
+                    uint256(us.dailyDeposit) <= uint256(s2.dailyUserDepositCap) * PRECISION,
                     "ZkBobAccounting: daily user deposit cap exceeded"
                 );
                 userStats[_user] = us;
@@ -132,45 +193,50 @@ contract ZkBobAccounting {
                 s1.dailyDeposit = uint32(depositAmount / PRECISION);
             } else {
                 s1.dailyDeposit += uint32(depositAmount / PRECISION);
-                require(s1.dailyDeposit <= s1.dailyDepositCap, "ZkBobAccounting: daily deposit cap exceeded");
+                require(s1.dailyDeposit <= s2.dailyDepositCap, "ZkBobAccounting: daily deposit cap exceeded");
             }
+        } else {
+            uint256 withdrawAmount = uint256(-_txAmount);
+            s1.tvl -= uint72(withdrawAmount);
 
-            slot1 = s1;
-        } else if (_txAmount < 0) {
-            s1.tvl -= uint72(uint256(-_txAmount));
-            slot1 = s1;
+            if (curDay > s0.headSlot / DAY_SLOTS) {
+                // latest withdrawal was on an earlier day, reset daily deposit sum
+                s1.dailyWithdrawal = uint32(withdrawAmount / PRECISION);
+            } else {
+                s1.dailyWithdrawal += uint32(withdrawAmount / PRECISION);
+                require(s1.dailyWithdrawal <= s2.dailyWithdrawalCap, "ZkBobAccounting: daily withdrawal cap exceeded");
+            }
         }
-        s0.headSlot = curSlot;
-        slot0 = s0;
-        return (s0.maxWeeklyAvgTvl, s0.maxWeeklyTxCount, txCount);
+
+        slot1 = s1;
     }
 
-    function getLimitsFor(address _user) external view returns (uint256[7] memory res) {
-        Slot0 memory s0 = slot0;
-        Slot1 memory s1 = slot1;
-        uint24 curSlot = uint24(block.timestamp / SLOT_DURATION);
-        UserDailyStats memory us = userStats[_user];
-        res[0] = s1.tvlCap * PRECISION;
-        res[1] = s1.tvl;
-        res[2] = s1.dailyDepositCap * PRECISION;
-        res[3] = (s0.headSlot / DAY_SLOTS == curSlot / DAY_SLOTS) ? s1.dailyDeposit * PRECISION : 0;
-        res[4] = s1.dailyUserDepositCap * PRECISION;
-        res[5] = (us.day == curSlot / DAY_SLOTS) ? us.dailyDeposit : 0;
-        res[6] = s1.depositCap * PRECISION;
-    }
-
-    function _setLimits(uint256 _tvlCap, uint256 _dailyDepositCap, uint256 _dailyUserDepositCap, uint256 _depositCap)
+    function _setLimits(
+        uint256 _tvlCap,
+        uint256 _dailyDepositCap,
+        uint256 _dailyWithdrawalCap,
+        uint256 _dailyUserDepositCap,
+        uint256 _depositCap
+    )
         internal
     {
         Slot1 memory s1 = slot1;
+        Slot2 memory s2 = slot2;
         require(_depositCap > 0, "ZkBobAccounting: zero deposit cap");
         require(_dailyUserDepositCap >= _depositCap, "ZkBobAccounting: daily user deposit cap too low");
         require(_dailyDepositCap >= _dailyUserDepositCap, "ZkBobAccounting: daily deposit cap too low");
         require(_tvlCap >= _dailyDepositCap, "ZkBobAccounting: tvl cap too low");
-        s1.tvlCap = uint56(_tvlCap / PRECISION);
-        s1.dailyDepositCap = uint32(_dailyDepositCap / PRECISION);
-        s1.dailyUserDepositCap = uint32(_dailyUserDepositCap / PRECISION);
-        s1.depositCap = uint32(_depositCap / PRECISION);
-        slot1 = s1;
+        require(_tvlCap >= s1.tvl, "ZkBobAccounting: tvl cap lower than current tvl");
+        require(_dailyWithdrawalCap > 0, "ZkBobAccounting: zero daily withdrawal cap");
+        s2.tvlCap = uint56(_tvlCap / PRECISION);
+        s2.dailyDepositCap = uint32(_dailyDepositCap / PRECISION);
+        s2.dailyWithdrawalCap = uint32(_dailyWithdrawalCap / PRECISION);
+        s2.dailyUserDepositCap = uint32(_dailyUserDepositCap / PRECISION);
+        s2.depositCap = uint32(_depositCap / PRECISION);
+        slot2 = s2;
+    }
+
+    function _txCount() internal view returns (uint256) {
+        return slot0.txCount;
     }
 }

@@ -31,11 +31,11 @@ contract DeployZkBobPool is Script {
         );
         EIP1967Proxy proxy = new EIP1967Proxy(tx.origin, address(impl), abi.encodeWithSelector(
             ZkBobPool.initialize.selector, zkBobInitialRoot,
-            zkBobPoolCap, zkBobDailyDepositCap, zkBobDailyUserDepositCap, zkBobDepositCap
+            zkBobPoolCap, zkBobDailyDepositCap, zkBobDailyWithdrawalCap, zkBobDailyUserDepositCap, zkBobDepositCap
         ));
         ZkBobPool pool = ZkBobPool(address(proxy));
 
-        IOperatorManager operatorManager = new MutableOperatorManager(zkBobRelayer, zkBobRelayerURL);
+        IOperatorManager operatorManager = new MutableOperatorManager(address(0), "");
         pool.setOperatorManager(operatorManager);
 
         if (owner != address(0)) {

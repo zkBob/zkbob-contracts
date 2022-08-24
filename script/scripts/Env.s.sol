@@ -22,6 +22,7 @@ address constant zkBobRelayer = 0xBA6f711e1D4dB0CBfbC09D1d11C5Fb7445160673;
 string constant zkBobRelayerURL = "https://example.com";
 uint256 constant zkBobPoolCap = 1_000_000 ether;
 uint256 constant zkBobDailyDepositCap = 100_000 ether;
+uint256 constant zkBobDailyWithdrawalCap = 100_000 ether;
 uint256 constant zkBobDailyUserDepositCap = 10_000 ether;
 uint256 constant zkBobDepositCap = 10_000 ether;
 

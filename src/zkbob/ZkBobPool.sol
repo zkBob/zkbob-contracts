@@ -30,7 +30,6 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
     mapping(uint256 => uint256) public nullifiers;
     mapping(uint256 => uint256) public roots;
-    uint256 public pool_index;
     bytes32 public all_messages_hash;
 
     mapping(address => uint256) public accumulatedFee;
@@ -54,6 +53,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         uint256 _root,
         uint256 _tvlCap,
         uint256 _dailyDepositCap,
+        uint256 _dailyWithdrawalCap,
         uint256 _dailyUserDepositCap,
         uint256 _depositCap
     )
@@ -65,6 +65,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         _setLimits(
             _tvlCap / TOKEN_DENOMINATOR,
             _dailyDepositCap / TOKEN_DENOMINATOR,
+            _dailyWithdrawalCap / TOKEN_DENOMINATOR,
             _dailyUserDepositCap / TOKEN_DENOMINATOR,
             _depositCap / TOKEN_DENOMINATOR
         );
@@ -72,6 +73,10 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
     function setOperatorManager(IOperatorManager _operatorManager) external onlyOwner {
         operatorManager = _operatorManager;
+    }
+
+    function pool_index() external view returns (uint256) {
+        return _txCount() << 7;
     }
 
     function _root() internal view override returns (uint256) {
@@ -131,10 +136,8 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
                 "ZkBobPool: incorrect withdraw amounts"
             );
 
-            address receiver = _memo_receiver();
-
             if (token_amount < 0) {
-                IERC20(token).safeTransfer(receiver, uint256(-token_amount) * TOKEN_DENOMINATOR);
+                IERC20(token).safeTransfer(_memo_receiver(), uint256(-token_amount) * TOKEN_DENOMINATOR);
             }
 
             if (energy_amount < 0) {
@@ -142,7 +145,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             }
 
             if (msg.value > 0) {
-                payable(receiver).transfer(msg.value);
+                payable(_memo_receiver()).transfer(msg.value);
             }
         } else if (txType == 3) {
             // Permittable token deposit
@@ -167,13 +170,20 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         accumulatedFee[msg.sender] = 0;
     }
 
-    function setLimits(uint256 _tvlCap, uint256 _dailyDepositCap, uint256 _dailyUserDepositCap, uint256 _depositCap)
+    function setLimits(
+        uint256 _tvlCap,
+        uint256 _dailyDepositCap,
+        uint256 _dailyWithdrawalCap,
+        uint256 _dailyUserDepositCap,
+        uint256 _depositCap
+    )
         external
         onlyOwner
     {
         _setLimits(
             _tvlCap / TOKEN_DENOMINATOR,
             _dailyDepositCap / TOKEN_DENOMINATOR,
+            _dailyWithdrawalCap / TOKEN_DENOMINATOR,
             _dailyUserDepositCap / TOKEN_DENOMINATOR,
             _depositCap / TOKEN_DENOMINATOR
         );
