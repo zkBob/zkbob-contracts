@@ -75,6 +75,10 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         operatorManager = _operatorManager;
     }
 
+    function denominator() external pure returns (uint256) {
+        return TOKEN_DENOMINATOR;
+    }
+
     function pool_index() external view returns (uint256) {
         return _txCount() << 7;
     }
