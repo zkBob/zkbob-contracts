@@ -129,16 +129,20 @@ contract ZkBobAccounting {
         uint24 curSlot = uint24(block.timestamp / SLOT_DURATION);
         txCount = uint256(s0.txCount);
 
+        // for full correctness, next line should use "while" instead of "if"
+        // however, in order to keep constant gas usage, "if" is being used
+        // this can lead to a longer sliding window (> 1 week) in some cases,
+        // but eventually it will converge back to the 1 week target
         if (s0.txCount > 0 && curSlot - s0.tailSlot > WEEK_SLOTS) {
             // if tail is more than 1 week behind, we move tail pointer to the next snapshot
             Snapshot memory sn = snapshots[s0.tailSlot];
             delete snapshots[s0.tailSlot];
             s0.tailSlot = sn.nextSlot;
-            uint32 txCount = s0.txCount - sn.txCount;
-            if (txCount > s0.maxWeeklyTxCount) {
-                s0.maxWeeklyTxCount = txCount;
+            uint32 weeklyTxCount = s0.txCount - sn.txCount;
+            if (weeklyTxCount > s0.maxWeeklyTxCount) {
+                s0.maxWeeklyTxCount = weeklyTxCount;
             }
-            uint56 avgTvl = uint56((s0.cumTvl - sn.cumTvl) / txCount);
+            uint56 avgTvl = uint56((s0.cumTvl - sn.cumTvl) / weeklyTxCount);
             if (avgTvl > s0.maxWeeklyAvgTvl) {
                 s0.maxWeeklyAvgTvl = avgTvl;
             }

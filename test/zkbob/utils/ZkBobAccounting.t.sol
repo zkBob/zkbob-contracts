@@ -20,53 +20,59 @@ contract ZkBobAccountingTest is Test {
     function testBasicStats() public {
         emit log_bytes32(pool.slot0());
 
-        // baseline
-        for (uint256 i = 0; i < 1000; i++) {
-            pool.transact(i == 0 ? int256(100 ether) : int256(0));
+        // baseline (100 BOB tvl ~13.8 days)
+        pool.transact(int256(100 ether));
+        vm.warp(block.timestamp + 20 minutes);
+        for (uint256 i = 1; i < 999; i++) {
+            pool.transact(0);
             vm.warp(block.timestamp + 20 minutes);
         }
         assertEq(pool.weekMaxTvl(), 100);
         assertEq(pool.weekMaxCount(), 504);
-        assertEq(pool.txCount(), 999);
+        assertEq(pool.txCount(), 998);
         emit log_bytes32(pool.slot0());
 
-        for (uint256 i = 0; i < 200; i++) {
+        // 100 -> 300 BOB tvl change for ~2.8 days
+        for (uint256 i = 0; i < 201; i++) {
             pool.transact(1 ether);
             vm.warp(block.timestamp + 20 minutes);
         }
-
         assertEq(pool.weekMaxTvl(), 138);
         assertEq(pool.weekMaxCount(), 504);
         assertEq(pool.txCount(), 1199);
         emit log_bytes32(pool.slot0());
 
-        for (uint256 i = 0; i < 200; i++) {
+        // 300 BOB tvl for ~1.4 days
+        for (uint256 i = 0; i < 204; i++) {
             pool.transact(0);
             vm.warp(block.timestamp + 10 minutes);
         }
-
-        assertEq(pool.weekMaxTvl(), 198);
+        assertEq(pool.weekMaxTvl(), 199);
         assertEq(pool.weekMaxCount(), 603);
-        assertEq(pool.txCount(), 1399);
+        assertEq(pool.txCount(), 1403);
         emit log_bytes32(pool.slot0());
 
-        for (uint256 i = 0; i < 1000; i++) {
-            pool.transact(i == 0 ? int256(-200 ether) : int256(0));
+        // back to 100 BOB tvl
+        pool.transact(int256(-200 ether));
+        vm.warp(block.timestamp + 30 minutes);
+        for (uint256 i = 1; i < 1000; i++) {
+            pool.transact(0);
             vm.warp(block.timestamp + 30 minutes);
         }
-
-        assertEq(pool.weekMaxTvl(), 213);
-        assertEq(pool.weekMaxCount(), 604);
-        assertEq(pool.txCount(), 2399);
+        assertEq(pool.weekMaxTvl(), 215);
+        assertEq(pool.weekMaxCount(), 606);
+        assertEq(pool.txCount(), 2403);
         emit log_bytes32(pool.slot0());
     }
 
     function testSparseIntervals() public {
         emit log_bytes32(pool.slot0());
 
-        // baseline
-        for (uint256 i = 0; i < 1000; i++) {
-            pool.transact(i == 0 ? int256(100 ether) : int256(0));
+        // baseline (100 BOB tvl ~13.8 days)
+        pool.transact(int256(100 ether));
+        vm.warp(block.timestamp + 20 minutes);
+        for (uint256 i = 1; i < 999; i++) {
+            pool.transact(0);
             vm.warp(block.timestamp + 20 minutes);
         }
         for (uint256 i = 1; i <= 10; i++) {
@@ -80,9 +86,41 @@ contract ZkBobAccountingTest is Test {
             vm.warp(block.timestamp + 30 minutes);
         }
         assertEq(pool.weekMaxTvl(), 130);
-        assertEq(pool.weekMaxCount(), 524);
-        assertEq(pool.txCount(), 2099);
+        assertEq(pool.weekMaxCount(), 523);
+        assertEq(pool.txCount(), 2098);
         emit log_bytes32(pool.slot0());
+    }
+
+    function testLaggingBehind() public {
+        // baseline (100 BOB tvl ~13.8 days)
+        pool.transact(int256(100 ether));
+        vm.warp(block.timestamp + 20 minutes);
+        for (uint256 i = 1; i < 999; i++) {
+            pool.transact(0);
+            vm.warp(block.timestamp + 20 minutes);
+        }
+
+        // 200 BOB tvl for 10 days
+        pool.transact(int256(100 ether));
+        vm.warp(block.timestamp + 6 hours);
+        for (uint256 i = 1; i < 40; i++) {
+            pool.transact(0);
+            vm.warp(block.timestamp + 6 hours);
+        }
+        // since tail pointer didn't catch up, max tvl is still less than 200 BOB
+        assertEq(pool.weekMaxTvl(), 108);
+        assertEq(pool.weekMaxCount(), 504);
+        assertEq(pool.txCount(), 1038);
+
+        // 200 BOB tvl for 7 days
+        for (uint256 i = 0; i < 168; i++) {
+            pool.transact(0);
+            vm.warp(block.timestamp + 1 hours);
+        }
+        // since tail pointer didn't catch up, max tvl is still less than 200 BOB
+        assertEq(pool.weekMaxTvl(), 200);
+        assertEq(pool.weekMaxCount(), 504);
+        assertEq(pool.txCount(), 1206);
     }
 
     function testDepositCap() public {
