@@ -52,5 +52,9 @@ contract DeployBobToken is Script {
         require(bob.minter() == address(minter), "Minter is not configured");
         require(minter.owner() == owner, "Minter owner is not configured");
         require(bobMinter == address(0) || minter.minter(bobMinter), "Bob minter is not configured");
+
+        console2.log("BobToken:", address(bob));
+        console2.log("BobToken implementation:", address(impl));
+        console2.log("MultiMinter:", address(minter));
     }
 }

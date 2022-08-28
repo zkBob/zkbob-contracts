@@ -24,7 +24,12 @@ Detailed list of all simulated transactions can be found in the printed path at 
 
 If everything looks good, you can re-run the same command with the `--broadcast` flag, this will eventually send transactions on-chain.
 ```shell
-./script/deploy.sh --broadcast ./script/scripts/BobToken.s.sol
+./script/deploy.sh ./script/scripts/BobToken.s.sol --broadcast 
+```
+
+When deploying to public chain, contracts may be automatically verified in Etherscan, add `--verify` flag for that.
+```shell
+./script/deploy.sh ./script/scripts/BobToken.s.sol --broadcast --verify 
 ```
 
 You will see the deployment status, transaction hashes and their receipts in the `./broadcast` directory.
