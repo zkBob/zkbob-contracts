@@ -25,25 +25,3 @@ uint256 constant zkBobDailyDepositCap = 100_000 ether;
 uint256 constant zkBobDailyWithdrawalCap = 100_000 ether;
 uint256 constant zkBobDailyUserDepositCap = 10_000 ether;
 uint256 constant zkBobDepositCap = 10_000 ether;
-
-// xp
-address constant xpMinter = 0x0000000000000000000000000000000000000000;
-
-// vault
-address constant vaultYieldAdmin = 0x0000000000000000000000000000000000000000;
-address constant vaultInvestAdmin = 0x0000000000000000000000000000000000000000;
-
-// auction
-address constant auctionOwner = 0x0000000000000000000000000000000000000000;
-uint96 constant auctionFeeAmount = 0.01 ether;
-address constant auctionFeeReceiver = 0x0000000000000000000000000000000000000000;
-
-// bob auction
-address constant xpToken = 0x0000000000000000000000000000000000000000;
-uint96 constant bobAuctionFeeAmount = 0.25 ether;
-address constant bobAuctionFeeReceiver = 0x0000000000000000000000000000000000000000;
-address constant bobAuctionManager = 0x0000000000000000000000000000000000000000;
-uint96 constant bobAuctionDuration = 3 days;
-address constant dutchAuction = 0x0000000000000000000000000000000000000000;
-address constant englishAuction = 0x0000000000000000000000000000000000000000;
-address constant batchAuction = 0x0000000000000000000000000000000000000000;
