@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./proxy/EIP1967Admin.sol";
 import "./token/ERC677.sol";
 import "./token/ERC20Permit.sol";
-import "./token/MintableERC20.sol";
+import "./token/ERC20MintBurn.sol";
 import "./token/ERC20Recovery.sol";
 import "./token/ERC20Blocklist.sol";
 import "./utils/Claimable.sol";
@@ -19,7 +19,7 @@ contract BobToken is
     BaseERC20,
     ERC677,
     ERC20Permit,
-    MintableERC20,
+    ERC20MintBurn,
     ERC20Recovery,
     ERC20Blocklist,
     Claimable

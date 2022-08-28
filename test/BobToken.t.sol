@@ -53,7 +53,7 @@ contract BobTokenTest is Test, EIP2470Test {
         vm.prank(deployer);
         bob.setMinter(user1);
 
-        vm.expectRevert("MintableERC20: not a minter");
+        vm.expectRevert("ERC20MintBurn: not a minter");
         bob.mint(user2, 1 ether);
 
         vm.prank(user1);
@@ -63,6 +63,25 @@ contract BobTokenTest is Test, EIP2470Test {
 
         assertEq(bob.totalSupply(), 1 ether);
         assertEq(bob.balanceOf(user2), 1 ether);
+    }
+
+    function testBurn() public {
+        vm.prank(deployer);
+        bob.setMinter(user1);
+
+        vm.prank(user1);
+        bob.mint(user1, 1 ether);
+
+        vm.expectRevert("ERC20MintBurn: not a minter");
+        bob.burn(1 ether);
+
+        vm.prank(user1);
+        vm.expectEmit(true, true, false, true);
+        emit Transfer(user1, address(0), 1 ether);
+        bob.burn(1 ether);
+
+        assertEq(bob.totalSupply(), 0 ether);
+        assertEq(bob.balanceOf(user1), 0 ether);
     }
 
     function testMinterChange() public {
@@ -600,8 +619,10 @@ contract BobTokenTest is Test, EIP2470Test {
         bob.blockAccount(user1);
         vm.expectRevert("Blocklist: caller is not the blocklister");
         bob.unblockAccount(user1);
-        vm.expectRevert("MintableERC20: not a minter");
+        vm.expectRevert("ERC20MintBurn: not a minter");
         bob.mint(user1, 1 ether);
+        vm.expectRevert("ERC20MintBurn: not a minter");
+        bob.burn(1 ether);
         vm.expectRevert("Claimable: not authorized for claiming");
         bob.claimTokens(address(0), user1);
         vm.expectRevert("Recovery: not authorized for recovery");
@@ -626,8 +647,10 @@ contract BobTokenTest is Test, EIP2470Test {
         bob.blockAccount(user1);
         vm.expectRevert("Blocklist: caller is not the blocklister");
         bob.unblockAccount(user1);
-        vm.expectRevert("MintableERC20: not a minter");
+        vm.expectRevert("ERC20MintBurn: not a minter");
         bob.mint(user1, 1 ether);
+        vm.expectRevert("ERC20MintBurn: not a minter");
+        bob.burn(1 ether);
         bob.claimTokens(address(0), user1);
         vm.expectRevert("Recovery: not enabled");
         bob.requestRecovery(new address[](1), new uint256[](1));
@@ -641,6 +664,7 @@ contract BobTokenTest is Test, EIP2470Test {
         bob.blockAccount(user2);
         bob.unblockAccount(user2);
         bob.mint(user1, 1 ether);
+        bob.burn(1 ether);
         vm.stopPrank();
     }
 }

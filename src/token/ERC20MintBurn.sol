@@ -5,11 +5,13 @@ pragma solidity 0.8.15;
 import "../utils/Ownable.sol";
 import "../interfaces/IMintableERC20.sol";
 import "./BaseERC20.sol";
+import "../interfaces/IMintableERC20.sol";
+import "../interfaces/IBurnableERC20.sol";
 
 /**
- * @title MintableERC20
+ * @title ERC20MintBurn
  */
-abstract contract MintableERC20 is IMintableERC20, Ownable, BaseERC20 {
+abstract contract ERC20MintBurn is IMintableERC20, IBurnableERC20, Ownable, BaseERC20 {
     address public minter;
 
     /**
@@ -28,8 +30,19 @@ abstract contract MintableERC20 is IMintableERC20, Ownable, BaseERC20 {
      * @param _amount amount of tokens to mint.
      */
     function mint(address _to, uint256 _amount) external {
-        require(msg.sender == minter, "MintableERC20: not a minter");
+        require(msg.sender == minter, "ERC20MintBurn: not a minter");
 
         _mint(_to, _amount);
+    }
+
+    /**
+     * @dev Burns tokens from the caller.
+     * Callable only by the current minter address.
+     * @param _value amount of tokens to burn. Should be less than or equal to caller balance.
+     */
+    function burn(uint256 _value) external virtual {
+        require(msg.sender == minter, "ERC20MintBurn: not a minter");
+
+        _burn(msg.sender, _value);
     }
 }

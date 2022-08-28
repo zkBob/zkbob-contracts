@@ -5,14 +5,13 @@ pragma solidity 0.8.15;
 import "./proxy/EIP1967Admin.sol";
 import "./token/ERC677.sol";
 import "./token/ERC20Permit.sol";
-import "./token/MintableERC20.sol";
-import "./token/BurnableERC20.sol";
+import "./token/ERC20MintBurn.sol";
 import "./utils/Claimable.sol";
 
 /**
  * @title XPBobToken
  */
-contract XPBobToken is EIP1967Admin, BaseERC20, ERC677, ERC20Permit, MintableERC20, BurnableERC20, Claimable {
+contract XPBobToken is EIP1967Admin, BaseERC20, ERC677, ERC20Permit, ERC20MintBurn, Claimable {
     /**
      * @dev Creates a proxy implementation for XPBobToken.
      * @param _self address of the proxy contract, linked to the deployed implementation,
@@ -41,5 +40,14 @@ contract XPBobToken is EIP1967Admin, BaseERC20, ERC677, ERC20Permit, MintableERC
      */
     function _isOwner() internal view override returns (bool) {
         return super._isOwner() || _admin() == _msgSender();
+    }
+
+    /**
+     * @dev Burns tokens from the caller.
+     * Anyone is allowed to burn tokens.
+     * @param _value amount of tokens to burn. Should be less than or equal to caller balance.
+     */
+    function burn(uint256 _value) external override {
+        _burn(msg.sender, _value);
     }
 }
