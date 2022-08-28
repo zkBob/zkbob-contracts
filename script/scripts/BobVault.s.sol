@@ -53,7 +53,7 @@ contract DeployBobVault is Script {
             vault.transferOwnership(owner);
         }
 
-        if (admin != deployer) {
+        if (admin != tx.origin) {
             proxy.setAdmin(admin);
         }
 

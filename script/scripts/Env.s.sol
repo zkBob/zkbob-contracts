@@ -48,3 +48,21 @@ address constant uniV3Quoter = 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6;
 uint24 constant fee0 = 500;
 address constant usdc = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
 uint24 constant fee1 = 500;
+
+// xp
+address constant xpMinter = 0x0000000000000000000000000000000000000000;
+
+// auction
+address constant auctionOwner = 0x0000000000000000000000000000000000000000;
+uint96 constant auctionFeeAmount = 0.01 ether;
+address constant auctionFeeReceiver = 0x0000000000000000000000000000000000000000;
+
+// bob auction
+address constant xpToken = 0x0000000000000000000000000000000000000000;
+uint96 constant bobAuctionFeeAmount = 0.25 ether;
+address constant bobAuctionFeeReceiver = 0x0000000000000000000000000000000000000000;
+address constant bobAuctionManager = 0x0000000000000000000000000000000000000000;
+uint96 constant bobAuctionDuration = 3 days;
+address constant dutchAuction = 0x0000000000000000000000000000000000000000;
+address constant englishAuction = 0x0000000000000000000000000000000000000000;
+address constant batchAuction = 0x0000000000000000000000000000000000000000;

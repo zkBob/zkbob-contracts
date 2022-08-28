@@ -11,6 +11,7 @@ import "../src/proxy/EIP1967Proxy.sol";
 import "./mocks/ERC677Receiver.sol";
 import "../src/BobVault.sol";
 import "../src/interfaces/ILegacyERC20.sol";
+import "../src/yield/CompoundYieldImplementation.sol";
 import "../src/yield/AAVEYieldImplementation.sol";
 
 contract BobVaultTest is Test, EIP2470Test {
@@ -417,6 +418,91 @@ contract BobVaultTest is Test, EIP2470Test {
         assertEq(_getAToken(_lendingPool, address(usdc)).balanceOf(address(vault)), 0);
         assertEq(_getAToken(_lendingPool, address(usdt)).balanceOf(address(vault)), 0);
         assertEq(_getAToken(_lendingPool, address(dai)).balanceOf(address(vault)), 0);
+    }
+
+    function testCompound() public {
+        _forkMainnet();
+
+        vm.startPrank(deployer);
+
+        vault.setYieldAdmin(user2);
+
+        CompoundYieldImplementation cImpl = new CompoundYieldImplementation();
+        vault.addCollateral(
+            address(usdc), BobVault.Collateral(0, 1e6 * 1e6, 1e6, address(cImpl), 1000000, 0.001 ether, 0.002 ether)
+        );
+        vault.addCollateral(
+            address(usdt), BobVault.Collateral(0, 1e6 * 1e6, 1e6, address(cImpl), 1000000, 0.003 ether, 0.004 ether)
+        );
+        vault.addCollateral(
+            address(dai),
+            BobVault.Collateral(0, 1e6 * 1 ether, 1 ether, address(cImpl), 1 ether, 0.005 ether, 0.006 ether)
+        );
+
+        bob.mint(address(vault), 1e8 ether);
+
+        usdc.transfer(user1, 1e7 * 1e6);
+        ILegacyERC20(address(usdt)).transfer(user1, 1e7 * 1e6);
+        dai.transfer(user1, 1e7 ether);
+
+        vm.stopPrank();
+        vm.startPrank(user1);
+
+        vault.buy(address(usdc), 1e7 * 1e6);
+        vault.buy(address(usdt), 1e7 * 1e6);
+        vault.buy(address(dai), 1e7 ether);
+
+        vm.stopPrank();
+        vm.startPrank(deployer);
+
+        vault.invest(address(usdc));
+        vault.invest(address(usdt));
+        vault.invest(address(dai));
+
+        assertEq(usdc.balanceOf(address(vault)), 1e6 * 1e6);
+        assertEq(usdt.balanceOf(address(vault)), 1e6 * 1e6);
+        assertEq(dai.balanceOf(address(vault)), 1e6 ether);
+
+        vm.warp(block.timestamp + 100 days);
+        vm.roll(block.number + 100 days / 12 seconds);
+
+        vm.stopPrank();
+        vm.startPrank(user2);
+
+        address[] memory cTokens = new address[](3);
+        cTokens[0] = 0x39AA39c021dfbaE8faC545936693aC917d5E7563;
+        cTokens[1] = 0xf650C3d88D12dB855b8bf7D11Be6C55A4e07dCC9;
+        cTokens[2] = 0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643;
+
+        if (usdc.balanceOf(user2) > 0) {
+            usdc.transfer(deployer, usdc.balanceOf(user2));
+        }
+        if (usdt.balanceOf(user2) > 0) {
+            ILegacyERC20(address(usdt)).transfer(deployer, usdt.balanceOf(user2));
+        }
+        if (dai.balanceOf(user2) > 0) {
+            dai.transfer(deployer, dai.balanceOf(user2));
+        }
+        if (cImpl.compToken().balanceOf(user2) > 0) {
+            cImpl.compToken().transfer(deployer, cImpl.compToken().balanceOf(user2));
+        }
+        vault.farm(address(usdc));
+        vault.farm(address(usdt));
+        vault.farm(address(dai));
+        vault.farmExtra(address(usdc), abi.encode(cTokens));
+        assertGt(usdc.balanceOf(user2), 1e6);
+        assertGt(usdt.balanceOf(user2), 1e6);
+        assertGt(dai.balanceOf(user2), 1 ether);
+        assertGt(cImpl.compToken().balanceOf(user2), 0.1 ether);
+
+        vm.stopPrank();
+        vm.startPrank(deployer);
+
+        vault.disableCollateralYield(address(usdc));
+        vault.disableCollateralYield(address(usdt));
+        vault.disableCollateralYield(address(dai));
+
+        vm.stopPrank();
     }
 
     function _testAAVEYieldParamsUpdates(address _lendingPool) internal {
