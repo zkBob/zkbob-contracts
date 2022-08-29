@@ -167,11 +167,15 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         }
     }
 
-    function withdrawFee() external {
-        uint256 fee = accumulatedFee[msg.sender];
+    function withdrawFee(address _operator, address _to) external {
+        require(
+            _operator == msg.sender || operatorManager.isOperatorFeeReceiver(_operator, msg.sender),
+            "ZkBobPool: not authorized"
+        );
+        uint256 fee = accumulatedFee[_operator];
         require(fee > 0, "ZkBobPool: no fee to withdraw");
-        IERC20(token).safeTransfer(msg.sender, fee * TOKEN_DENOMINATOR);
-        accumulatedFee[msg.sender] = 0;
+        IERC20(token).safeTransfer(_to, fee * TOKEN_DENOMINATOR);
+        accumulatedFee[_operator] = 0;
     }
 
     function setLimits(

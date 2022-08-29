@@ -9,7 +9,7 @@ import "../mocks/TreeUpdateVerifierMock.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/BobToken.sol";
-import "../../src/zkbob/manager/SimpleOperatorManager.sol";
+import "../../src/zkbob/manager/MutableOperatorManager.sol";
 
 contract ZkBobPoolTest is Test {
     uint256 private constant initialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
@@ -31,7 +31,7 @@ contract ZkBobPoolTest is Test {
         ));
         pool = ZkBobPool(address(poolProxy));
 
-        pool.setOperatorManager(new SimpleOperatorManager(user2, "https://example.com"));
+        pool.setOperatorManager(new MutableOperatorManager(user2, user3, "https://example.com"));
 
         bob.mint(address(user1), 1 ether);
     }
@@ -43,20 +43,20 @@ contract ZkBobPoolTest is Test {
         bytes memory data2 = _encodeTransfer();
         _transact(data2);
 
-        vm.prank(user2);
-        pool.withdrawFee();
-        assertEq(bob.balanceOf(user2), 0.02 ether);
+        vm.prank(user3);
+        pool.withdrawFee(user2, user3);
+        assertEq(bob.balanceOf(user3), 0.02 ether);
     }
 
     function testPermitDeposit() public {
         bytes memory data = _encodePermitDeposit(0.5 ether);
         _transact(data);
 
-        vm.prank(user2);
-        pool.withdrawFee();
+        vm.prank(user3);
+        pool.withdrawFee(user2, user3);
         assertEq(bob.balanceOf(user1), 0.49 ether);
         assertEq(bob.balanceOf(address(pool)), 0.5 ether);
-        assertEq(bob.balanceOf(user2), 0.01 ether);
+        assertEq(bob.balanceOf(user3), 0.01 ether);
     }
 
     function _encodePermitDeposit(uint256 _amount) internal returns (bytes memory) {

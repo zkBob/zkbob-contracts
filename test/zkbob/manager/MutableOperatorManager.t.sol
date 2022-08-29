@@ -8,7 +8,7 @@ import "../../../src/zkbob/manager/MutableOperatorManager.sol";
 
 contract MutableOperatorManagerTest is Test {
     function testSimpleOperatorChanges() public {
-        MutableOperatorManager manager = new MutableOperatorManager(user1, "https://user1.example.com");
+        MutableOperatorManager manager = new MutableOperatorManager(user1, user4, "https://user1.example.com");
 
         assertEq(manager.owner(), address(this));
         manager.transferOwnership(user3);
@@ -18,25 +18,32 @@ contract MutableOperatorManagerTest is Test {
         assertEq(manager.operatorURI(), "https://user1.example.com");
         assertEq(manager.isOperator(user1), true);
         assertEq(manager.isOperator(user2), false);
+        assertTrue(manager.isOperatorFeeReceiver(user1, user4));
+        assertTrue(!manager.isOperatorFeeReceiver(user1, user2));
+        assertTrue(!manager.isOperatorFeeReceiver(user2, user2));
 
         vm.prank(user1);
         vm.expectRevert("Ownable: caller is not the owner");
-        manager.setOperator(user2, "https://user2.example.com");
+        manager.setOperator(user2, user2, "https://user2.example.com");
         vm.prank(user3);
-        manager.setOperator(user2, "https://user2.example.com");
+        manager.setOperator(user2, user2, "https://user2.example.com");
         assertEq(manager.operator(), user2);
         assertEq(manager.operatorURI(), "https://user2.example.com");
         assertEq(manager.isOperator(user1), false);
         assertEq(manager.isOperator(user2), true);
+        assertTrue(manager.isOperatorFeeReceiver(user1, user4));
+        assertTrue(!manager.isOperatorFeeReceiver(user1, user2));
+        assertTrue(manager.isOperatorFeeReceiver(user2, user2));
     }
 
     function testEnableForAll() public {
-        MutableOperatorManager manager = new MutableOperatorManager(user1, "https://user1.example.com");
+        MutableOperatorManager manager = new MutableOperatorManager(user1, user4, "https://user1.example.com");
 
-        manager.setOperator(address(0), "");
+        manager.setOperator(address(0), address(0), "");
         assertEq(manager.operator(), address(0));
         assertEq(manager.operatorURI(), "");
         assertEq(manager.isOperator(user1), true);
         assertEq(manager.isOperator(user2), true);
+        assertTrue(manager.isOperatorFeeReceiver(user1, user4));
     }
 }
