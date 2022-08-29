@@ -49,7 +49,7 @@ contract DeployLocal is Script {
             ));
         ZkBobPool pool = ZkBobPool(address(poolProxy));
 
-        IOperatorManager operatorManager = 
+        IOperatorManager operatorManager =
             new MutableOperatorManager(zkBobRelayer, zkBobRelayerFeeReceiver, zkBobRelayerURL);
         pool.setOperatorManager(operatorManager);
 
