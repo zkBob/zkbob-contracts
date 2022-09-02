@@ -7,7 +7,6 @@ import "./Env.s.sol";
 import "../../test/shared/EIP2470.t.sol";
 import "../../src/BobToken.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
-import "../../src/MultiMinter.sol";
 
 contract DeployBobToken is Script {
     SingletonFactory private constant factory = SingletonFactory(0xce0042B868300000d44A59004Da54A005ffdcf9f);
@@ -26,17 +25,12 @@ contract DeployBobToken is Script {
 
         BobToken bob = BobToken(address(proxy));
 
-        MultiMinter minter = new MultiMinter(address(bob));
-
-        bob.setMinter(address(minter));
-
         if (bobMinter != address(0)) {
-            minter.setMinter(bobMinter, true);
+            bob.updateMinter(bobMinter, true, true);
         }
 
         if (owner != address(0)) {
             bob.transferOwnership(owner);
-            minter.transferOwnership(owner);
         }
 
         if (admin != deployer) {
@@ -49,12 +43,9 @@ contract DeployBobToken is Script {
         require(proxy.implementation() == address(impl), "Invalid implementation address");
         require(proxy.admin() == admin, "Proxy admin is not configured");
         require(bob.owner() == owner, "Owner is not configured");
-        require(bob.minter() == address(minter), "Minter is not configured");
-        require(minter.owner() == owner, "Minter owner is not configured");
-        require(bobMinter == address(0) || minter.minter(bobMinter), "Bob minter is not configured");
+        require(bobMinter == address(0) || bob.isMinter(bobMinter), "Bob minter is not configured");
 
         console2.log("BobToken:", address(bob));
         console2.log("BobToken implementation:", address(impl));
-        console2.log("MultiMinter:", address(minter));
     }
 }

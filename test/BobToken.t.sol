@@ -8,7 +8,6 @@ import "./shared/Env.t.sol";
 import "./shared/EIP2470.t.sol";
 import "../src/BobToken.sol";
 import "../src/proxy/EIP1967Proxy.sol";
-import "../src/MultiMinter.sol";
 import "./mocks/ERC677Receiver.sol";
 
 contract BobTokenTest is Test, EIP2470Test {
@@ -23,9 +22,13 @@ contract BobTokenTest is Test, EIP2470Test {
         bytes memory creationCode = bytes.concat(type(EIP1967Proxy).creationCode, abi.encode(deployer, mockImpl, ""));
         proxy = EIP1967Proxy(factory.deploy(creationCode, bobSalt));
         BobToken impl = new BobToken(address(proxy));
-        vm.prank(deployer);
+        vm.startPrank(deployer);
         proxy.upgradeTo(address(impl));
         bob = BobToken(address(proxy));
+
+        bob.updateMinter(user1, true, false);
+        bob.updateMinter(user2, false, true);
+        vm.stopPrank();
 
         assertEq(address(proxy), bobVanityAddr);
 
@@ -50,9 +53,10 @@ contract BobTokenTest is Test, EIP2470Test {
     }
 
     function testMint() public {
-        vm.prank(deployer);
-        bob.setMinter(user1);
+        vm.expectRevert("ERC20MintBurn: not a minter");
+        bob.mint(user2, 1 ether);
 
+        vm.prank(user2);
         vm.expectRevert("ERC20MintBurn: not a minter");
         bob.mint(user2, 1 ether);
 
@@ -66,69 +70,53 @@ contract BobTokenTest is Test, EIP2470Test {
     }
 
     function testBurn() public {
-        vm.prank(deployer);
-        bob.setMinter(user1);
-
-        vm.prank(user1);
+        vm.startPrank(user1);
         bob.mint(user1, 1 ether);
+        bob.mint(user2, 1 ether);
+        vm.stopPrank();
 
-        vm.expectRevert("ERC20MintBurn: not a minter");
+        vm.expectRevert("ERC20MintBurn: not a burner");
         bob.burn(1 ether);
 
         vm.prank(user1);
-        vm.expectEmit(true, true, false, true);
-        emit Transfer(user1, address(0), 1 ether);
+        vm.expectRevert("ERC20MintBurn: not a burner");
         bob.burn(1 ether);
 
-        assertEq(bob.totalSupply(), 0 ether);
-        assertEq(bob.balanceOf(user1), 0 ether);
+        vm.prank(user2);
+        vm.expectEmit(true, true, false, true);
+        emit Transfer(user2, address(0), 1 ether);
+        bob.burn(1 ether);
+
+        assertEq(bob.totalSupply(), 1 ether);
+        assertEq(bob.balanceOf(user1), 1 ether);
+        assertEq(bob.balanceOf(user2), 0 ether);
     }
 
     function testMinterChange() public {
         vm.expectRevert("Ownable: caller is not the owner");
-        bob.setMinter(user1);
+        bob.updateMinter(user3, true, true);
 
-        assertEq(bob.minter(), address(0));
-        vm.prank(deployer);
-        bob.setMinter(user1);
-        assertEq(bob.minter(), address(user1));
-        vm.prank(deployer);
-        bob.setMinter(user2);
-        assertEq(bob.minter(), address(user2));
-    }
-
-    function testMultiMinter() public {
-        vm.prank(deployer);
-        MultiMinter minter = new MultiMinter(address(bob));
-        vm.prank(deployer);
-        bob.setMinter(address(minter));
-
-        vm.expectRevert("Ownable: caller is not the owner");
-        minter.setMinter(user1, true);
-
-        vm.prank(deployer);
-        minter.setMinter(user1, true);
-        vm.prank(deployer);
-        minter.setMinter(user2, true);
-
-        assertEq(minter.minter(user1), true);
-        assertEq(minter.minter(user2), true);
-        assertEq(minter.minter(address(this)), false);
-
-        vm.expectRevert("MultiMinter: not a minter");
-        minter.mint(user2, 1 ether);
-
-        vm.prank(user1);
-        minter.mint(user2, 1 ether);
-
-        assertEq(bob.totalSupply(), 1 ether);
-        assertEq(bob.balanceOf(user2), 1 ether);
+        assertEq(bob.isMinter(user1), true);
+        assertEq(bob.isMinter(user2), false);
+        assertEq(bob.isMinter(user3), false);
+        assertEq(bob.isBurner(user1), false);
+        assertEq(bob.isBurner(user2), true);
+        assertEq(bob.isBurner(user3), false);
+        vm.startPrank(deployer);
+        bob.updateMinter(user1, false, false);
+        bob.updateMinter(user2, false, false);
+        bob.updateMinter(user3, true, true);
+        vm.stopPrank();
+        assertEq(bob.isMinter(user1), false);
+        assertEq(bob.isMinter(user2), false);
+        assertEq(bob.isMinter(user3), true);
+        assertEq(bob.isBurner(user1), false);
+        assertEq(bob.isBurner(user2), false);
+        assertEq(bob.isBurner(user3), true);
     }
 
     function testPermit() public {
-        vm.prank(deployer);
-        bob.setMinter(address(this));
-
+        vm.prank(user1);
         bob.mint(user1, 1 ether);
 
         uint256 expiry = block.timestamp + 1 days;
@@ -157,9 +145,7 @@ contract BobTokenTest is Test, EIP2470Test {
     }
 
     function testReceiveWithPermit() public {
-        vm.prank(deployer);
-        bob.setMinter(address(this));
-
+        vm.prank(user1);
         bob.mint(user1, 1 ether);
 
         uint256 expiry = block.timestamp + 1 days;
@@ -180,9 +166,7 @@ contract BobTokenTest is Test, EIP2470Test {
     }
 
     function testSaltedPermit() public {
-        vm.prank(deployer);
-        bob.setMinter(address(this));
-
+        vm.prank(user1);
         bob.mint(user1, 1 ether);
 
         uint256 expiry = block.timestamp + 1 days;
@@ -212,9 +196,7 @@ contract BobTokenTest is Test, EIP2470Test {
     }
 
     function testReceiveWithSaltedPermit() public {
-        vm.prank(deployer);
-        bob.setMinter(address(this));
-
+        vm.prank(user1);
         bob.mint(user1, 1 ether);
 
         uint256 expiry = block.timestamp + 1 days;
@@ -273,8 +255,7 @@ contract BobTokenTest is Test, EIP2470Test {
     }
 
     function testBlocklist() public {
-        vm.prank(deployer);
-        bob.setMinter(address(this));
+        vm.prank(user1);
         bob.mint(user1, 1 ether);
 
         address erc677Receiver = address(new ERC677Receiver());
@@ -585,7 +566,7 @@ contract BobTokenTest is Test, EIP2470Test {
 
     function _setUpRecoveryConfig() internal {
         vm.startPrank(deployer);
-        bob.setMinter(deployer);
+        bob.updateMinter(deployer, true, true);
         bob.setRecoveryAdmin(user1);
         bob.setRecoveredFundsReceiver(user2);
         bob.setRecoveryLimitPercent(0.1 ether);
@@ -596,13 +577,13 @@ contract BobTokenTest is Test, EIP2470Test {
     }
 
     function testAccessRights() public {
-        vm.startPrank(user1);
+        vm.startPrank(user3);
         vm.expectRevert("EIP1967Admin: not an admin");
         proxy.upgradeTo(address(0xdead));
         vm.expectRevert("Ownable: caller is not the owner");
         bob.transferOwnership(user1);
         vm.expectRevert("Ownable: caller is not the owner");
-        bob.setMinter(user1);
+        bob.updateMinter(user1, true, true);
         vm.expectRevert("Ownable: caller is not the owner");
         bob.setClaimingAdmin(user1);
         vm.expectRevert("Ownable: caller is not the owner");
@@ -621,7 +602,7 @@ contract BobTokenTest is Test, EIP2470Test {
         bob.unblockAccount(user1);
         vm.expectRevert("ERC20MintBurn: not a minter");
         bob.mint(user1, 1 ether);
-        vm.expectRevert("ERC20MintBurn: not a minter");
+        vm.expectRevert("ERC20MintBurn: not a burner");
         bob.burn(1 ether);
         vm.expectRevert("Claimable: not authorized for claiming");
         bob.claimTokens(address(0), user1);
@@ -636,7 +617,7 @@ contract BobTokenTest is Test, EIP2470Test {
         vm.startPrank(deployer);
         proxy.upgradeTo(address(new BobToken(address(bob))));
         bob.transferOwnership(user1);
-        bob.setMinter(user1);
+        bob.updateMinter(user1, true, true);
         bob.setClaimingAdmin(user1);
         bob.setRecoveryAdmin(user1);
         bob.setRecoveredFundsReceiver(user1);
@@ -649,7 +630,7 @@ contract BobTokenTest is Test, EIP2470Test {
         bob.unblockAccount(user1);
         vm.expectRevert("ERC20MintBurn: not a minter");
         bob.mint(user1, 1 ether);
-        vm.expectRevert("ERC20MintBurn: not a minter");
+        vm.expectRevert("ERC20MintBurn: not a burner");
         bob.burn(1 ether);
         bob.claimTokens(address(0), user1);
         vm.expectRevert("Recovery: not enabled");

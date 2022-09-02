@@ -7,7 +7,6 @@ import "./Env.s.sol";
 import "../../test/shared/EIP2470.t.sol";
 import "../../src/BobToken.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
-import "../../src/MultiMinter.sol";
 import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
 
@@ -20,10 +19,8 @@ contract DeployLocal is Script {
         bobProxy.upgradeTo(address(bobImpl));
         BobToken bob = BobToken(address(bobProxy));
 
-        MultiMinter minter = new MultiMinter(address(bob));
-        bob.setMinter(address(minter));
         if (bobMinter != address(0)) {
-            minter.setMinter(bobMinter, true);
+            bob.updateMinter(bobMinter, true, true);
         }
 
         ITransferVerifier transferVerifier;
@@ -55,7 +52,6 @@ contract DeployLocal is Script {
 
         if (owner != address(0)) {
             bob.transferOwnership(owner);
-            minter.transferOwnership(owner);
             pool.transferOwnership(owner);
         }
 
@@ -69,9 +65,7 @@ contract DeployLocal is Script {
         require(bobProxy.implementation() == address(bobImpl), "Invalid implementation address");
         require(bobProxy.admin() == admin, "Proxy admin is not configured");
         require(bob.owner() == owner, "Owner is not configured");
-        require(bob.minter() == address(minter), "Minter is not configured");
-        require(minter.owner() == owner, "Minter owner is not configured");
-        require(bobMinter == address(0) || minter.minter(bobMinter), "Bob minter is not configured");
+        require(bobMinter == address(0) || bob.isMinter(bobMinter), "Bob minter is not configured");
         require(poolProxy.implementation() == address(poolImpl), "Invalid implementation address");
         require(poolProxy.admin() == admin, "Proxy admin is not configured");
         require(pool.owner() == owner, "Owner is not configured");
@@ -80,7 +74,6 @@ contract DeployLocal is Script {
 
         console2.log("BobToken:", address(bob));
         console2.log("BobToken implementation:", address(bobImpl));
-        console2.log("MultiMinter:", address(minter));
         console2.log("ZkBobPool:", address(pool));
         console2.log("ZkBobPool implementation:", address(poolImpl));
     }
