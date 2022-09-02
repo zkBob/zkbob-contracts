@@ -22,7 +22,7 @@ contract ZkBobPoolTest is Test {
         BobToken bobImpl = new BobToken(address(bobProxy));
         bobProxy.upgradeTo(address(bobImpl));
         bob = BobToken(address(bobProxy));
-        bob.setMinter(address(this));
+        bob.updateMinter(address(this), true, true);
 
         ZkBobPool impl = new ZkBobPool(0, address(bob), new TransferVerifierMock(), new TreeUpdateVerifierMock());
         EIP1967Proxy poolProxy = new EIP1967Proxy(address(this), address(impl), abi.encodeWithSelector(
