@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"log"
@@ -15,7 +16,7 @@ import (
 )
 
 var (
-	deployer = flag.String("deployer", "0xBF3d6f830CE263CAE987193982192Cd990442B53", "")
+	deployer = flag.String("deployer", "0x39F0bD56c1439a22Ee90b4972c16b7868D161981", "")
 	mockImpl = flag.String("mockImpl", "0xdead", "")
 	factory  = flag.String("factory", "0xce0042B868300000d44A59004Da54A005ffdcf9f", "")
 	pattern  = flag.String("pattern", "(?i)^0xB0B.*B0B$", "")
@@ -61,8 +62,11 @@ func main() {
 	for n := 0; n < *threads; n++ {
 		go func(n int) {
 			defer wg.Done()
-			state := crypto.NewKeccakState()
-			var hash common.Hash
+			state1 := crypto.NewKeccakState()
+			state2 := crypto.NewKeccakState()
+			var buf [40]byte
+			var hash1 common.Hash
+			var hash2 common.Hash
 
 			// keccak256( 0xff ++ address ++ salt ++ keccak256(init_code))[12:]
 			msg := make([]byte, 85)
@@ -74,12 +78,14 @@ func main() {
 					log.Printf("progress (%d/%d) - %d\n", n+1, *threads, i)
 				}
 				binary.BigEndian.PutUint64(msg[45:], uint64(i))
-				_, _ = state.Write(msg)
-				state.Read(hash[:])
-				state.Reset()
-				addr := common.BytesToAddress(hash.Bytes())
-				if regex.MatchString(addr.String()) {
-					log.Printf("Found, nonce: %d, salt: %s, address: %s\n", i, common.BytesToHash(msg[21:53]), addr.String())
+				_, _ = state1.Write(msg)
+				_, _ = state1.Read(hash1[:])
+				state1.Reset()
+
+				addr := ChecksumAddr(buf, hash1.Bytes()[12:], state2, hash2)
+
+				if regex.MatchString(addr) {
+					log.Printf("Found, nonce: %d, salt: %s, address: %s\n", i, common.BytesToHash(msg[21:53]), common.BytesToAddress(hash1[:]).Hex())
 					break
 				}
 			}
@@ -87,4 +93,23 @@ func main() {
 	}
 
 	wg.Wait()
+}
+
+func ChecksumAddr(buf [40]byte, addr []byte, state2 crypto.KeccakState, hash2 common.Hash) string {
+	hex.Encode(buf[:], addr[:])
+	_, _ = state2.Write(buf[:])
+	_, _ = state2.Read(hash2[:])
+	state2.Reset()
+	for i := 0; i < 40; i++ {
+		hashByte := hash2[i/2]
+		if i%2 == 0 {
+			hashByte = hashByte >> 4
+		} else {
+			hashByte &= 0xf
+		}
+		if buf[i] > '9' && hashByte > 7 {
+			buf[i] -= 32
+		}
+	}
+	return string(buf[:])
 }
