@@ -6,12 +6,12 @@ import "forge-std/Script.sol";
 
 // common
 address constant deployer = 0x39F0bD56c1439a22Ee90b4972c16b7868D161981;
-address constant admin = 0x39F0bD56c1439a22Ee90b4972c16b7868D161981;
-address constant owner = 0x39F0bD56c1439a22Ee90b4972c16b7868D161981;
+address constant admin = 0xd4a3D9Ca00fa1fD8833D560F9217458E61c446d8;
+address constant owner = 0xd4a3D9Ca00fa1fD8833D560F9217458E61c446d8;
 address constant mockImpl = address(0xdead);
 
 // bob
-address constant bobMinter = 0x39F0bD56c1439a22Ee90b4972c16b7868D161981;
+address constant bobMinter = 0xd4a3D9Ca00fa1fD8833D560F9217458E61c446d8;
 address constant bobVanityAddr = address(0xB0B195aEFA3650A6908f15CdaC7D92F8a5791B0B);
 bytes32 constant bobSalt = bytes32(uint256(285834900769));
 
