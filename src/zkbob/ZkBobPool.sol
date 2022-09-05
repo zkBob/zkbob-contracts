@@ -14,12 +14,12 @@ import "./utils/ZkBobAccounting.sol";
 import "../utils/Ownable.sol";
 import "../proxy/EIP1967Admin.sol";
 
-uint256 constant MAX_POOL_ID = 0xffffff;
-uint256 constant TOKEN_DENOMINATOR = 1 gwei;
-uint256 constant NATIVE_DENOMINATOR = 1 gwei;
-
 contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     using SafeERC20 for IERC20;
+
+    uint256 internal constant MAX_POOL_ID = 0xffffff;
+    uint256 internal constant TOKEN_DENOMINATOR = 1_000_000_000;
+    uint256 internal constant NATIVE_DENOMINATOR = 1_000_000_000;
 
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;

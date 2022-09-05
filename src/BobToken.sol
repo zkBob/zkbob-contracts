@@ -2,7 +2,6 @@
 
 pragma solidity 0.8.15;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./proxy/EIP1967Admin.sol";
 import "./token/ERC677.sol";
 import "./token/ERC20Permit.sol";
