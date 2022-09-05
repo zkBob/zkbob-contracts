@@ -4,9 +4,16 @@ pragma solidity 0.8.15;
 
 import "../../interfaces/IOperatorManager.sol";
 
+/**
+ * @title SimpleOperatorManager
+ * @dev Implements an immutable access control for ZkBobPool relayers.
+ */
 contract SimpleOperatorManager is IOperatorManager {
+    // current operator address, address(0) allows anyone to be an operator
     address public immutable operator;
+    // fee receiver address of the current operator
     address public immutable operatorFeeReceiver;
+    // current operator public API URL
     string public operatorURI;
 
     constructor(address _operator, address _operatorFeeReceiver, string memory _operatorURI) {

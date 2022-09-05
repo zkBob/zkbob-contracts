@@ -14,6 +14,10 @@ import "./utils/ZkBobAccounting.sol";
 import "../utils/Ownable.sol";
 import "../proxy/EIP1967Admin.sol";
 
+/**
+ * @title ZkBobPool
+ * Shielded transactions pool for BOB tokens.
+ */
 contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     using SafeERC20 for IERC20;
 
@@ -144,6 +148,8 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
                 IERC20(token).safeTransfer(_memo_receiver(), uint256(-token_amount) * TOKEN_DENOMINATOR);
             }
 
+            // energy withdrawals are not yet implemented, any transaction with non-zero energy_amount will revert
+            // future version of the protocol will support energy withdrawals through negative energy_amount
             if (energy_amount < 0) {
                 revert("ZkBobPool: XP claiming is not yet enabled");
             }
