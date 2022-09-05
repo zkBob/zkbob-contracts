@@ -35,15 +35,4 @@ contract MutableOperatorManagerTest is Test {
         assertTrue(!manager.isOperatorFeeReceiver(user1, user2));
         assertTrue(manager.isOperatorFeeReceiver(user2, user2));
     }
-
-    function testEnableForAll() public {
-        MutableOperatorManager manager = new MutableOperatorManager(user1, user4, "https://user1.example.com");
-
-        manager.setOperator(address(0), address(0), "");
-        assertEq(manager.operator(), address(0));
-        assertEq(manager.operatorURI(), "");
-        assertEq(manager.isOperator(user1), true);
-        assertEq(manager.isOperator(user2), true);
-        assertTrue(manager.isOperatorFeeReceiver(user1, user4));
-    }
 }

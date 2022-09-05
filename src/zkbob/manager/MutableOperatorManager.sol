@@ -10,7 +10,7 @@ import "../../utils/Ownable.sol";
  * @dev Implements a mutable access control for ZkBobPool relayers.
  */
 contract MutableOperatorManager is IOperatorManager, Ownable {
-    // current operator address, address(0) allows anyone to be an operator
+    // current operator address
     address public operator;
     // mapping of all historical fee receiver addresses, we keep fee receivers addresses
     // in a mapping to allow fee withdrawals even after operator address was changed
@@ -27,19 +27,16 @@ contract MutableOperatorManager is IOperatorManager, Ownable {
     }
 
     function _setOperator(address _operator, address _feeReceiver, string memory _operatorURI) internal {
-        if (_operator == address(0)) {
-            require(_feeReceiver == address(0), "OperatorManager: Non-zero fee receiver");
-            require(bytes(_operatorURI).length == 0, "OperatorManager: non-empty uri");
-        } else {
-            require(bytes(_operatorURI).length > 0, "OperatorManager: empty uri");
-            operatorFeeReceiver[_operator] = _feeReceiver;
-        }
+        require(_operator != address(0), "OperatorManager: empty operator");
+        require(_feeReceiver != address(0), "OperatorManager: empty fee receiver");
+        require(bytes(_operatorURI).length > 0, "OperatorManager: empty uri");
         operator = _operator;
         operatorURI = _operatorURI;
+        operatorFeeReceiver[_operator] = _feeReceiver;
     }
 
     function isOperator(address _addr) external view override returns (bool) {
-        return operator == _addr || operator == address(0);
+        return operator == _addr;
     }
 
     function isOperatorFeeReceiver(address _operator, address _addr) external view override returns (bool) {
