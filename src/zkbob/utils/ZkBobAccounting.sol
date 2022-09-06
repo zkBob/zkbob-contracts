@@ -2,11 +2,6 @@
 
 pragma solidity 0.8.15;
 
-uint256 constant PRECISION = 1 gwei;
-uint256 constant SLOT_DURATION = 1 hours;
-uint256 constant DAY_SLOTS = 1 days / SLOT_DURATION;
-uint256 constant WEEK_SLOTS = 1 weeks / SLOT_DURATION;
-
 /**
  * @title ZkBobAccounting
  * @dev On chain accounting for zkBob operations, limits and stats.
@@ -15,6 +10,11 @@ uint256 constant WEEK_SLOTS = 1 weeks / SLOT_DURATION;
  * and overall transaction count does not exceed 4.3e9 (4.3 billion). Pool usage limits cannot exceed 4.3e9 BOB (4.3 billion) per day.
  */
 contract ZkBobAccounting {
+    uint256 internal constant PRECISION = 1_000_000_000;
+    uint256 internal constant SLOT_DURATION = 1 hours;
+    uint256 internal constant DAY_SLOTS = 1 days / SLOT_DURATION;
+    uint256 internal constant WEEK_SLOTS = 1 weeks / SLOT_DURATION;
+
     struct Slot0 {
         // max seen average tvl over period of at least 1 week (granularity of 1e9), might not be precise
         // max possible tvl - type(uint56).max * 1e9 zkBOB units ~= 7.2e16 BOB

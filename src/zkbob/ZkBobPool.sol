@@ -14,12 +14,16 @@ import "./utils/ZkBobAccounting.sol";
 import "../utils/Ownable.sol";
 import "../proxy/EIP1967Admin.sol";
 
-uint256 constant MAX_POOL_ID = 0xffffff;
-uint256 constant TOKEN_DENOMINATOR = 1 gwei;
-uint256 constant NATIVE_DENOMINATOR = 1 gwei;
-
+/**
+ * @title ZkBobPool
+ * Shielded transactions pool for BOB tokens.
+ */
 contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     using SafeERC20 for IERC20;
+
+    uint256 internal constant MAX_POOL_ID = 0xffffff;
+    uint256 internal constant TOKEN_DENOMINATOR = 1_000_000_000;
+    uint256 internal constant NATIVE_DENOMINATOR = 1_000_000_000;
 
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;
@@ -44,11 +48,25 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         tree_verifier = _tree_verifier;
     }
 
+    /**
+     * @dev Throws if called by any account other than the current relayer operator.
+     */
     modifier onlyOperator() {
         require(operatorManager.isOperator(_msgSender()), "ZkBobPool: not an operator");
         _;
     }
 
+    /**
+     * @dev Initializes pool proxy storage.
+     * Callable only once and only through EIP1967Proxy constructor / upgradeToAndCall.
+     * @param _root initial empty merkle tree root.
+     * @param _tvlCap initial upper cap on the entire pool tvl, 18 decimals.
+     * @param _dailyDepositCap initial daily limit on the sum of all deposits, 18 decimals.
+     * @param _dailyWithdrawalCap initial daily limit on the sum of all withdrawals, 18 decimals.
+     * @param _dailyUserDepositCap initial daily limit on the sum of all per-address deposits, 18 decimals.
+     * @param _dailyUserDepositCap initial daily limit on the sum of all per-address deposits, 18 decimals.
+     * @param _depositCap initial limit on the amount of a single deposit, 18 decimals.
+     */
     function initialize(
         uint256 _root,
         uint256 _tvlCap,
@@ -71,14 +89,28 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         );
     }
 
+    /**
+     * @dev Updates used operator manager contract.
+     * Callable only by the contract owner / proxy admin.
+     * @param _operatorManager new operator manager implementation.
+     */
     function setOperatorManager(IOperatorManager _operatorManager) external onlyOwner {
         operatorManager = _operatorManager;
     }
 
+    /**
+     * @dev Tells the denominator for converting BOB into zkBOB units.
+     * 1e18 BOB units = 1e9 zkBOB units.
+     */
     function denominator() external pure returns (uint256) {
         return TOKEN_DENOMINATOR;
     }
 
+    /**
+     * @dev Tells the current merkle tree index, which will be used for the next operation.
+     * Each operation increases merkle tree size by 128, so index is equal to the total number of seen operations, multiplied by 128.
+     * @return next operator merkle index.
+     */
     function pool_index() external view returns (uint256) {
         return _txCount() << 7;
     }
@@ -91,6 +123,12 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         return pool_id;
     }
 
+    /**
+     * @dev Perform a zkBob pool transaction.
+     * Callable only by the current operator.
+     * Method uses a custom ABI encoding scheme described in CustomABIDecoder.
+     * Single transact() call performs either deposit, withdrawal or shielded transfer operation.
+     */
     function transact() external payable onlyOperator {
         address user;
         uint256 txType = _tx_type();
@@ -144,6 +182,8 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
                 IERC20(token).safeTransfer(_memo_receiver(), uint256(-token_amount) * TOKEN_DENOMINATOR);
             }
 
+            // energy withdrawals are not yet implemented, any transaction with non-zero energy_amount will revert
+            // future version of the protocol will support energy withdrawals through negative energy_amount
             if (energy_amount < 0) {
                 revert("ZkBobPool: XP claiming is not yet enabled");
             }
@@ -167,6 +207,12 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         }
     }
 
+    /**
+     * @dev Withdraws accumulated fee on behalf of an operator.
+     * Callable only by the operator itself, or by a pre-configured operator fee receiver address.
+     * @param _operator address of an operator account to withdraw fee from.
+     * @param _to address of the accumulated fee tokens receiver.
+     */
     function withdrawFee(address _operator, address _to) external {
         require(
             _operator == msg.sender || operatorManager.isOperatorFeeReceiver(_operator, msg.sender),
@@ -178,6 +224,16 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         accumulatedFee[_operator] = 0;
     }
 
+    /**
+     * @dev Updates pool usage limits.
+     * Callable only by the contract owner / proxy admin.
+     * @param _tvlCap new upper cap on the entire pool tvl, 18 decimals.
+     * @param _dailyDepositCap new daily limit on the sum of all deposits, 18 decimals.
+     * @param _dailyWithdrawalCap new daily limit on the sum of all withdrawals, 18 decimals.
+     * @param _dailyUserDepositCap new daily limit on the sum of all per-address deposits, 18 decimals.
+     * @param _dailyUserDepositCap new daily limit on the sum of all per-address deposits, 18 decimals.
+     * @param _depositCap new limit on the amount of a single deposit, 18 decimals.
+     */
     function setLimits(
         uint256 _tvlCap,
         uint256 _dailyDepositCap,
