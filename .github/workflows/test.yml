@@ -19,7 +19,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly-6f7866d822eec03bc2be45204c714fbed2024522
+          version: nightly
         id: init
 
       - name: Run Forge fmt src
@@ -50,7 +50,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly-6f7866d822eec03bc2be45204c714fbed2024522
+          version: nightly
 
       - name: Run Forge build
         run: |

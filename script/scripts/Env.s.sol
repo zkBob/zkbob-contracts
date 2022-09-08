@@ -16,11 +16,11 @@ address constant bobVanityAddr = address(0xB0B195aEFA3650A6908f15CdaC7D92F8a5791
 bytes32 constant bobSalt = bytes32(uint256(285834900769));
 
 // zkbob
-string constant zkBobVerifiers = "stageV1";
+string constant zkBobVerifiers = "prodV1";
 uint256 constant zkBobInitialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
 address constant zkBobRelayer = 0xc2c4AD59B78F4A0aFD0CDB8133E640Db08Fa5b90;
 address constant zkBobRelayerFeeReceiver = 0x758768EC473279c4B1Aa61FA5450745340D4B17d;
-string constant zkBobRelayerURL = "https://relayer.thgkjlr.website";
+string constant zkBobRelayerURL = "https://relayer.zkbob.com";
 uint256 constant zkBobPoolCap = 1_000_000 ether;
 uint256 constant zkBobDailyDepositCap = 100_000 ether;
 uint256 constant zkBobDailyWithdrawalCap = 100_000 ether;
