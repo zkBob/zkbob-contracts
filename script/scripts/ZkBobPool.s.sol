@@ -54,5 +54,10 @@ contract DeployZkBobPool is Script {
         require(pool.owner() == owner, "Owner is not configured");
         require(pool.transfer_verifier() == transferVerifier, "Transfer verifier is not configured");
         require(pool.tree_verifier() == treeVerifier, "Tree verifier is not configured");
+
+        console2.log("ZkBobPool:", address(pool));
+        console2.log("ZkBobPool implementation:", address(impl));
+        console2.log("TransferVerifier:", address(transferVerifier));
+        console2.log("TreeUpdateVerifier:", address(treeVerifier));
     }
 }
