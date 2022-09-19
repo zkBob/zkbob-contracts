@@ -120,7 +120,10 @@ contract ZkBobAccounting {
         });
     }
 
-    function _recordOperation(address _user, int256 _txAmount)
+    function _recordOperation(
+        address _user,
+        int256 _txAmount
+    )
         internal
         returns (uint56 maxWeeklyAvgTvl, uint32 maxWeeklyTxCount, uint256 txCount)
     {
