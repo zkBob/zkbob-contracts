@@ -81,11 +81,7 @@ library Pairing {
         G2Point memory c2,
         G1Point memory d1,
         G2Point memory d2
-    )
-        internal
-        view
-        returns (bool)
-    {
+    ) internal view returns (bool) {
         G1Point[4] memory p1 = [a1, b1, c1, d1];
         G2Point[4] memory p2 = [a2, b2, c2, d2];
         uint256 inputSize = 24;
@@ -216,6 +212,8 @@ contract TransferVerifier {
             require(input[i] < SNARK_SCALAR_FIELD, "verifier-gte-snark-scalar-field");
             vk_x = Pairing.plus(vk_x, Pairing.scalar_mul(vk.IC[i + 1], input[i]));
         }
-        return Pairing.pairing(Pairing.negate(_proof.A), _proof.B, vk.alfa1, vk.beta2, vk_x, vk.gamma2, _proof.C, vk.delta2);
+        return Pairing.pairing(
+            Pairing.negate(_proof.A), _proof.B, vk.alfa1, vk.beta2, vk_x, vk.gamma2, _proof.C, vk.delta2
+        );
     }
 }

@@ -221,9 +221,7 @@ contract ZkBobAccounting {
         uint256 _dailyWithdrawalCap,
         uint256 _dailyUserDepositCap,
         uint256 _depositCap
-    )
-        internal
-    {
+    ) internal {
         Slot1 memory s1 = slot1;
         Slot2 memory s2 = slot2;
         require(_depositCap > 0, "ZkBobAccounting: zero deposit cap");
