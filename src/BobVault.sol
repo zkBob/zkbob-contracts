@@ -136,7 +136,7 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         require(token.price > 0, "BobVault: unsupported collateral");
 
         require(_inFee <= MAX_FEE || _inFee == 1 ether, "BobVault: invalid inFee");
-        require(_outFee <= MAX_FEE || _inFee == 1 ether, "BobVault: invalid outFee");
+        require(_outFee <= MAX_FEE || _outFee == 1 ether, "BobVault: invalid outFee");
 
         (token.inFee, token.outFee) = (_inFee, _outFee);
 
@@ -149,6 +149,95 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
 
     function setInvestAdmin(address _investAdmin) external onlyOwner {
         investAdmin = _investAdmin;
+    }
+
+    function getAmountOut(address _inToken, address _outToken, uint256 _inAmount) public view returns (uint256) {
+        require(_inToken != _outToken, "BobVault: tokens should be different");
+
+        if (_outToken == address(bobToken)) {
+            Collateral storage token = collateral[_inToken];
+            require(token.price > 0, "BobVault: unsupported collateral");
+            require(token.inFee <= MAX_FEE, "BobVault: collateral deposit suspended");
+
+            uint256 fee = _inAmount * uint256(token.inFee) / 1 ether;
+            uint256 sellAmount = _inAmount - fee;
+            uint256 outAmount = sellAmount * 1 ether / token.price;
+
+            require(outAmount <= bobToken.balanceOf(address(this)), "BobVault: exceeds available liquidity");
+
+            return outAmount;
+        } else if (_inToken == address(bobToken)) {
+            Collateral storage token = collateral[_outToken];
+            require(token.price > 0, "BobVault: unsupported collateral");
+            require(token.outFee <= MAX_FEE, "BobVault: collateral withdrawal suspended");
+
+            uint256 outAmount = _inAmount * token.price / 1 ether;
+            require(token.balance >= outAmount, "BobVault: insufficient liquidity for collateral");
+            outAmount -= outAmount * uint256(token.outFee) / 1 ether;
+
+            return outAmount;
+        } else {
+            Collateral storage inToken = collateral[_inToken];
+            Collateral storage outToken = collateral[_outToken];
+            require(inToken.price > 0, "BobVault: unsupported input collateral");
+            require(outToken.price > 0, "BobVault: unsupported output collateral");
+            require(inToken.inFee <= MAX_FEE, "BobVault: collateral deposit suspended");
+            require(outToken.outFee <= MAX_FEE, "BobVault: collateral withdrawal suspended");
+
+            uint256 fee = _inAmount * uint256(inToken.inFee) / 1 ether;
+            uint256 sellAmount = _inAmount - fee;
+            uint256 bobAmount = sellAmount * 1 ether / inToken.price;
+
+            uint256 outAmount = bobAmount * outToken.price / 1 ether;
+            require(outToken.balance >= outAmount, "BobVault: insufficient liquidity for collateral");
+            outAmount -= outAmount * uint256(outToken.outFee) / 1 ether;
+
+            return outAmount;
+        }
+    }
+
+    function getAmountIn(address _inToken, address _outToken, uint256 _outAmount) public view returns (uint256) {
+        require(_inToken != _outToken, "BobVault: tokens should be different");
+
+        if (_outToken == address(bobToken)) {
+            Collateral storage token = collateral[_inToken];
+            require(token.price > 0, "BobVault: unsupported collateral");
+            require(token.inFee <= MAX_FEE, "BobVault: collateral deposit suspended");
+
+            require(_outAmount <= bobToken.balanceOf(address(this)), "BobVault: exceeds available liquidity");
+
+            uint256 sellAmount = _outAmount * token.price / 1 ether;
+            uint256 inAmount = sellAmount * 1 ether / (1 ether - uint256(token.inFee));
+
+            return inAmount;
+        } else if (_inToken == address(bobToken)) {
+            Collateral storage token = collateral[_outToken];
+            require(token.price > 0, "BobVault: unsupported collateral");
+            require(token.outFee <= MAX_FEE, "BobVault: collateral withdrawal suspended");
+
+            require(token.balance >= _outAmount, "BobVault: insufficient liquidity for collateral");
+
+            uint256 buyAmount = _outAmount * 1 ether / (1 ether - uint256(token.outFee));
+            uint256 inAmount = buyAmount * 1 ether / token.price;
+
+            return inAmount;
+        } else {
+            Collateral storage inToken = collateral[_inToken];
+            Collateral storage outToken = collateral[_outToken];
+            require(inToken.price > 0, "BobVault: unsupported input collateral");
+            require(outToken.price > 0, "BobVault: unsupported output collateral");
+            require(inToken.inFee <= MAX_FEE, "BobVault: collateral deposit suspended");
+            require(outToken.outFee <= MAX_FEE, "BobVault: collateral withdrawal suspended");
+
+            require(outToken.balance >= _outAmount, "BobVault: insufficient liquidity for collateral");
+
+            uint256 buyAmount = _outAmount * 1 ether / (1 ether - uint256(outToken.outFee));
+            uint256 bobAmount = buyAmount * 1 ether / outToken.price;
+            uint256 sellAmount = bobAmount * inToken.price / 1 ether;
+            uint256 inAmount = sellAmount * 1 ether / (1 ether - uint256(inToken.inFee));
+
+            return inAmount;
+        }
     }
 
     function buy(address _token, uint256 _amount) external returns (uint256) {
@@ -195,6 +284,7 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
     function swap(address _inToken, address _outToken, uint256 _amount) external returns (uint256) {
         Collateral storage inToken = collateral[_inToken];
         Collateral storage outToken = collateral[_outToken];
+        require(_inToken != _outToken, "BobVault: tokens should be different");
         require(inToken.price > 0, "BobVault: unsupported input collateral");
         require(outToken.price > 0, "BobVault: unsupported output collateral");
         require(inToken.inFee <= MAX_FEE, "BobVault: collateral deposit suspended");
@@ -245,17 +335,7 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         }
     }
 
-    function farm(address[] memory _tokens) external returns (uint256[] memory) {
-        require(_msgSender() == yieldAdmin || _isOwner(), "BobVault: not authorized");
-
-        uint256[] memory result = new uint256[](_tokens.length);
-        for (uint256 i = 0; i < _tokens.length; i++) {
-            result[i] = _farm(_tokens[i], msg.sender);
-        }
-        return result;
-    }
-
-    function _farm(address _token, address _to) internal returns (uint256) {
+    function getFarmAmount(address _token) public returns (uint256) {
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
 
@@ -271,9 +351,15 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
             return 0;
         }
 
-        uint256 value = currentBalance - requiredBalance;
-        _transferOut(_token, _to, value);
-        emit Farm(_token, token.yield, value);
+        return currentBalance - requiredBalance;
+    }
+
+    function farm(address _token) external returns (uint256) {
+        require(_msgSender() == yieldAdmin || _isOwner(), "BobVault: not authorized");
+
+        uint256 value = getFarmAmount(_token);
+        _transferOut(_token, _msgSender(), value);
+        emit Farm(_token, collateral[_token].yield, value);
 
         return value;
     }
@@ -295,7 +381,7 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
     }
 
     function give(address _token, uint256 _amount) external {
-        Collateral memory token = collateral[_token];
+        Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
 
         IERC20(_token).safeTransferFrom(msg.sender, address(this), _amount);
