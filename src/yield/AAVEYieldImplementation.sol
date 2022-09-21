@@ -11,7 +11,7 @@ import "../interfaces/IYieldImplementation.sol";
 
 /**
  * @title AAVEYieldImplementation
- * @dev This contract contains token-specific logic for investing ERC20 tokens into AAVE protocol.
+ * @dev This contract contains token-specific logic for investing ERC20 tokens into AAVE V2 protocol.
  */
 contract AAVEYieldImplementation is IYieldImplementation {
     using SafeERC20 for IERC20;

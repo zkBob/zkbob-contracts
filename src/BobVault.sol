@@ -10,32 +10,34 @@ import "./utils/Ownable.sol";
 
 /**
  * @title BobVault
+ * @dev This contract contains logic for buying/selling BOB tokens for multiple underlying collaterals at a fixed flat rate.
+ * Locked collateral can be seamlessly invested in arbitrary yield-generating protocols (e.g. Compound or AAVE)
  */
 contract BobVault is EIP1967Admin, Ownable, YieldConnector {
     using SafeERC20 for IERC20;
 
-    address public yieldAdmin;
-    address public investAdmin;
+    address public yieldAdmin; // permissioned receiver of swap fees and generated compound yields
+    address public investAdmin; // account triggering invest of excess collateral
     IERC20 public immutable bobToken;
 
     mapping(address => Collateral) public collateral;
 
-    uint64 internal constant MAX_FEE = 0.01 ether;
+    uint64 internal constant MAX_FEE = 0.01 ether; // 1%
 
     struct Collateral {
-        uint128 balance;
-        uint128 buffer;
-        uint96 dust;
-        address yield;
+        uint128 balance; // accounted required collateral balance
+        uint128 buffer; // buffer of tokens that should not be invested and kept as is
+        uint96 dust; // small non-withdrawable yield to account for possible rounding issues
+        address yield; // address of yield-generating implementation
         uint128 price; // X tokens / 1 bob
-        uint64 inFee;
-        uint64 outFee;
+        uint64 inFee; // fee for TOKEN->BOB buys
+        uint64 outFee; // fee for BOB->TOKEN sells
     }
 
     struct Stat {
-        uint256 total;
-        uint256 required;
-        uint256 farmed;
+        uint256 total; // current balance of collateral (total == required + farmed)
+        uint256 required; // min required balance of collateral
+        uint256 farmed; // withdrawable collateral yield
     }
 
     event AddCollateral(address indexed token, uint128 price);
@@ -58,10 +60,20 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         bobToken = IERC20(_bobToken);
     }
 
+    /**
+     * @dev Tells if given token address belongs to one of the whitelisted collaterals.
+     * @param _token address of the token contract.
+     * @return true, if token is a supported collateral.
+     */
     function isCollateral(address _token) external view returns (bool) {
         return collateral[_token].price > 0;
     }
 
+    /**
+     * @dev Tells the balance-related stats for the specific collateral.
+     * @param _token address of the token contract.
+     * @return res balance stats struct.
+     */
     function stat(address _token) external returns (Stat memory res) {
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
@@ -71,11 +83,16 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         if (token.yield != address(0)) {
             res.total += _delegateInvestedAmount(token.yield, _token);
             res.required += token.dust;
-            res.farmed = res.total - res.required;
         }
         res.farmed = res.total - res.required;
     }
 
+    /**
+     * @dev Adds a new collateral token.
+     * Callable only by the contract owner / proxy admin.
+     * @param _token address of added collateral token. Token can be added only once.
+     * @param _collateral added collateral settings.
+     */
     function addCollateral(address _token, Collateral calldata _collateral) external onlyOwner {
         Collateral storage token = collateral[_token];
         require(token.price == 0, "BobVault: already initialized collateral");
@@ -95,6 +112,16 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         emit AddCollateral(_token, _collateral.price);
     }
 
+    /**
+     * @dev Enables yield-earning on the particular collateral token.
+     * Callable only by the contract owner / proxy admin.
+     * In order to change yield provider for already yield-enabled tokens,
+     * disableCollateralYield should be called first.
+     * @param _token address of the collateral token.
+     * @param _yield address of the yield provider contract.
+     * @param _buffer amount of non-invested collateral.
+     * @param _dust small amount of non-withdrawable yield.
+     */
     function enableCollateralYield(address _token, address _yield, uint128 _buffer, uint96 _dust) external onlyOwner {
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
@@ -103,6 +130,14 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         _enableCollateralYield(_token, _yield, _buffer, _dust);
     }
 
+    /**
+     * @dev Internal function that enables yield-earning on the particular collateral token.
+     * Delegate-calls initialize and invest functions on the yield provider contract.
+     * @param _token address of the collateral token.
+     * @param _yield address of the yield provider contract.
+     * @param _buffer amount of non-invested collateral.
+     * @param _dust small amount of non-withdrawable yield.
+     */
     function _enableCollateralYield(address _token, address _yield, uint128 _buffer, uint96 _dust) internal {
         Collateral storage token = collateral[_token];
 
@@ -116,6 +151,13 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         emit EnableYield(_token, _yield, _buffer, _dust);
     }
 
+    /**
+     * @dev Disable yield-earning on the particular collateral token.
+     * Callable only by the contract owner / proxy admin.
+     * Yield can only be disabled on collaterals on which enableCollateralYield was called first.
+     * Delegate-calls investedAmount, withdraw and exit functions on the yield provider contract.
+     * @param _token address of the collateral token.
+     */
     function disableCollateralYield(address _token) external onlyOwner {
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
@@ -131,6 +173,14 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         emit DisableYield(_token, yield);
     }
 
+    /**
+     * @dev Updates in/out fees on the particular collateral.
+     * Callable only by the contract owner / proxy admin.
+     * Can only be called on already whitelisted collaterals.
+     * @param _token address of the collateral token.
+     * @param _inFee fee for TOKEN->BOB buys (or 1 ether to pause buys).
+     * @param _outFee fee for BOB->TOKEN sells (or 1 ether to pause sells).
+     */
     function setCollateralFees(address _token, uint64 _inFee, uint64 _outFee) external onlyOwner {
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
@@ -143,14 +193,33 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         emit UpdateFees(_token, _inFee, _outFee);
     }
 
+    /**
+     * @dev Sets address of the yield receiver account.
+     * Callable only by the contract owner / proxy admin.
+     * Nominated address will be capable of withdrawing accumulated fees and generated yields by calling farm function.
+     * @param _yieldAdmin new yield receiver address.
+     */
     function setYieldAdmin(address _yieldAdmin) external onlyOwner {
         yieldAdmin = _yieldAdmin;
     }
 
+    /**
+     * @dev Sets address of the invest manager.
+     * Callable only by the contract owner / proxy admin.
+     * Nominated address will be only capable of investing excess collateral tokens by calling invest function.
+     * @param _investAdmin new invest manager address.
+     */
     function setInvestAdmin(address _investAdmin) external onlyOwner {
         investAdmin = _investAdmin;
     }
 
+    /**
+     * @dev Estimates amount of received tokens, when swapping some amount of inToken for outToken.
+     * @param _inToken address of the sold token. Can be either the address of BOB token or one of whitelisted collaterals.
+     * @param _outToken address of the bought token. Can be either the address of BOB token or one of whitelisted collaterals.
+     * @param _inAmount amount of sold _inToken.
+     * @return estimated amount of received _outToken.
+     */
     function getAmountOut(address _inToken, address _outToken, uint256 _inAmount) public view returns (uint256) {
         require(_inToken != _outToken, "BobVault: tokens should be different");
 
@@ -196,6 +265,14 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         }
     }
 
+    /**
+     * @dev Estimates amount of tokens that should be sold, in order to get required amount of out bought tokens,
+     * when swapping inToken for outToken.
+     * @param _inToken address of the sold token. Can be either the address of BOB token or one of whitelisted collaterals.
+     * @param _outToken address of the bought token. Can be either the address of BOB token or one of whitelisted collaterals.
+     * @param _outAmount desired amount of bought _outToken.
+     * @return estimated amount of _inToken that should be sold.
+     */
     function getAmountIn(address _inToken, address _outToken, uint256 _outAmount) public view returns (uint256) {
         require(_inToken != _outToken, "BobVault: tokens should be different");
 
@@ -240,6 +317,15 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         }
     }
 
+    /**
+     * @dev Buys BOB with one of the collaterals at a fixed rate.
+     * Collateral token should be pre-approved to the vault contract.
+     * Swap will revert, if order cannot be fully filled due to the lack of BOB tokens.
+     * Swapped amount of collateral will be subject to relevant inFee.
+     * @param _token address of the sold collateral token.
+     * @param _amount amount of sold collateral.
+     * @return amount of received _outToken, i.e. getAmountOut(_token, BOB, _amount).
+     */
     function buy(address _token, uint256 _amount) external returns (uint256) {
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
@@ -259,6 +345,15 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         return buyAmount;
     }
 
+    /**
+     * @dev Sells BOB for one of the collaterals at a fixed rate.
+     * BOB token should be pre-approved to the vault contract.
+     * Swap will revert, if order cannot be fully filled due to the lack of particular collateral.
+     * Swapped amount of collateral will be subject to relevant outFee.
+     * @param _token address of the received collateral token.
+     * @param _amount amount of sold BOB tokens.
+     * @return amount of received _outToken, i.e. getAmountOut(BOB, _token, _amount).
+     */
     function sell(address _token, uint256 _amount) external returns (uint256) {
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
@@ -281,6 +376,18 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         return buyAmount;
     }
 
+    /**
+     * @dev Buys one collateral with another collateral by virtually routing swap through BOB token at a fixed rate.
+     * Collateral token should be pre-approved to the vault contract.
+     * Identical to sequence of buy+sell calls,
+     * with the exception that swap does not require presence of the BOB liquidity and has a much lower gas usage.
+     * Swap will revert, if order cannot be fully filled due to the lack of particular collateral.
+     * Swapped amount of collateral will be subject to relevant inFee and outFee.
+     * @param _inToken address of the sold collateral token.
+     * @param _outToken address of the bought collateral token.
+     * @param _amount amount of sold collateral.
+     * @return amount of received _outToken, i.e. getAmountOut(_inToken, _outToken, _amount).
+     */
     function swap(address _inToken, address _outToken, uint256 _amount) external returns (uint256) {
         Collateral storage inToken = collateral[_inToken];
         Collateral storage outToken = collateral[_outToken];
@@ -316,8 +423,13 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         return buyAmount;
     }
 
+    /**
+     * @dev Invests excess tokens into the yield provider.
+     * Callable only by the contract owner / proxy admin / invest admin.
+     * @param _token address of collateral to invest.
+     */
     function invest(address _token) external {
-        require(_msgSender() == investAdmin || _isOwner(), "BobVault: not authorized");
+        require(msg.sender == investAdmin || _isOwner(), "BobVault: not authorized");
 
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
@@ -325,6 +437,11 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         _investExcess(_token, token.yield, token.buffer);
     }
 
+    /**
+     * @dev Internal function for investing excess tokens into the yield provider.
+     * Delegate-calls invest function on the yield provider contract.
+     * @param _token address of collateral to invest.
+     */
     function _investExcess(address _token, address _yield, uint256 _buffer) internal {
         uint256 balance = IERC20(_token).balanceOf(address(this));
 
@@ -335,7 +452,14 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         }
     }
 
-    function getFarmAmount(address _token) public returns (uint256) {
+    /**
+     * @dev Collects accumulated fees and generated yield for the specific collateral.
+     * Callable only by the contract owner / proxy admin / yield admin.
+     * @param _token address of collateral to collect fess / interest for.
+     */
+    function farm(address _token) external returns (uint256) {
+        require(msg.sender == yieldAdmin || _isOwner(), "BobVault: not authorized");
+
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
 
@@ -351,35 +475,36 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
             return 0;
         }
 
-        return currentBalance - requiredBalance;
-    }
-
-    function farm(address _token) external returns (uint256) {
-        require(_msgSender() == yieldAdmin || _isOwner(), "BobVault: not authorized");
-
-        uint256 value = getFarmAmount(_token);
-        _transferOut(_token, _msgSender(), value);
-        emit Farm(_token, collateral[_token].yield, value);
+        uint256 value = currentBalance - requiredBalance;
+        _transferOut(_token, msg.sender, value);
+        emit Farm(_token, token.yield, value);
 
         return value;
     }
 
+    /**
+     * @dev Collects extra rewards from the specific yield provider (e.g. COMP tokens).
+     * Callable only by the contract owner / proxy admin / yield admin.
+     * @param _token address of collateral to collect rewards for.
+     * @param _data arbitrary extra data required for rewards collection.
+     */
     function farmExtra(address _token, bytes calldata _data) external {
-        require(_msgSender() == yieldAdmin || _isOwner(), "BobVault: not authorized");
+        require(msg.sender == yieldAdmin || _isOwner(), "BobVault: not authorized");
 
         Collateral memory token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
 
-        _delegateFarmExtra(token.yield, _token, _msgSender(), _data);
+        _delegateFarmExtra(token.yield, _token, msg.sender, _data);
 
         emit FarmExtra(_token, token.yield);
-
-        assembly {
-            returndatacopy(0, 0, returndatasize())
-            return(0, returndatasize())
-        }
     }
 
+    /**
+     * @dev Top up balance of the particular collateral.
+     * Can be used when migrating liquidity from other sources (e.g. from Uniswap).
+     * @param _token address of collateral to top up.
+     * @param _amount amount of collateral to add.
+     */
     function give(address _token, uint256 _amount) external {
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
@@ -391,6 +516,13 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         emit Give(_token, _amount);
     }
 
+    /**
+     * @dev Withdraws BOB liquidity.
+     * Can be used when migrating BOB liquidity into other pools. (e.g. to a different BobVault contract).
+     * Will withdraw at most _value tokens, but no more than the current available balance.
+     * @param _to address of BOB tokens receiver.
+     * @param _value max amount of BOB tokens to withdraw.
+     */
     function reclaim(address _to, uint256 _value) external onlyOwner {
         uint256 balance = bobToken.balanceOf(address(this));
         uint256 value = balance > _value ? _value : balance;
@@ -399,6 +531,14 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         }
     }
 
+    /**
+     * @dev Internal function for doing collateral payouts.
+     * Delegate-calls investedAmount and withdraw functions on the yield provider contract.
+     * Seamlessly withdraws the necessary amount of invested liquidity, when needed.
+     * @param _token address of withdrawn collateral token.
+     * @param _to address of withdrawn collateral receiver.
+     * @param _value amount of collateral tokens to withdraw.
+     */
     function _transferOut(address _token, address _to, uint256 _value) internal {
         Collateral storage token = collateral[_token];
 

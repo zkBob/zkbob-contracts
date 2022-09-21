@@ -260,9 +260,9 @@ contract BobVaultTest is Test, EIP2470Test {
     function testBalanceAdjustments() public {
         _setup3pool(1000 ether);
 
-        assertEq(vault.getFarmAmount(address(usdc)), 0);
-        assertEq(vault.getFarmAmount(address(usdt)), 0);
-        assertEq(vault.getFarmAmount(address(dai)), 0);
+        assertEq(vault.stat(address(usdc)).farmed, 0);
+        assertEq(vault.stat(address(usdt)).farmed, 0);
+        assertEq(vault.stat(address(dai)).farmed, 0);
 
         vm.startPrank(deployer);
         vault.buy(address(usdc), 100 * 1e6);
@@ -270,15 +270,15 @@ contract BobVaultTest is Test, EIP2470Test {
         vault.buy(address(dai), 100 ether);
         vm.stopPrank();
 
-        assertEq(vault.getFarmAmount(address(usdc)), 0.1 * 1e6);
-        assertEq(vault.getFarmAmount(address(usdt)), 0.3 * 1e6);
-        assertEq(vault.getFarmAmount(address(dai)), 0.5 ether);
+        assertEq(vault.stat(address(usdc)).farmed, 0.1 * 1e6);
+        assertEq(vault.stat(address(usdt)).farmed, 0.3 * 1e6);
+        assertEq(vault.stat(address(dai)).farmed, 0.5 ether);
 
         vm.startPrank(deployer);
         vault.give(address(usdc), 100 * 1e6);
-        assertEq(vault.getFarmAmount(address(usdc)), 0.1 * 1e6);
+        assertEq(vault.stat(address(usdc)).farmed, 0.1 * 1e6);
         usdc.transfer(address(vault), 1e6);
-        assertEq(vault.getFarmAmount(address(usdc)), 1.1 * 1e6);
+        assertEq(vault.stat(address(usdc)).farmed, 1.1 * 1e6);
 
         assertGt(bob.balanceOf(address(vault)), 500 ether);
         vault.reclaim(deployer, 1000 ether);
