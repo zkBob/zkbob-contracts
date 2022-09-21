@@ -3,7 +3,15 @@
 pragma solidity 0.8.15;
 
 interface IERC20Permit {
-    function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+    function permit(
+        address owner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    )
         external;
 
     function nonces(address owner) external view returns (uint256);
@@ -14,7 +22,14 @@ interface IERC20Permit {
 
     function SALTED_PERMIT_TYPEHASH() external view returns (bytes32);
 
-    function receiveWithPermit(address _holder, uint256 _value, uint256 _deadline, uint8 _v, bytes32 _r, bytes32 _s)
+    function receiveWithPermit(
+        address _holder,
+        uint256 _value,
+        uint256 _deadline,
+        uint8 _v,
+        bytes32 _r,
+        bytes32 _s
+    )
         external;
 
     function saltedPermit(

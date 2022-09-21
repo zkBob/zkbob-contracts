@@ -144,6 +144,26 @@ contract BobTokenTest is Test, EIP2470Test {
         bob.permit(user1, user2, 1 ether, expiry, v, r, s);
     }
 
+    function testPermitFailsAfterHardFork() public {
+        vm.prank(user1);
+        bob.mint(user1, 1 ether);
+
+        uint256 expiry = block.timestamp + 1 days;
+        (uint8 v, bytes32 r, bytes32 s) = _signPermit(pk1, user1, user2, 1 ether, 0, expiry);
+
+        bytes32 sep = bob.DOMAIN_SEPARATOR();
+
+        vm.chainId(1234);
+        assertTrue(sep != bob.DOMAIN_SEPARATOR());
+        vm.expectRevert("ERC20Permit: invalid ERC2612 signature");
+        bob.permit(user1, user2, 1 ether, expiry, v, r, s);
+
+        vm.chainId(31337);
+        assertTrue(sep == bob.DOMAIN_SEPARATOR());
+        bob.permit(user1, user2, 1 ether, expiry, v, r, s);
+        assertEq(bob.allowance(user1, user2), 1 ether);
+    }
+
     function testReceiveWithPermit() public {
         vm.prank(user1);
         bob.mint(user1, 1 ether);
