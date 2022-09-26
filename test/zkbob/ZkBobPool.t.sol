@@ -59,6 +59,34 @@ contract ZkBobPoolTest is Test {
         assertEq(bob.balanceOf(user3), 0.01 ether);
     }
 
+    function testUsualDeposit() public {
+        vm.prank(user1);
+        bob.approve(address(pool), 0.51 ether);
+
+        bytes memory data = _encodeDeposit(0.5 ether);
+        _transact(data);
+
+        vm.prank(user3);
+        pool.withdrawFee(user2, user3);
+        assertEq(bob.balanceOf(user1), 0.49 ether);
+        assertEq(bob.balanceOf(address(pool)), 0.5 ether);
+        assertEq(bob.balanceOf(user3), 0.01 ether);
+    }
+
+    function testWithdrawal() public {
+        bytes memory data1 = _encodePermitDeposit(0.5 ether);
+        _transact(data1);
+
+        bytes memory data2 = _encodeWithdrawal(0.1 ether);
+        _transact(data2);
+
+        vm.prank(user3);
+        pool.withdrawFee(user2, user3);
+        assertEq(bob.balanceOf(user1), 0.59 ether);
+        assertEq(bob.balanceOf(address(pool)), 0.39 ether);
+        assertEq(bob.balanceOf(user3), 0.02 ether);
+    }
+
     function _encodePermitDeposit(uint256 _amount) internal returns (bytes memory) {
         uint256 expiry = block.timestamp + 1 hours;
         bytes32 nullifier = bytes32(_randFR());
@@ -81,6 +109,45 @@ contract ZkBobPoolTest is Test {
             bytes12(bytes32(_randFR()))
         );
         return abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
+    }
+
+    function _encodeDeposit(uint256 _amount) internal returns (bytes memory) {
+        bytes32 nullifier = bytes32(_randFR());
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
+        bytes memory data = abi.encodePacked(
+            ZkBobPool.transact.selector, nullifier, _randFR(), uint48(0), uint112(0), int64(int256(_amount / 1 gwei))
+        );
+        for (uint256 i = 0; i < 17; i++) {
+            data = abi.encodePacked(data, _randFR());
+        }
+        data = abi.encodePacked(
+            data, uint16(0), uint16(48), uint64(0.01 ether / 1 gwei), _randFR(), bytes8(bytes32(_randFR()))
+        );
+        return abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
+    }
+
+    function _encodeWithdrawal(uint256 _amount) internal returns (bytes memory) {
+        bytes memory data = abi.encodePacked(
+            ZkBobPool.transact.selector,
+            _randFR(),
+            _randFR(),
+            uint48(0),
+            uint112(0),
+            int64(-int256((_amount + 0.01 ether) / 1 gwei))
+        );
+        for (uint256 i = 0; i < 17; i++) {
+            data = abi.encodePacked(data, _randFR());
+        }
+        return abi.encodePacked(
+            data,
+            uint16(2),
+            uint16(80),
+            uint64(0.01 ether / 1 gwei),
+            uint64(0),
+            user1,
+            _randFR(),
+            bytes12(bytes32(_randFR()))
+        );
     }
 
     function _encodeTransfer() internal returns (bytes memory) {
