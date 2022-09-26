@@ -81,6 +81,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         require(roots[0] == 0, "ZkBobPool: already initialized");
         roots[0] = _root;
         _setLimits(
+            0,
             _tvlCap / TOKEN_DENOMINATOR,
             _dailyDepositCap / TOKEN_DENOMINATOR,
             _dailyWithdrawalCap / TOKEN_DENOMINATOR,
@@ -134,6 +135,8 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         uint256 txType = _tx_type();
         if (txType == 0) {
             user = _deposit_spender();
+        } else if (txType == 2) {
+            user = _memo_receiver();
         } else if (txType == 3) {
             user = _memo_permit_holder();
         }
@@ -179,7 +182,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             );
 
             if (token_amount < 0) {
-                IERC20(token).safeTransfer(_memo_receiver(), uint256(-token_amount) * TOKEN_DENOMINATOR);
+                IERC20(token).safeTransfer(user, uint256(-token_amount) * TOKEN_DENOMINATOR);
             }
 
             // energy withdrawals are not yet implemented, any transaction with non-zero energy_amount will revert
@@ -189,7 +192,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             }
 
             if (msg.value > 0) {
-                payable(_memo_receiver()).transfer(msg.value);
+                payable(user).transfer(msg.value);
             }
         } else if (txType == 3) {
             // Permittable token deposit
@@ -227,6 +230,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     /**
      * @dev Updates pool usage limits.
      * Callable only by the contract owner / proxy admin.
+     * @param _tier pool limits tier (0-254).
      * @param _tvlCap new upper cap on the entire pool tvl, 18 decimals.
      * @param _dailyDepositCap new daily limit on the sum of all deposits, 18 decimals.
      * @param _dailyWithdrawalCap new daily limit on the sum of all withdrawals, 18 decimals.
@@ -235,6 +239,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
      * @param _depositCap new limit on the amount of a single deposit, 18 decimals.
      */
     function setLimits(
+        uint8 _tier,
         uint256 _tvlCap,
         uint256 _dailyDepositCap,
         uint256 _dailyWithdrawalCap,
@@ -245,12 +250,26 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         onlyOwner
     {
         _setLimits(
+            _tier,
             _tvlCap / TOKEN_DENOMINATOR,
             _dailyDepositCap / TOKEN_DENOMINATOR,
             _dailyWithdrawalCap / TOKEN_DENOMINATOR,
             _dailyUserDepositCap / TOKEN_DENOMINATOR,
             _depositCap / TOKEN_DENOMINATOR
         );
+    }
+
+    /**
+     * @dev Updates users limit tiers.
+     * Callable only by the contract owner / proxy admin.
+     * @param _tier pool limits tier (0-255).
+     * 0 is the default tier.
+     * 1-254 are custom pool limit tiers, configured at runtime.
+     * 255 is the special tier with zero limits, used to effectively prevent some address from accessing the pool.
+     * @param _users list of user account addresses to assign a tier for.
+     */
+    function setUsersTier(uint8 _tier, address[] memory _users) external onlyOwner {
+        _setUsersTier(_tier, _users);
     }
 
     /**
