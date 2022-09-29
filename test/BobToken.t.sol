@@ -19,7 +19,9 @@ contract BobTokenTest is Test, EIP2470Test {
 
     function setUp() public {
         setUpFactory();
-        bytes memory creationCode = bytes.concat(type(EIP1967Proxy).creationCode, abi.encode(deployer, mockImpl, ""));
+        bytes memory creationCode = bytes.concat(
+            vm.getCode("scripts/vanityaddr/contracts/EIP1967Proxy.json"), abi.encode(deployer, mockImpl, "")
+        );
         proxy = EIP1967Proxy(factory.deploy(creationCode, bobSalt));
         BobToken impl = new BobToken(address(proxy));
         vm.startPrank(deployer);

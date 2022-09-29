@@ -3,13 +3,17 @@
 pragma solidity 0.8.15;
 
 import "forge-std/Test.sol";
+import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
+import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import "../shared/Env.t.sol";
 import "../mocks/TransferVerifierMock.sol";
 import "../mocks/TreeUpdateVerifierMock.sol";
+import "../mocks/DummyImpl.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/BobToken.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
+import "../../src/utils/UniswapV3Seller.sol";
 
 contract ZkBobPoolTest is Test {
     uint256 private constant initialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
@@ -77,7 +81,7 @@ contract ZkBobPoolTest is Test {
         bytes memory data1 = _encodePermitDeposit(0.5 ether);
         _transact(data1);
 
-        bytes memory data2 = _encodeWithdrawal(0.1 ether);
+        bytes memory data2 = _encodeWithdrawal(user1, 0.1 ether, 0 ether);
         _transact(data2);
 
         vm.prank(user3);
@@ -85,6 +89,70 @@ contract ZkBobPoolTest is Test {
         assertEq(bob.balanceOf(user1), 0.59 ether);
         assertEq(bob.balanceOf(address(pool)), 0.39 ether);
         assertEq(bob.balanceOf(user3), 0.02 ether);
+    }
+
+    function _setupNativeSwaps() internal {
+        vm.makePersistent(address(pool), address(bob));
+        vm.makePersistent(
+            EIP1967Proxy(payable(address(pool))).implementation(), EIP1967Proxy(payable(address(bob))).implementation()
+        );
+        vm.makePersistent(
+            address(pool.operatorManager()), address(pool.transfer_verifier()), address(pool.tree_verifier())
+        );
+
+        // fork mainnet
+        vm.createSelectFork(forkRpcUrl);
+
+        // create BOB-USDC 0.05% pool at Uniswap V3
+        deal(usdc, address(this), 1e12);
+        IERC20(usdc).approve(uniV3Positions, 1e12);
+        INonfungiblePositionManager(uniV3Positions).createAndInitializePoolIfNecessary(
+            usdc, address(bob), 500, TickMath.getSqrtRatioAtTick(276320)
+        );
+        INonfungiblePositionManager(uniV3Positions).mint(
+            INonfungiblePositionManager.MintParams({
+                token0: usdc,
+                token1: address(bob),
+                fee: 500,
+                tickLower: 276320,
+                tickUpper: 276330,
+                amount0Desired: 1e12,
+                amount1Desired: 0,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: address(this),
+                deadline: block.timestamp
+            })
+        );
+
+        // enable token swaps for ETH
+        pool.setTokenSeller(address(new UniswapV3Seller(uniV3Router, address(bob), 500, usdc, 500)));
+    }
+
+    function testNativeWithdrawal() public {
+        _setupNativeSwaps();
+
+        vm.deal(user1, 0);
+
+        bytes memory data1 = _encodePermitDeposit(0.99 ether);
+        _transact(data1);
+
+        // user1 withdraws 0.4 BOB, 0.3 BOB gets converted to ETH
+        bytes memory data2 = _encodeWithdrawal(user1, 0.4 ether, 0.3 ether);
+        _transact(data2);
+
+        address dummy = address(new DummyImpl(0));
+        bytes memory data3 = _encodeWithdrawal(dummy, 0.4 ether, 0.3 ether);
+        _transact(data3);
+
+        vm.prank(user3);
+        pool.withdrawFee(user2, user3);
+        assertEq(bob.balanceOf(user1), 0.1 ether);
+        assertEq(bob.balanceOf(dummy), 0.1 ether);
+        assertEq(bob.balanceOf(address(pool)), 0.17 ether);
+        assertEq(bob.balanceOf(user3), 0.03 ether);
+        assertGt(user1.balance, 1 gwei);
+        assertGt(dummy.balance, 1 gwei);
     }
 
     function _encodePermitDeposit(uint256 _amount) internal returns (bytes memory) {
@@ -126,7 +194,7 @@ contract ZkBobPoolTest is Test {
         return abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
     }
 
-    function _encodeWithdrawal(uint256 _amount) internal returns (bytes memory) {
+    function _encodeWithdrawal(address _to, uint256 _amount, uint256 _nativeAmount) internal returns (bytes memory) {
         bytes memory data = abi.encodePacked(
             ZkBobPool.transact.selector,
             _randFR(),
@@ -143,8 +211,8 @@ contract ZkBobPoolTest is Test {
             uint16(2),
             uint16(80),
             uint64(0.01 ether / 1 gwei),
-            uint64(0),
-            user1,
+            uint64(_nativeAmount / 1 gwei),
+            _to,
             _randFR(),
             bytes12(bytes32(_randFR()))
         );

@@ -26,3 +26,9 @@ uint256 constant zkBobDailyDepositCap = 100_000 ether;
 uint256 constant zkBobDailyWithdrawalCap = 100_000 ether;
 uint256 constant zkBobDailyUserDepositCap = 10_000 ether;
 uint256 constant zkBobDepositCap = 10_000 ether;
+
+// bob seller
+address constant uniV3Router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
+uint24 constant fee0 = 500;
+address constant usdc = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
+uint24 constant fee1 = 500;
