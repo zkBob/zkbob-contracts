@@ -41,7 +41,8 @@ interface IERC20Permit {
         uint8 _v,
         bytes32 _r,
         bytes32 _s
-    ) external;
+    )
+        external;
 
     function receiveWithSaltedPermit(
         address _holder,
@@ -51,5 +52,6 @@ interface IERC20Permit {
         uint8 _v,
         bytes32 _r,
         bytes32 _s
-    ) external;
+    )
+        external;
 }

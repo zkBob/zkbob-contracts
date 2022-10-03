@@ -281,7 +281,10 @@ contract ZkBobPoolTest is Test {
         uint256 _nonce,
         uint256 _expiry,
         bytes32 _salt
-    ) internal returns (uint8 v, bytes32 r, bytes32 s) {
+    )
+        internal
+        returns (uint8 v, bytes32 r, bytes32 s)
+    {
         bytes32 digest = ECDSA.toTypedDataHash(
             bob.DOMAIN_SEPARATOR(),
             keccak256(abi.encode(bob.SALTED_PERMIT_TYPEHASH(), _holder, _spender, _value, _nonce, _expiry, _salt))

@@ -79,7 +79,9 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         uint256 _dailyWithdrawalCap,
         uint256 _dailyUserDepositCap,
         uint256 _depositCap
-    ) external {
+    )
+        external
+    {
         require(msg.sender == address(this), "ZkBobPool: not initializer");
         require(roots[0] == 0, "ZkBobPool: already initialized");
         roots[0] = _root;
@@ -262,7 +264,10 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         uint256 _dailyWithdrawalCap,
         uint256 _dailyUserDepositCap,
         uint256 _depositCap
-    ) external onlyOwner {
+    )
+        external
+        onlyOwner
+    {
         _setLimits(
             _tier,
             _tvlCap / TOKEN_DENOMINATOR,

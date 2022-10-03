@@ -50,7 +50,9 @@ abstract contract ERC20Permit is IERC20Permit, BaseERC20, EIP712 {
         uint8 _v,
         bytes32 _r,
         bytes32 _s
-    ) external {
+    )
+        external
+    {
         _checkPermit(_holder, _spender, _value, _deadline, _v, _r, _s);
         _approve(_holder, _spender, _value);
     }
@@ -91,7 +93,9 @@ abstract contract ERC20Permit is IERC20Permit, BaseERC20, EIP712 {
         uint8 _v,
         bytes32 _r,
         bytes32 _s
-    ) external {
+    )
+        external
+    {
         _checkSaltedPermit(_holder, _spender, _value, _deadline, _salt, _v, _r, _s);
         _approve(_holder, _spender, _value);
     }
@@ -107,7 +111,10 @@ abstract contract ERC20Permit is IERC20Permit, BaseERC20, EIP712 {
         uint8 _v,
         bytes32 _r,
         bytes32 _s
-    ) public virtual {
+    )
+        public
+        virtual
+    {
         _checkSaltedPermit(_holder, msg.sender, _value, _deadline, _salt, _v, _r, _s);
 
         // we don't make calls to _approve to avoid unnecessary storage writes
@@ -126,7 +133,9 @@ abstract contract ERC20Permit is IERC20Permit, BaseERC20, EIP712 {
         uint8 _v,
         bytes32 _r,
         bytes32 _s
-    ) private {
+    )
+        private
+    {
         require(block.timestamp <= _deadline, "ERC20Permit: expired permit");
 
         uint256 nonce = nonces[_holder]++;
@@ -146,7 +155,9 @@ abstract contract ERC20Permit is IERC20Permit, BaseERC20, EIP712 {
         uint8 _v,
         bytes32 _r,
         bytes32 _s
-    ) private {
+    )
+        private
+    {
         require(block.timestamp <= _deadline, "ERC20Permit: expired permit");
 
         uint256 nonce = nonces[_holder]++;

@@ -33,7 +33,9 @@ contract ZkBobAccountingMock is ZkBobAccounting {
         uint256 _dailyWithdrawalCap,
         uint256 _dailyUserDepositCap,
         uint256 _depositCap
-    ) external {
+    )
+        external
+    {
         _setLimits(
             _tier,
             _tvlCap / 1 gwei,
