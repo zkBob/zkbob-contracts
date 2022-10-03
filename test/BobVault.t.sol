@@ -26,18 +26,15 @@ contract BobVaultTest is Test, EIP2470Test {
     function setUp() public {
         vm.createSelectFork(forkRpcUrl);
 
-        bytes memory creationCode = bytes.concat(type(EIP1967Proxy).creationCode, abi.encode(deployer, mockImpl, ""));
-        bobProxy = EIP1967Proxy(factory.deploy(creationCode, bobSalt));
-        BobToken impl = new BobToken(address(bobProxy));
+        EIP1967Proxy bobProxy = new EIP1967Proxy(deployer, mockImpl, "");
+        BobToken bobImpl = new BobToken(address(bobProxy));
         vm.prank(deployer);
-        bobProxy.upgradeTo(address(impl));
+        bobProxy.upgradeTo(address(bobImpl));
         bob = BobToken(address(bobProxy));
         vm.prank(deployer);
         bob.updateMinter(deployer, true, true);
 
-        assertEq(address(bobProxy), bobVanityAddr);
-
-        vault = new BobVault(bobVanityAddr);
+        vault = new BobVault(address(bob));
         vaultProxy = new EIP1967Proxy(deployer, address(vault), "");
         vault = BobVault(address(vaultProxy));
 
@@ -192,6 +189,11 @@ contract BobVaultTest is Test, EIP2470Test {
         vm.expectRevert("BobVault: insufficient liquidity for collateral");
         vault.getAmountIn(address(bob), address(usdc), 1e18 * 1e6);
 
+        assertEq(vault.stat(address(usdc)).required, 1e6 * 1e6 * 0.999);
+        vm.expectRevert("BobVault: insufficient liquidity for collateral");
+        vault.getAmountIn(address(bob), address(usdc), 1e6 * 1e6 * 0.999 * 0.998 + 1);
+        vault.getAmountIn(address(bob), address(usdc), 1e6 * 1e6 * 0.999 * 0.998);
+
         // collateral -> collateral
         assertEq(vault.getAmountOut(address(usdc), address(usdt), 100 * 1e6), 99_500_400); // 0.1% + 0.4%
         assertEq(vault.getAmountIn(address(usdc), address(usdt), 99_500_400), 100 * 1e6); // 0.1% + 0.4%
@@ -209,6 +211,11 @@ contract BobVaultTest is Test, EIP2470Test {
         vault.getAmountOut(address(usdc), address(usdt), 1 ether);
         vm.expectRevert("BobVault: insufficient liquidity for collateral");
         vault.getAmountIn(address(usdt), address(usdc), 1 ether);
+
+        assertEq(vault.stat(address(usdc)).required, 1e6 * 1e6 * 0.999);
+        vm.expectRevert("BobVault: insufficient liquidity for collateral");
+        vault.getAmountIn(address(usdt), address(usdc), 1e6 * 1e6 * 0.999 * 0.998 + 1);
+        vault.getAmountIn(address(usdt), address(usdc), 1e6 * 1e6 * 0.999 * 0.998);
     }
 
     function testCollateralPause() public {

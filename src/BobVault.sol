@@ -241,6 +241,8 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
             require(token.outFee <= MAX_FEE, "BobVault: collateral withdrawal suspended");
 
             uint256 outAmount = _inAmount * token.price / 1 ether;
+            // collected outFee should be available for withdrawal after the swap,
+            // so collateral liquidity is checked before subtracting the fee
             require(token.balance >= outAmount, "BobVault: insufficient liquidity for collateral");
             outAmount -= outAmount * uint256(token.outFee) / 1 ether;
 
@@ -258,6 +260,8 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
             uint256 bobAmount = sellAmount * 1 ether / inToken.price;
 
             uint256 outAmount = bobAmount * outToken.price / 1 ether;
+            // collected outFee should be available for withdrawal after the swap,
+            // so collateral liquidity is checked before subtracting the fee
             require(outToken.balance >= outAmount, "BobVault: insufficient liquidity for collateral");
             outAmount -= outAmount * uint256(outToken.outFee) / 1 ether;
 
@@ -292,9 +296,11 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
             require(token.price > 0, "BobVault: unsupported collateral");
             require(token.outFee <= MAX_FEE, "BobVault: collateral withdrawal suspended");
 
-            require(token.balance >= _outAmount, "BobVault: insufficient liquidity for collateral");
-
             uint256 buyAmount = _outAmount * 1 ether / (1 ether - uint256(token.outFee));
+            // collected outFee should be available for withdrawal after the swap,
+            // so collateral liquidity is checked before subtracting the fee
+            require(token.balance >= buyAmount, "BobVault: insufficient liquidity for collateral");
+
             uint256 inAmount = buyAmount * 1 ether / token.price;
 
             return inAmount;
@@ -306,9 +312,11 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
             require(inToken.inFee <= MAX_FEE, "BobVault: collateral deposit suspended");
             require(outToken.outFee <= MAX_FEE, "BobVault: collateral withdrawal suspended");
 
-            require(outToken.balance >= _outAmount, "BobVault: insufficient liquidity for collateral");
-
             uint256 buyAmount = _outAmount * 1 ether / (1 ether - uint256(outToken.outFee));
+            // collected outFee should be available for withdrawal after the swap,
+            // so collateral liquidity is checked before subtracting the fee
+            require(outToken.balance >= buyAmount, "BobVault: insufficient liquidity for collateral");
+
             uint256 bobAmount = buyAmount * 1 ether / outToken.price;
             uint256 sellAmount = bobAmount * inToken.price / 1 ether;
             uint256 inAmount = sellAmount * 1 ether / (1 ether - uint256(inToken.inFee));
@@ -362,6 +370,8 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         bobToken.transferFrom(msg.sender, address(this), _amount);
 
         uint256 buyAmount = _amount * token.price / 1 ether;
+        // collected outFee should be available for withdrawal after the swap,
+        // so collateral liquidity is checked before subtracting the fee
         require(token.balance >= buyAmount, "BobVault: insufficient liquidity for collateral");
         unchecked {
             token.balance -= uint128(buyAmount);
@@ -409,6 +419,8 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         // sell virtual bob
 
         uint256 buyAmount = bobAmount * outToken.price / 1 ether;
+        // collected outFee should be available for withdrawal after the swap,
+        // so collateral liquidity is checked before subtracting the fee
         require(outToken.balance >= buyAmount, "BobVault: insufficient liquidity for collateral");
         unchecked {
             outToken.balance -= uint128(buyAmount);
