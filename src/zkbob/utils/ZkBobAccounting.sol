@@ -232,9 +232,6 @@ contract ZkBobAccounting {
         uint256 _dailyUserDepositCap,
         uint256 _depositCap
     ) internal {
-        Slot1 memory s1 = slot1;
-        Slot2 memory s2 = slot2;
-
         require(_tier < 255, "ZkBobAccounting: invalid limit tier");
         require(_depositCap > 0, "ZkBobAccounting: zero deposit cap");
         require(_dailyUserDepositCap >= _depositCap, "ZkBobAccounting: daily user deposit cap too low");
