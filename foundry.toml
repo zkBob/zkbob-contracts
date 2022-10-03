@@ -2,7 +2,10 @@
 src = 'src'
 out = 'out'
 libs = ['lib']
-fs_permissions = [{ access = "read", path = "./out"}]
+fs_permissions = [
+    { access = "read", path = "./out" },
+    { access = "read", path = "./scripts/vanityaddr/contracts" }
+]
 
 [fmt]
 line_length = 120
