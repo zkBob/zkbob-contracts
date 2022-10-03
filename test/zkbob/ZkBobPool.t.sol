@@ -104,8 +104,8 @@ contract ZkBobPoolTest is Test {
         vm.createSelectFork(forkRpcUrl);
 
         // create BOB-USDC 0.05% pool at Uniswap V3
-        deal(usdc, address(this), 1e12);
-        IERC20(usdc).approve(uniV3Positions, 1e12);
+        deal(usdc, address(this), 1e9);
+        IERC20(usdc).approve(uniV3Positions, 1e9);
         INonfungiblePositionManager(uniV3Positions).createAndInitializePoolIfNecessary(
             usdc, address(bob), 500, TickMath.getSqrtRatioAtTick(276320)
         );
@@ -116,7 +116,7 @@ contract ZkBobPoolTest is Test {
                 fee: 500,
                 tickLower: 276320,
                 tickUpper: 276330,
-                amount0Desired: 1e12,
+                amount0Desired: 1e9,
                 amount1Desired: 0,
                 amount0Min: 0,
                 amount1Min: 0,
@@ -126,7 +126,7 @@ contract ZkBobPoolTest is Test {
         );
 
         // enable token swaps for ETH
-        pool.setTokenSeller(address(new UniswapV3Seller(uniV3Router, address(bob), 500, usdc, 500)));
+        pool.setTokenSeller(address(new UniswapV3Seller(uniV3Router, uniV3Quoter, address(bob), 500, usdc, 500)));
     }
 
     function testNativeWithdrawal() public {
@@ -138,10 +138,12 @@ contract ZkBobPoolTest is Test {
         _transact(data1);
 
         // user1 withdraws 0.4 BOB, 0.3 BOB gets converted to ETH
+        uint256 quote2 = pool.tokenSeller().quoteSellForETH(0.3 ether);
         bytes memory data2 = _encodeWithdrawal(user1, 0.4 ether, 0.3 ether);
         _transact(data2);
 
         address dummy = address(new DummyImpl(0));
+        uint256 quote3 = pool.tokenSeller().quoteSellForETH(0.3 ether);
         bytes memory data3 = _encodeWithdrawal(dummy, 0.4 ether, 0.3 ether);
         _transact(data3);
 
@@ -152,7 +154,42 @@ contract ZkBobPoolTest is Test {
         assertEq(bob.balanceOf(address(pool)), 0.17 ether);
         assertEq(bob.balanceOf(user3), 0.03 ether);
         assertGt(user1.balance, 1 gwei);
+        assertEq(user1.balance, quote2);
         assertGt(dummy.balance, 1 gwei);
+        assertEq(dummy.balance, quote3);
+    }
+
+    function testNativeWithdrawalOutOfLiquidity() public {
+        _setupNativeSwaps();
+
+        bob.mint(address(user1), 9999.01 ether);
+
+        vm.deal(user1, 0);
+
+        bytes memory data1 = _encodePermitDeposit(10000 ether);
+        _transact(data1);
+
+        uint256 quote2 = pool.tokenSeller().quoteSellForETH(60 ether);
+        bytes memory data2 = _encodeWithdrawal(user1, 100 ether, 60 ether);
+        _transact(data2);
+
+        assertEq(bob.balanceOf(user1), 40 ether);
+        assertEq(bob.balanceOf(address(pool)), 9900.01 ether);
+        assertGt(user1.balance, 1 gwei);
+
+        uint256 quote31 = pool.tokenSeller().quoteSellForETH(1000 ether);
+        uint256 quote32 = pool.tokenSeller().quoteSellForETH(3000 ether);
+        bytes memory data3 = _encodeWithdrawal(user1, 5000 ether, 3000 ether);
+        _transact(data3);
+
+        vm.prank(user3);
+        pool.withdrawFee(user2, user3);
+        assertEq(bob.balanceOf(user3), 0.03 ether);
+        assertGt(bob.balanceOf(user1), 40 ether + 2000 ether + 2000 ether);
+        assertEq(bob.balanceOf(address(pool)), 4899.98 ether);
+        assertGt(user1.balance, 1 gwei);
+        assertEq(quote31, quote32);
+        assertEq(user1.balance, quote2 + quote31);
     }
 
     function _encodePermitDeposit(uint256 _amount) internal returns (bytes memory) {

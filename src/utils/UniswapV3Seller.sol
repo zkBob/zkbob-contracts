@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/IPeripheryImmutableState.sol";
+import "@uniswap/v3-periphery/contracts/interfaces/IQuoter.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol";
 import "../interfaces/ITokenSeller.sol";
 import "./Sacrifice.sol";
@@ -14,6 +15,7 @@ import "./Sacrifice.sol";
  */
 contract UniswapV3Seller is ITokenSeller {
     ISwapRouter immutable swapRouter;
+    IQuoter immutable quoter;
     IWETH9 immutable WETH;
 
     address immutable token0;
@@ -21,9 +23,10 @@ contract UniswapV3Seller is ITokenSeller {
     address immutable token1;
     uint24 immutable fee1;
 
-    constructor(address _swapRouter, address _token0, uint24 _fee0, address _token1, uint24 _fee1) {
+    constructor(address _swapRouter, address _quoter, address _token0, uint24 _fee0, address _token1, uint24 _fee1) {
         IERC20(_token0).approve(_swapRouter, type(uint256).max);
         swapRouter = ISwapRouter(_swapRouter);
+        quoter = IQuoter(_quoter);
         WETH = IWETH9(IPeripheryImmutableState(_swapRouter).WETH9());
         token0 = _token0;
         fee0 = _fee0;
@@ -39,15 +42,19 @@ contract UniswapV3Seller is ITokenSeller {
      * @dev Sells tokens for ETH.
      * Prior to calling this function, contract balance of token0 should be greater than or equal to the sold amount.
      * @param _receiver native ETH receiver.
-     * @param _value amount of tokens to sell.
+     * @param _amount amount of tokens to sell.
+     * @return (received eth amount, refunded token amount).
      */
-    function sellForETH(address _receiver, uint256 _value) external {
+    function sellForETH(address _receiver, uint256 _amount) external returns (uint256, uint256) {
+        uint256 balance = IERC20(token0).balanceOf(address(this));
+        require(balance >= _amount, "UniswapV3Seller: not enough tokens");
+
         uint256 amountOut = swapRouter.exactInput(
             ISwapRouter.ExactInputParams({
                 path: abi.encodePacked(token0, fee0, token1, fee1, WETH),
                 recipient: address(this),
                 deadline: block.timestamp,
-                amountIn: _value,
+                amountIn: _amount,
                 amountOutMinimum: 0
             })
         );
@@ -55,5 +62,21 @@ contract UniswapV3Seller is ITokenSeller {
         if (!payable(_receiver).send(amountOut)) {
             new Sacrifice{value: amountOut}(_receiver);
         }
+        uint256 remainingBalance = IERC20(token0).balanceOf(address(this));
+        if (remainingBalance + _amount > balance) {
+            uint256 refund = remainingBalance + _amount - balance;
+            IERC20(token0).transfer(msg.sender, refund);
+            return (amountOut, refund);
+        }
+        return (amountOut, 0);
+    }
+
+    /**
+     * @dev Estimates amount of received ETH, when selling given amount of tokens via sellForETH function.
+     * @param _amount amount of tokens to sell.
+     * @return received eth amount.
+     */
+    function quoteSellForETH(uint256 _amount) external returns (uint256) {
+        return quoter.quoteExactInput(abi.encodePacked(token0, fee0, token1, fee1, WETH), _amount);
     }
 }

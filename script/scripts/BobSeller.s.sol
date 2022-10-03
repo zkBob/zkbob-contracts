@@ -10,7 +10,7 @@ contract DeployBobSeller is Script {
     function run() external {
         vm.startBroadcast();
 
-        UniswapV3Seller seller = new UniswapV3Seller(uniV3Router, bobVanityAddr, fee0, usdc, fee1);
+        UniswapV3Seller seller = new UniswapV3Seller(uniV3Router, uniV3Quoter, bobVanityAddr, fee0, usdc, fee1);
 
         vm.stopBroadcast();
 

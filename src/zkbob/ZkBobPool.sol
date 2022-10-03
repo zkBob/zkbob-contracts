@@ -198,9 +198,9 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             if (native_amount > 0) {
                 ITokenSeller seller = tokenSeller;
                 if (address(seller) != address(0)) {
-                    withdraw_amount -= native_amount;
                     IERC20(token).safeTransfer(address(seller), native_amount);
-                    seller.sellForETH(user, native_amount);
+                    (, uint256 refunded) = seller.sellForETH(user, native_amount);
+                    withdraw_amount = withdraw_amount - native_amount + refunded;
                 }
             }
 
