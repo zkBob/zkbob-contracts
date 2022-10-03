@@ -27,6 +27,16 @@ uint256 constant zkBobDailyWithdrawalCap = 100_000 ether;
 uint256 constant zkBobDailyUserDepositCap = 10_000 ether;
 uint256 constant zkBobDepositCap = 10_000 ether;
 
+// vault
+address constant vaultYieldAdmin = 0x0000000000000000000000000000000000000000;
+address constant vaultInvestAdmin = 0x0000000000000000000000000000000000000000;
+address constant vaultCollateralTokenAddress = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
+uint128 constant vaultCollateralPrice = 1_000_000;
+uint64 constant vaultCollateralInFee = 0;
+uint64 constant vaultCollateralOutFee = 0;
+address constant vaultCollateralAAVELendingPool = 0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf;
+uint128 constant vaultCollateralBuffer = 1_000_000 * 1_000_000;
+uint96 constant vaultCollateralDust = 1_000_000;
 // bob seller
 address constant uniV3Router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
 address constant uniV3Quoter = 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6;
