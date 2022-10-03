@@ -20,7 +20,14 @@ contract ZkBobAccountingMock is ZkBobAccounting {
         (weekMaxTvl, weekMaxCount, txCount) = _recordOperation(msg.sender, _amount / 1 gwei);
     }
 
+    function setUserTier(uint8 _tier, address _user) external {
+        address[] memory users = new address[](1);
+        users[0] = _user;
+        _setUsersTier(_tier, users);
+    }
+
     function setLimits(
+        uint8 _tier,
         uint256 _tvlCap,
         uint256 _dailyDepositCap,
         uint256 _dailyWithdrawalCap,
@@ -28,6 +35,7 @@ contract ZkBobAccountingMock is ZkBobAccounting {
         uint256 _depositCap
     ) external {
         _setLimits(
+            _tier,
             _tvlCap / 1 gwei,
             _dailyDepositCap / 1 gwei,
             _dailyWithdrawalCap / 1 gwei,

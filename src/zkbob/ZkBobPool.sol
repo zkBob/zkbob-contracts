@@ -4,11 +4,15 @@ pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import "@uniswap/v3-periphery/contracts/interfaces/IPeripheryImmutableState.sol";
+import "@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol";
 import "../interfaces/ITransferVerifier.sol";
 import "../interfaces/ITreeVerifier.sol";
 import "../interfaces/IMintableERC20.sol";
 import "../interfaces/IOperatorManager.sol";
 import "../interfaces/IERC20Permit.sol";
+import "../interfaces/ITokenSeller.sol";
 import "./utils/Parameters.sol";
 import "./utils/ZkBobAccounting.sol";
 import "../utils/Ownable.sol";
@@ -23,7 +27,6 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
     uint256 internal constant TOKEN_DENOMINATOR = 1_000_000_000;
-    uint256 internal constant NATIVE_DENOMINATOR = 1_000_000_000;
 
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;
@@ -37,6 +40,8 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     bytes32 public all_messages_hash;
 
     mapping(address => uint256) public accumulatedFee;
+
+    ITokenSeller public tokenSeller;
 
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
 
@@ -79,12 +84,22 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         require(roots[0] == 0, "ZkBobPool: already initialized");
         roots[0] = _root;
         _setLimits(
+            0,
             _tvlCap / TOKEN_DENOMINATOR,
             _dailyDepositCap / TOKEN_DENOMINATOR,
             _dailyWithdrawalCap / TOKEN_DENOMINATOR,
             _dailyUserDepositCap / TOKEN_DENOMINATOR,
             _depositCap / TOKEN_DENOMINATOR
         );
+    }
+
+    /**
+     * @dev Updates token seller contract used for native coin withdrawals.
+     * Callable only by the contract owner / proxy admin.
+     * @param _seller new token seller contract implementation. address(0) will deactivate native withdrawals.
+     */
+    function setTokenSeller(address _seller) external onlyOwner {
+        tokenSeller = ITokenSeller(_seller);
     }
 
     /**
@@ -127,11 +142,13 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
      * Method uses a custom ABI encoding scheme described in CustomABIDecoder.
      * Single transact() call performs either deposit, withdrawal or shielded transfer operation.
      */
-    function transact() external payable onlyOperator {
+    function transact() external onlyOperator {
         address user;
         uint256 txType = _tx_type();
         if (txType == 0) {
             user = _deposit_spender();
+        } else if (txType == 2) {
+            user = _memo_receiver();
         } else if (txType == 3) {
             user = _memo_permit_holder();
         }
@@ -164,20 +181,29 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
         if (txType == 0) {
             // Deposit
-            require(token_amount >= 0 && energy_amount == 0 && msg.value == 0, "ZkBobPool: incorrect deposit amounts");
+            require(token_amount >= 0 && energy_amount == 0, "ZkBobPool: incorrect deposit amounts");
             IERC20(token).safeTransferFrom(user, address(this), uint256(token_amount) * TOKEN_DENOMINATOR);
         } else if (txType == 1) {
             // Transfer
-            require(token_amount == 0 && energy_amount == 0 && msg.value == 0, "ZkBobPool: incorrect transfer amounts");
+            require(token_amount == 0 && energy_amount == 0, "ZkBobPool: incorrect transfer amounts");
         } else if (txType == 2) {
             // Withdraw
-            require(
-                token_amount <= 0 && energy_amount <= 0 && msg.value == _memo_native_amount() * NATIVE_DENOMINATOR,
-                "ZkBobPool: incorrect withdraw amounts"
-            );
+            require(token_amount <= 0 && energy_amount <= 0, "ZkBobPool: incorrect withdraw amounts");
 
-            if (token_amount < 0) {
-                IERC20(token).safeTransfer(_memo_receiver(), uint256(-token_amount) * TOKEN_DENOMINATOR);
+            uint256 native_amount = _memo_native_amount() * TOKEN_DENOMINATOR;
+            uint256 withdraw_amount = uint256(-token_amount) * TOKEN_DENOMINATOR;
+
+            if (native_amount > 0) {
+                ITokenSeller seller = tokenSeller;
+                if (address(seller) != address(0)) {
+                    IERC20(token).safeTransfer(address(seller), native_amount);
+                    (, uint256 refunded) = seller.sellForETH(user, native_amount);
+                    withdraw_amount = withdraw_amount - native_amount + refunded;
+                }
+            }
+
+            if (withdraw_amount > 0) {
+                IERC20(token).safeTransfer(user, withdraw_amount);
             }
 
             // energy withdrawals are not yet implemented, any transaction with non-zero energy_amount will revert
@@ -185,13 +211,9 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             if (energy_amount < 0) {
                 revert("ZkBobPool: XP claiming is not yet enabled");
             }
-
-            if (msg.value > 0) {
-                payable(_memo_receiver()).transfer(msg.value);
-            }
         } else if (txType == 3) {
             // Permittable token deposit
-            require(token_amount >= 0 && energy_amount == 0 && msg.value == 0, "ZkBobPool: incorrect deposit amounts");
+            require(token_amount >= 0 && energy_amount == 0, "ZkBobPool: incorrect deposit amounts");
             (uint8 v, bytes32 r, bytes32 s) = _permittable_deposit_signature();
             IERC20Permit(token).receiveWithSaltedPermit(
                 user, uint256(token_amount) * TOKEN_DENOMINATOR, _memo_permit_deadline(), bytes32(nullifier), v, r, s
@@ -225,6 +247,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     /**
      * @dev Updates pool usage limits.
      * Callable only by the contract owner / proxy admin.
+     * @param _tier pool limits tier (0-254).
      * @param _tvlCap new upper cap on the entire pool tvl, 18 decimals.
      * @param _dailyDepositCap new daily limit on the sum of all deposits, 18 decimals.
      * @param _dailyWithdrawalCap new daily limit on the sum of all withdrawals, 18 decimals.
@@ -233,6 +256,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
      * @param _depositCap new limit on the amount of a single deposit, 18 decimals.
      */
     function setLimits(
+        uint8 _tier,
         uint256 _tvlCap,
         uint256 _dailyDepositCap,
         uint256 _dailyWithdrawalCap,
@@ -240,12 +264,26 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         uint256 _depositCap
     ) external onlyOwner {
         _setLimits(
+            _tier,
             _tvlCap / TOKEN_DENOMINATOR,
             _dailyDepositCap / TOKEN_DENOMINATOR,
             _dailyWithdrawalCap / TOKEN_DENOMINATOR,
             _dailyUserDepositCap / TOKEN_DENOMINATOR,
             _depositCap / TOKEN_DENOMINATOR
         );
+    }
+
+    /**
+     * @dev Updates users limit tiers.
+     * Callable only by the contract owner / proxy admin.
+     * @param _tier pool limits tier (0-255).
+     * 0 is the default tier.
+     * 1-254 are custom pool limit tiers, configured at runtime.
+     * 255 is the special tier with zero limits, used to effectively prevent some address from accessing the pool.
+     * @param _users list of user account addresses to assign a tier for.
+     */
+    function setUsersTier(uint8 _tier, address[] memory _users) external onlyOwner {
+        _setUsersTier(_tier, _users);
     }
 
     /**

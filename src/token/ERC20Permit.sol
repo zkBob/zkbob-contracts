@@ -5,13 +5,12 @@ pragma solidity 0.8.15;
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "../interfaces/IERC20Permit.sol";
 import "./BaseERC20.sol";
+import "../utils/EIP712.sol";
 
 /**
  * @title ERC20Permit
  */
-abstract contract ERC20Permit is BaseERC20, IERC20Permit {
-    // EIP712 domain separator
-    bytes32 public immutable DOMAIN_SEPARATOR;
+abstract contract ERC20Permit is IERC20Permit, BaseERC20, EIP712 {
     // EIP2612 permit typehash
     bytes32 public constant PERMIT_TYPEHASH =
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
@@ -23,16 +22,10 @@ abstract contract ERC20Permit is BaseERC20, IERC20Permit {
 
     mapping(address => uint256) public nonces;
 
-    constructor(address _self) {
-        DOMAIN_SEPARATOR = keccak256(
-            abi.encode(
-                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
-                keccak256(bytes(name())),
-                keccak256("1"),
-                block.chainid,
-                _self
-            )
-        );
+    constructor(address _self) EIP712(_self, name(), "1") {}
+
+    function DOMAIN_SEPARATOR() external view override returns (bytes32) {
+        return _domainSeparatorV4();
     }
 
     /**
@@ -65,7 +58,14 @@ abstract contract ERC20Permit is BaseERC20, IERC20Permit {
     /**
      * @dev Cheap shortcut for making sequential calls to permit() + transferFrom() functions.
      */
-    function receiveWithPermit(address _holder, uint256 _value, uint256 _deadline, uint8 _v, bytes32 _r, bytes32 _s)
+    function receiveWithPermit(
+        address _holder,
+        uint256 _value,
+        uint256 _deadline,
+        uint8 _v,
+        bytes32 _r,
+        bytes32 _s
+    )
         public
         virtual
     {
@@ -131,7 +131,7 @@ abstract contract ERC20Permit is BaseERC20, IERC20Permit {
 
         uint256 nonce = nonces[_holder]++;
         bytes32 digest = ECDSA.toTypedDataHash(
-            DOMAIN_SEPARATOR, keccak256(abi.encode(PERMIT_TYPEHASH, _holder, _spender, _value, nonce, _deadline))
+            _domainSeparatorV4(), keccak256(abi.encode(PERMIT_TYPEHASH, _holder, _spender, _value, nonce, _deadline))
         );
 
         require(_holder == ECDSA.recover(digest, _v, _r, _s), "ERC20Permit: invalid ERC2612 signature");
@@ -151,7 +151,7 @@ abstract contract ERC20Permit is BaseERC20, IERC20Permit {
 
         uint256 nonce = nonces[_holder]++;
         bytes32 digest = ECDSA.toTypedDataHash(
-            DOMAIN_SEPARATOR,
+            _domainSeparatorV4(),
             keccak256(abi.encode(SALTED_PERMIT_TYPEHASH, _holder, _spender, _value, nonce, _deadline, _salt))
         );
 
