@@ -23,5 +23,5 @@ interface ILendingPool {
 
     // workaround to omit usage of abicoder v2
     // see real signature at https://github.com/aave/protocol-v2/blob/master/contracts/protocol/libraries/types/DataTypes.sol
-    function getReserveData(address asset) external returns (address[12] memory);
+    function getReserveData(address asset) external returns (uint256[12] memory);
 }

@@ -19,13 +19,11 @@ contract BobVaultTest is Test, EIP2470Test {
     BobToken bob;
     BobVault vault;
 
-    IERC20 usdc = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
-    IERC20 usdt = IERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7);
-    IERC20 dai = IERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
+    IERC20 usdc;
+    IERC20 usdt;
+    IERC20 dai;
 
     function setUp() public {
-        vm.createSelectFork(forkRpcUrl);
-
         EIP1967Proxy bobProxy = new EIP1967Proxy(deployer, mockImpl, "");
         BobToken bobImpl = new BobToken(address(bobProxy));
         vm.prank(deployer);
@@ -40,13 +38,45 @@ contract BobVaultTest is Test, EIP2470Test {
 
         assertEq(address(vault.bobToken()), address(bob));
 
-        vm.store(address(usdc), keccak256(abi.encode(deployer, uint256(9))), bytes32(uint256(1 ether)));
-        vm.store(address(usdt), keccak256(abi.encode(deployer, uint256(2))), bytes32(uint256(1 ether)));
-        vm.store(address(dai), keccak256(abi.encode(deployer, uint256(2))), bytes32(uint256(1e12 ether)));
+        vm.makePersistent(address(bobProxy), address(bobImpl));
+        vm.makePersistent(address(vaultProxy), address(vaultProxy.implementation()));
 
-        assertEq(usdc.balanceOf(deployer), 1 ether);
-        assertEq(usdt.balanceOf(deployer), 1 ether);
-        assertEq(dai.balanceOf(deployer), 1e12 ether);
+        vm.label(address(bob), "BOB");
+        vm.label(address(vault), "VAULT");
+    }
+
+    function _forkMainnet() internal {
+        usdc = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
+        usdt = IERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7);
+        dai = IERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
+
+        vm.createSelectFork(forkRpcUrlMainnet);
+
+        _forkApprovals();
+
+        vm.label(address(usdc), "USDC");
+        vm.label(address(usdt), "USDT");
+        vm.label(address(dai), "DAI");
+    }
+
+    function _forkPolygon() internal {
+        usdc = IERC20(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
+        usdt = IERC20(0xc2132D05D31c914a87C6611C10748AEb04B58e8F);
+        dai = IERC20(0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063);
+
+        vm.createSelectFork(forkRpcUrlPolygon);
+
+        _forkApprovals();
+
+        vm.label(address(usdc), "USDC");
+        vm.label(address(usdt), "USDT");
+        vm.label(address(dai), "DAI");
+    }
+
+    function _forkApprovals() internal {
+        deal(address(usdc), deployer, 1e12 * 1e6);
+        deal(address(usdt), deployer, 1e12 * 1e6);
+        deal(address(dai), deployer, 1e12 * 1e18);
 
         vm.startPrank(user1);
         usdc.approve(address(vault), type(uint256).max);
@@ -64,6 +94,8 @@ contract BobVaultTest is Test, EIP2470Test {
     }
 
     function _setup3pool(uint256 _bobAmount) internal {
+        _forkMainnet();
+
         vm.startPrank(deployer);
 
         assertEq(vault.isCollateral(address(usdc)), false);
@@ -293,12 +325,12 @@ contract BobVaultTest is Test, EIP2470Test {
         vm.stopPrank();
     }
 
-    function testAAVE() public {
+    function _testAAVEIntegration(address _lendingPool) internal {
         vm.startPrank(deployer);
 
         vault.setYieldAdmin(user2);
 
-        AAVEYieldImplementation aImpl = new AAVEYieldImplementation(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
+        AAVEYieldImplementation aImpl = new AAVEYieldImplementation(_lendingPool);
         vault.addCollateral(
             address(usdc), BobVault.Collateral(0, 1e6 * 1e6, 1e6, address(aImpl), 1000000, 0.001 ether, 0.002 ether)
         );
@@ -364,5 +396,23 @@ contract BobVaultTest is Test, EIP2470Test {
         vault.disableCollateralYield(address(dai));
 
         vm.stopPrank();
+    }
+
+    function testAAVEv2Mainnet() public {
+        _forkMainnet();
+
+        _testAAVEIntegration(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
+    }
+
+    function testAAVEv2Polygon() public {
+        _forkPolygon();
+
+        _testAAVEIntegration(0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf);
+    }
+
+    function testAAVEv3Polygon() public {
+        _forkPolygon();
+
+        _testAAVEIntegration(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
     }
 }

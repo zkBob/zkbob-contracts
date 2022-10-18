@@ -11,7 +11,7 @@ import "../interfaces/IYieldImplementation.sol";
 
 /**
  * @title AAVEYieldImplementation
- * @dev This contract contains token-specific logic for investing ERC20 tokens into AAVE V2 protocol.
+ * @dev This contract contains token-specific logic for investing ERC20 tokens into AAVE V2/V3 protocol.
  */
 contract AAVEYieldImplementation is IYieldImplementation {
     using SafeERC20 for IERC20;
@@ -28,7 +28,9 @@ contract AAVEYieldImplementation is IYieldImplementation {
     }
 
     function initialize(address _token) external {
-        address aToken = lendingPool.getReserveData(_token)[7];
+        uint256[12] memory reserveData = lendingPool.getReserveData(_token);
+        // 7th slot for AAVE v2, 8th slot for AAVE v3
+        address aToken = address(uint160(reserveData[reserveData[7] <= type(uint16).max ? 8 : 7]));
         require(IAToken(aToken).UNDERLYING_ASSET_ADDRESS() == _token);
         interestToken[_token] = aToken;
 
