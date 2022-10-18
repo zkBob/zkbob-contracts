@@ -73,6 +73,20 @@ contract BobVaultTest is Test, EIP2470Test {
         vm.label(address(dai), "DAI");
     }
 
+    function _forkOptimism() internal {
+        usdc = IERC20(0x7F5c764cBc14f9669B88837ca1490cCa17c31607);
+        usdt = IERC20(0x94b008aA00579c1307B0EF2c499aD98a8ce58e58);
+        dai = IERC20(0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1);
+
+        vm.createSelectFork(forkRpcUrlOptimism);
+
+        _forkApprovals();
+
+        vm.label(address(usdc), "USDC");
+        vm.label(address(usdt), "USDT");
+        vm.label(address(dai), "DAI");
+    }
+
     function _forkApprovals() internal {
         deal(address(usdc), deployer, 1e12 * 1e6);
         deal(address(usdt), deployer, 1e12 * 1e6);
@@ -412,6 +426,12 @@ contract BobVaultTest is Test, EIP2470Test {
 
     function testAAVEv3Polygon() public {
         _forkPolygon();
+
+        _testAAVEIntegration(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
+    }
+
+    function testAAVEv3Optimism() public {
+        _forkOptimism();
 
         _testAAVEIntegration(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
     }
