@@ -26,9 +26,9 @@ uint256 constant zkBobDailyDepositCap = 100_000 ether;
 uint256 constant zkBobDailyWithdrawalCap = 100_000 ether;
 uint256 constant zkBobDailyUserDepositCap = 10_000 ether;
 uint256 constant zkBobDepositCap = 10_000 ether;
-uint256 constant zkBobDailyTurnoverCap = 1000 gwei;
-uint256 constant zkBobTransferCap = 100 gwei;
-uint256 constant zkBobOutNoteMinCap = 1 gwei;
+uint256 constant zkBobDailyTurnoverCap = 1000 ether;
+uint256 constant zkBobTransferCap = 100 ether;
+uint256 constant zkBobOutNoteMinCap = 1 ether;
 
 // vault
 address constant vaultYieldAdmin = 0x0000000000000000000000000000000000000000;

@@ -15,6 +15,7 @@ import "../interfaces/IERC20Permit.sol";
 import "../interfaces/ITokenSeller.sol";
 import "./utils/Parameters.sol";
 import "./utils/ZkBobAccounting.sol";
+import "./utils/SnarksLimitsManager.sol";
 import "../utils/Ownable.sol";
 import "../proxy/EIP1967Admin.sol";
 
@@ -22,7 +23,7 @@ import "../proxy/EIP1967Admin.sol";
  * @title ZkBobPool
  * Shielded transactions pool for BOB tokens.
  */
-contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
+contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting, SnarksLimitsManager {
     using SafeERC20 for IERC20;
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
@@ -61,10 +62,6 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         _;
     }
 
-    uint256 public dailyTurnoverCap;
-    uint256 public transferCap;
-    uint256 public outNoteMinCap;
-
     /**
      * @dev Initializes pool proxy storage.
      * Callable only once and only through EIP1967Proxy constructor / upgradeToAndCall.
@@ -100,9 +97,12 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             _dailyUserDepositCap / TOKEN_DENOMINATOR,
             _depositCap / TOKEN_DENOMINATOR
         );
-        dailyTurnoverCap = _dailyTurnoverCap;
-        transferCap = _transferCap;
-        outNoteMinCap = _outNoteMinCap;
+
+        _setSnarksLimits(
+            _dailyTurnoverCap / TOKEN_DENOMINATOR,
+            _transferCap / TOKEN_DENOMINATOR,
+            _outNoteMinCap / TOKEN_DENOMINATOR
+        );
     }
 
     /**
@@ -153,15 +153,15 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     }
 
     function _daily_turnover_cap() internal view override returns (uint256) {
-        return dailyTurnoverCap;
+        return getSnarksLimits().dailyTurnoverCap;
     }
 
     function _transfer_cap() internal view override returns (uint256) {
-        return transferCap;
+        return getSnarksLimits().transferCap;
     }
 
     function _out_note_min_cap() internal view override returns (uint256) {
-        return outNoteMinCap;
+        return getSnarksLimits().outNoteMinCap;
     }
 
     /**
@@ -289,7 +289,10 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         uint256 _dailyDepositCap,
         uint256 _dailyWithdrawalCap,
         uint256 _dailyUserDepositCap,
-        uint256 _depositCap
+        uint256 _depositCap,
+        uint256 _dailyTurnoverCap,
+        uint256 _transferCap,
+        uint256 _outNoteMinCap
     )
         external
         onlyOwner
@@ -301,6 +304,12 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             _dailyWithdrawalCap / TOKEN_DENOMINATOR,
             _dailyUserDepositCap / TOKEN_DENOMINATOR,
             _depositCap / TOKEN_DENOMINATOR
+        );
+
+        _setSnarksLimits(
+            _dailyTurnoverCap / TOKEN_DENOMINATOR,
+            _transferCap / TOKEN_DENOMINATOR,
+            _outNoteMinCap / TOKEN_DENOMINATOR
         );
     }
 
