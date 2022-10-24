@@ -58,7 +58,7 @@ contract ZkBobAccounting {
         // max cap on the daily withdrawal sum (granularity of 1e9)
         // max possible cap - type(uint32).max * 1e9 zkBOB units ~= 4.3e9 BOB
         uint32 dailyWithdrawalCap;
-        // max cap on the daily deposits sum for single user (granularity of 1e9)
+        // max cap on the daily deposits sum for a single user (granularity of 1e9)
         // max possible cap - type(uint32).max * 1e9 zkBOB units ~= 4.3e9 BOB
         uint32 dailyUserDepositCap;
         // max cap on single deposit (granularity of 1e9)
