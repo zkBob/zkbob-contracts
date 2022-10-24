@@ -149,7 +149,9 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting, Snarks
     }
 
     function _day() internal view override returns (uint256) {
-        return uint256(block.timestamp / 1 days);
+        uint256 txDay = _tx_day();
+        require(block.timestamp - txDay * 1 days <= 24 hours + 15 minutes, "ZkBobPool: transfer proof expired");
+        return txDay;
     }
 
     function _daily_turnover_cap() internal view override returns (uint256) {

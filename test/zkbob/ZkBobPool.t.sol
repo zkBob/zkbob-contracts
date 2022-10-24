@@ -206,6 +206,7 @@ contract ZkBobPoolTest is Test {
         data = abi.encodePacked(
             data,
             uint16(3),
+            uint24(block.timestamp / 1 days),
             uint16(80),
             uint64(0.01 ether / 1 gwei),
             uint64(expiry),
@@ -226,7 +227,7 @@ contract ZkBobPoolTest is Test {
             data = abi.encodePacked(data, _randFR());
         }
         data = abi.encodePacked(
-            data, uint16(0), uint16(48), uint64(0.01 ether / 1 gwei), _randFR(), bytes8(bytes32(_randFR()))
+            data, uint16(0), uint24(block.timestamp / 1 days), uint16(48), uint64(0.01 ether / 1 gwei), _randFR(), bytes8(bytes32(_randFR()))
         );
         return abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
     }
@@ -246,6 +247,7 @@ contract ZkBobPoolTest is Test {
         return abi.encodePacked(
             data,
             uint16(2),
+            uint24(block.timestamp / 1 days),
             uint16(80),
             uint64(0.01 ether / 1 gwei),
             uint64(_nativeAmount / 1 gwei),
@@ -263,7 +265,7 @@ contract ZkBobPoolTest is Test {
             data = abi.encodePacked(data, _randFR());
         }
         return abi.encodePacked(
-            data, uint16(1), uint16(48), uint64(0.01 ether / 1 gwei), _randFR(), bytes8(bytes32(_randFR()))
+            data, uint16(1), uint24(block.timestamp / 1 days), uint16(48), uint64(0.01 ether / 1 gwei), _randFR(), bytes8(bytes32(_randFR()))
         );
     }
 

@@ -80,7 +80,15 @@ contract CustomABIDecoder {
         r = _loaduint256(tx_type_pos + tx_type_size - uint256_size) & tx_type_mask;
     }
 
-    uint256 constant memo_data_size_pos = tx_type_pos + tx_type_size;
+    uint256 constant tx_day_pos = tx_type_pos + tx_type_size;
+    uint256 constant tx_day_size = 3;
+    uint256 constant tx_day_mask = (1 << (tx_day_size * 8)) - 1;
+
+    function _tx_day() internal pure returns (uint256 r) {
+        r = _loaduint256(tx_day_pos + tx_day_size - uint256_size) & tx_day_mask;
+    }
+
+    uint256 constant memo_data_size_pos = tx_day_pos + tx_day_size;
     uint256 constant memo_data_size_size = 2;
     uint256 constant memo_data_size_mask = (1 << (memo_data_size_size * 8)) - 1;
 
