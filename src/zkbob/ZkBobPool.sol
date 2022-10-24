@@ -61,6 +61,10 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         _;
     }
 
+    uint256 public dailyTurnoverCap;
+    uint256 public transferCap;
+    uint256 public outNoteMinCap;
+
     /**
      * @dev Initializes pool proxy storage.
      * Callable only once and only through EIP1967Proxy constructor / upgradeToAndCall.
@@ -78,7 +82,10 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         uint256 _dailyDepositCap,
         uint256 _dailyWithdrawalCap,
         uint256 _dailyUserDepositCap,
-        uint256 _depositCap
+        uint256 _depositCap,
+        uint256 _dailyTurnoverCap,
+        uint256 _transferCap,
+        uint256 _outNoteMinCap
     )
         external
     {
@@ -93,6 +100,9 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             _dailyUserDepositCap / TOKEN_DENOMINATOR,
             _depositCap / TOKEN_DENOMINATOR
         );
+        dailyTurnoverCap = _dailyTurnoverCap;
+        transferCap = _transferCap;
+        outNoteMinCap = _outNoteMinCap;
     }
 
     /**
@@ -136,6 +146,22 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
     function _pool_id() internal view override returns (uint256) {
         return pool_id;
+    }
+
+    function _day() internal view override returns (uint256) {
+        return uint256(block.timestamp / 1 days);
+    }
+
+    function _daily_turnover_cap() internal view override returns (uint256) {
+        return dailyTurnoverCap;
+    }
+
+    function _transfer_cap() internal view override returns (uint256) {
+        return transferCap;
+    }
+
+    function _out_note_min_cap() internal view override returns (uint256) {
+        return outNoteMinCap;
     }
 
     /**

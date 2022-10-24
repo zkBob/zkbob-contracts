@@ -42,7 +42,8 @@ contract DeployLocal is Script {
         );
         EIP1967Proxy poolProxy = new EIP1967Proxy(tx.origin, address(poolImpl), abi.encodeWithSelector(
                 ZkBobPool.initialize.selector, zkBobInitialRoot,
-                zkBobPoolCap, zkBobDailyDepositCap, zkBobDailyWithdrawalCap, zkBobDailyUserDepositCap, zkBobDepositCap
+                zkBobPoolCap, zkBobDailyDepositCap, zkBobDailyWithdrawalCap, zkBobDailyUserDepositCap, zkBobDepositCap,
+                zkBobDailyTurnoverCap, zkBobTransferCap, zkBobOutNoteMinCap
             ));
         ZkBobPool pool = ZkBobPool(address(poolProxy));
 

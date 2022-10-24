@@ -11,13 +11,21 @@ abstract contract Parameters is CustomABIDecoder {
 
     function _root() internal view virtual returns (uint256);
     function _pool_id() internal view virtual returns (uint256);
+    function _day() internal view virtual returns (uint256);
+    function _daily_turnover_cap() internal view virtual returns (uint256);
+    function _transfer_cap() internal view virtual returns (uint256);
+    function _out_note_min_cap() internal view virtual returns (uint256);
 
-    function _transfer_pub() internal view returns (uint256[5] memory r) {
+    function _transfer_pub() internal view returns (uint256[9] memory r) {
         r[0] = _root();
         r[1] = _transfer_nullifier();
         r[2] = _transfer_out_commit();
         r[3] = _transfer_delta() + (_pool_id() << (transfer_delta_size * 8));
         r[4] = uint256(keccak256(_memo_data())) % R;
+        r[5] = _day();
+        r[6] = _daily_turnover_cap();
+        r[7] = _transfer_cap();
+        r[8] = _out_note_min_cap();
     }
 
     function _tree_pub(uint256 _root_before) internal view returns (uint256[3] memory r) {
