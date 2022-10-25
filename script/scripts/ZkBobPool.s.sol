@@ -24,7 +24,7 @@ contract DeployZkBobPool is Script {
         }
 
         ZkBobPool impl = new ZkBobPool(
-            0,
+            zkBobPoolId,
             bobVanityAddr,
             transferVerifier,
             treeVerifier

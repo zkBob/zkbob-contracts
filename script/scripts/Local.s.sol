@@ -35,7 +35,7 @@ contract DeployLocal is Script {
         }
 
         ZkBobPool poolImpl = new ZkBobPool(
-            0,
+            zkBobPoolId,
             address(bob),
             transferVerifier,
             treeVerifier
