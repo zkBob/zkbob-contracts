@@ -101,7 +101,7 @@ contract ZkBobPoolTest is Test {
         );
 
         // fork mainnet
-        vm.createSelectFork(forkRpcUrl);
+        vm.createSelectFork(forkRpcUrlMainnet);
 
         // create BOB-USDC 0.05% pool at Uniswap V3
         deal(usdc, address(this), 1e9);
