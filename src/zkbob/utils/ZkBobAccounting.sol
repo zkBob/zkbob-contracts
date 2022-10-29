@@ -172,14 +172,20 @@ contract ZkBobAccounting {
     }
 
     function _processTVLChange(Slot0 memory s0, Slot1 memory s1, address _user, int256 _txAmount) internal {
+        uint16 curDay = uint16(block.timestamp / SLOT_DURATION / DAY_SLOTS);
+
+        bool isDayTransition = curDay > s0.headSlot / DAY_SLOTS;
+
         if (_txAmount == 0) {
+            if (isDayTransition) {
+                (s1.dailyDeposit, s1.dailyWithdrawal) = (0, 0);
+                slot1 = s1;
+            }
             return;
         }
 
         UserStats memory us = userStats[_user];
         PoolLimits memory pl = poolLimits[us.tier];
-
-        uint16 curDay = uint16(block.timestamp / SLOT_DURATION / DAY_SLOTS);
 
         if (_txAmount > 0) {
             uint256 depositAmount = uint256(_txAmount);
@@ -201,9 +207,10 @@ contract ZkBobAccounting {
                 userStats[_user] = us;
             }
 
-            if (curDay > s0.headSlot / DAY_SLOTS) {
+            if (isDayTransition) {
                 // latest deposit was on an earlier day, reset daily deposit sum
                 s1.dailyDeposit = uint32(depositAmount / PRECISION);
+                s1.dailyWithdrawal = 0;
             } else {
                 s1.dailyDeposit += uint32(depositAmount / PRECISION);
                 require(s1.dailyDeposit <= pl.dailyDepositCap, "ZkBobAccounting: daily deposit cap exceeded");
@@ -212,7 +219,8 @@ contract ZkBobAccounting {
             uint256 withdrawAmount = uint256(-_txAmount);
             s1.tvl -= uint72(withdrawAmount);
 
-            if (curDay > s0.headSlot / DAY_SLOTS) {
+            if (isDayTransition) {
+                s1.dailyDeposit = 0;
                 // latest withdrawal was on an earlier day, reset daily deposit sum
                 s1.dailyWithdrawal = uint32(withdrawAmount / PRECISION);
             } else {
@@ -222,6 +230,10 @@ contract ZkBobAccounting {
         }
 
         slot1 = s1;
+    }
+
+    function _resetDailyLimits() internal {
+        (slot1.dailyDeposit, slot1.dailyWithdrawal) = (0, 0);
     }
 
     function _setLimits(
