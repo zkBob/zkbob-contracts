@@ -45,7 +45,14 @@ contract CustomABIDecoder {
         r = int64(uint64(_loaduint256(transfer_token_amount_pos + transfer_token_amount_size - uint256_size)));
     }
 
-    uint256 constant transfer_proof_pos = transfer_token_amount_pos + transfer_token_amount_size;
+    uint256 constant transfer_day_pos = transfer_token_amount_pos + transfer_token_amount_size;
+    uint256 constant transfer_day_size = 3;
+
+    function _transfer_day() internal pure returns (uint256 r) {
+        r = uint256(uint24(_loaduint256(transfer_day_pos + transfer_day_size - uint256_size)));
+    }
+
+    uint256 constant transfer_proof_pos = transfer_day_pos + transfer_day_size;
     uint256 constant transfer_proof_size = 256;
 
     function _transfer_proof() internal pure returns (uint256[8] calldata r) {

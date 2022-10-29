@@ -198,7 +198,13 @@ contract ZkBobPoolTest is Test {
         (uint8 v, bytes32 r, bytes32 s) =
             _signSaltedPermit(pk1, user1, address(pool), _amount + 0.01 ether, bob.nonces(user1), expiry, nullifier);
         bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector, nullifier, _randFR(), uint48(0), uint112(0), int64(int256(_amount / 1 gwei))
+            ZkBobPool.transact.selector,
+            nullifier,
+            _randFR(),
+            uint48(0),
+            uint112(0),
+            int64(int256(_amount / 1 gwei)),
+            uint24(block.timestamp / 1 days)
         );
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());
@@ -220,7 +226,13 @@ contract ZkBobPoolTest is Test {
         bytes32 nullifier = bytes32(_randFR());
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
         bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector, nullifier, _randFR(), uint48(0), uint112(0), int64(int256(_amount / 1 gwei))
+            ZkBobPool.transact.selector,
+            nullifier,
+            _randFR(),
+            uint48(0),
+            uint112(0),
+            int64(int256(_amount / 1 gwei)),
+            uint24(block.timestamp / 1 days)
         );
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());
@@ -238,7 +250,8 @@ contract ZkBobPoolTest is Test {
             _randFR(),
             uint48(0),
             uint112(0),
-            int64(-int256((_amount + 0.01 ether) / 1 gwei))
+            int64(-int256((_amount + 0.01 ether) / 1 gwei)),
+            uint24(block.timestamp / 1 days)
         );
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());
@@ -257,7 +270,13 @@ contract ZkBobPoolTest is Test {
 
     function _encodeTransfer() internal returns (bytes memory) {
         bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector, _randFR(), _randFR(), uint48(0), uint112(0), int64(-0.01 ether / 1 gwei)
+            ZkBobPool.transact.selector,
+            _randFR(),
+            _randFR(),
+            uint48(0),
+            uint112(0),
+            int64(-0.01 ether / 1 gwei),
+            uint24(block.timestamp / 1 days)
         );
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());

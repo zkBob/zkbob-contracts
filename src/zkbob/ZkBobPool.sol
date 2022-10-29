@@ -28,6 +28,10 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     uint256 internal constant MAX_POOL_ID = 0xffffff;
     uint256 internal constant TOKEN_DENOMINATOR = 1_000_000_000;
 
+    uint256 internal constant DAILY_TURNOVER_LIMIT = 100_000 gwei;
+    uint256 internal constant TRANSFER_LIMIT = 20_000 gwei;
+    uint256 internal constant MIN_OUT_NOTE_LIMIT = 0.1 gwei;
+
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;
     ITreeVerifier public immutable tree_verifier;
@@ -162,7 +166,18 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
             require(nullifiers[nullifier] == 0, "ZkBobPool: doublespend detected");
             require(_transfer_index() <= _pool_index, "ZkBobPool: transfer index out of bounds");
-            require(transfer_verifier.verifyProof(_transfer_pub(), _transfer_proof()), "ZkBobPool: bad transfer proof");
+            uint256 day = _transfer_day();
+            // to avoid unexpected reverts on the day boundary, the proof is considered valid until 00:05 of the next day
+            require(
+                day == block.timestamp / 1 days || day == (block.timestamp - 5 minutes) / 1 days,
+                "ZkBobPool: transfer proof expired"
+            );
+            require(
+                transfer_verifier.verifyProof(
+                    _transfer_pub(DAILY_TURNOVER_LIMIT, TRANSFER_LIMIT, MIN_OUT_NOTE_LIMIT), _transfer_proof()
+                ),
+                "ZkBobPool: bad transfer proof"
+            );
             require(
                 tree_verifier.verifyProof(_tree_pub(roots[_pool_index]), _tree_proof()), "ZkBobPool: bad tree proof"
             );
