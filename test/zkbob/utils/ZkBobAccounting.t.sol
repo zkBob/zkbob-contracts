@@ -329,6 +329,93 @@ contract ZkBobAccountingTest is Test {
         assertEq(limits2.depositCap, 150 gwei);
     }
 
+    function testPoolDailyLimitsReset() public {
+        pool.setLimits(0, 10000 ether, 500 ether, 400 ether, 300 ether, 150 ether);
+
+        ZkBobAccounting.Limits memory limits1;
+
+        vm.startPrank(user1);
+        pool.transact(70 ether);
+        pool.transact(-50 ether);
+        vm.stopPrank();
+
+        limits1 = pool.getLimitsFor(user1);
+        assertEq(limits1.tvlCap, 10000 gwei);
+        assertEq(limits1.tvl, 20 gwei);
+        assertEq(limits1.dailyDepositCap, 500 gwei);
+        assertEq(limits1.dailyDepositCapUsage, 70 gwei);
+        assertEq(limits1.dailyWithdrawalCap, 400 gwei);
+        assertEq(limits1.dailyWithdrawalCapUsage, 50 gwei);
+        assertEq(limits1.dailyUserDepositCap, 300 gwei);
+        assertEq(limits1.dailyUserDepositCapUsage, 70 gwei);
+        assertEq(limits1.depositCap, 150 gwei);
+
+        vm.warp(block.timestamp + 1 days);
+
+        limits1 = pool.getLimitsFor(user1);
+        assertEq(limits1.tvlCap, 10000 gwei);
+        assertEq(limits1.tvl, 20 gwei);
+        assertEq(limits1.dailyDepositCap, 500 gwei);
+        assertEq(limits1.dailyDepositCapUsage, 0 gwei);
+        assertEq(limits1.dailyWithdrawalCap, 400 gwei);
+        assertEq(limits1.dailyWithdrawalCapUsage, 0 gwei);
+        assertEq(limits1.dailyUserDepositCap, 300 gwei);
+        assertEq(limits1.dailyUserDepositCapUsage, 0 gwei);
+        assertEq(limits1.depositCap, 150 gwei);
+
+        uint256 sid1 = vm.snapshot();
+        uint256 sid2 = vm.snapshot();
+
+        // deposit on a new day should reset daily deposit and withdrawal limits
+        vm.prank(user1);
+        pool.transact(100 ether);
+
+        limits1 = pool.getLimitsFor(user1);
+        assertEq(limits1.tvlCap, 10000 gwei);
+        assertEq(limits1.tvl, 120 gwei);
+        assertEq(limits1.dailyDepositCap, 500 gwei);
+        assertEq(limits1.dailyDepositCapUsage, 100 gwei);
+        assertEq(limits1.dailyWithdrawalCap, 400 gwei);
+        assertEq(limits1.dailyWithdrawalCapUsage, 0 gwei);
+        assertEq(limits1.dailyUserDepositCap, 300 gwei);
+        assertEq(limits1.dailyUserDepositCapUsage, 100 gwei);
+        assertEq(limits1.depositCap, 150 gwei);
+
+        vm.revertTo(sid2);
+
+        // withdrawal on a new day should reset daily deposit and withdrawal limits
+        vm.prank(user1);
+        pool.transact(-10 ether);
+
+        limits1 = pool.getLimitsFor(user1);
+        assertEq(limits1.tvlCap, 10000 gwei);
+        assertEq(limits1.tvl, 10 gwei);
+        assertEq(limits1.dailyDepositCap, 500 gwei);
+        assertEq(limits1.dailyDepositCapUsage, 0 gwei);
+        assertEq(limits1.dailyWithdrawalCap, 400 gwei);
+        assertEq(limits1.dailyWithdrawalCapUsage, 10 gwei);
+        assertEq(limits1.dailyUserDepositCap, 300 gwei);
+        assertEq(limits1.dailyUserDepositCapUsage, 0 gwei);
+        assertEq(limits1.depositCap, 150 gwei);
+
+        vm.revertTo(sid1);
+
+        // private transfer on a new day should reset daily deposit and withdrawal limits
+        vm.prank(user1);
+        pool.transact(0 ether);
+
+        limits1 = pool.getLimitsFor(user1);
+        assertEq(limits1.tvlCap, 10000 gwei);
+        assertEq(limits1.tvl, 20 gwei);
+        assertEq(limits1.dailyDepositCap, 500 gwei);
+        assertEq(limits1.dailyDepositCapUsage, 0 gwei);
+        assertEq(limits1.dailyWithdrawalCap, 400 gwei);
+        assertEq(limits1.dailyWithdrawalCapUsage, 0 gwei);
+        assertEq(limits1.dailyUserDepositCap, 300 gwei);
+        assertEq(limits1.dailyUserDepositCapUsage, 0 gwei);
+        assertEq(limits1.depositCap, 150 gwei);
+    }
+
     function testPoolLimitsTiers() public {
         pool.setLimits(0, 600 ether, 500 ether, 400 ether, 300 ether, 150 ether);
         pool.setLimits(1, 10000 ether, 1000 ether, 800 ether, 600 ether, 300 ether);

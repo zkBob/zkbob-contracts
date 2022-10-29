@@ -28,6 +28,9 @@ uint256 constant zkBobDailyWithdrawalCap = 100_000 ether;
 uint256 constant zkBobDailyUserDepositCap = 10_000 ether;
 uint256 constant zkBobDepositCap = 10_000 ether;
 
+// new zkbob impl
+address constant zkBobPool = 0x72e6B59D4a90ab232e55D4BB7ed2dD17494D62fB;
+
 // vault
 address constant vaultYieldAdmin = 0x0000000000000000000000000000000000000000;
 address constant vaultInvestAdmin = 0x0000000000000000000000000000000000000000;

@@ -279,6 +279,14 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     }
 
     /**
+     * @dev Resets daily limit usage for the current day.
+     * Callable only by the contract owner / proxy admin.
+     */
+    function resetDailyLimits() external onlyOwner {
+        _resetDailyLimits();
+    }
+
+    /**
      * @dev Updates users limit tiers.
      * Callable only by the contract owner / proxy admin.
      * @param _tier pool limits tier (0-255).
