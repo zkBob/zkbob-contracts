@@ -1,2 +1,3 @@
 @openzeppelin/contracts/=lib/@openzeppelin/contracts/contracts/
 @gnosis/auction/=lib/@gnosis/auction/contracts/
+@polygon/pos-portal/=lib/pos-portal/contracts/
