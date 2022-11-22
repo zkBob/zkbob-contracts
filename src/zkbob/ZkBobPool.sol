@@ -9,6 +9,7 @@ import "@uniswap/v3-periphery/contracts/interfaces/IPeripheryImmutableState.sol"
 import "@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol";
 import "../interfaces/ITransferVerifier.sol";
 import "../interfaces/ITreeVerifier.sol";
+import "../interfaces/IBatchDepositVerifier.sol";
 import "../interfaces/IMintableERC20.sol";
 import "../interfaces/IOperatorManager.sol";
 import "../interfaces/IERC20Permit.sol";
@@ -31,6 +32,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;
     ITreeVerifier public immutable tree_verifier;
+    IBatchDepositVerifier public immutable batch_deposit_verifier;
     address public immutable token;
 
     IOperatorManager public operatorManager;
@@ -43,7 +45,22 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
     ITokenSeller public tokenSeller;
 
+    struct PublicNote {
+        uint256 pk;
+        uint80 d;
+        uint64 b;
+        uint80 t;
+    }
+
+    mapping(uint256 => PublicNote) public pendingNotes;
+    uint32 pendingNoteIndex;
+    uint32 pendingNoteCount;
+    uint64 pendingNoteFee;
+
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
+
+    event PendingNote(uint256 indexed index, address indexed sender, uint80 d, uint256 pk, uint64 balance);
+    event PendingNoteDeposited(uint256 indexed index);
 
     constructor(uint256 __pool_id, address _token, ITransferVerifier _transfer_verifier, ITreeVerifier _tree_verifier) {
         require(__pool_id <= MAX_POOL_ID);
@@ -51,6 +68,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         token = _token;
         transfer_verifier = _transfer_verifier;
         tree_verifier = _tree_verifier;
+        batch_deposit_verifier = IBatchDepositVerifier(address(0)); // TODO
     }
 
     /**
@@ -227,6 +245,81 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         if (fee > 0) {
             accumulatedFee[msg.sender] += fee;
         }
+    }
+
+    function appendPendingDeposits(
+        uint256 _root_after,
+        uint256 _count,
+        uint256 _out_commit,
+        uint256[8] memory _batch_deposit_proof,
+        uint256[8] memory _tree_proof
+    )
+        external
+        onlyOperator
+    {
+        require(_count < 17, "ZkBobPool: too many deposits");
+        uint256 index = pendingNoteIndex;
+        require(index + _count <= pendingNoteCount, "ZkBobPool: deposit count too high");
+
+        (,, uint256 txCount) = _recordOperation(address(0), 0);
+
+        uint256 _pool_index = txCount << 7;
+
+        uint256[33] memory batch_deposit_pub;
+        for (uint256 i = 0; i < _count * 2; i += 2) {
+            PublicNote storage note = pendingNotes[index];
+            // batch_deposit_pub[i..i+1] = note;
+            assembly {
+                mstore(add(batch_deposit_pub, i), sload(note.slot))
+                mstore(add(add(batch_deposit_pub, i), 1), sload(add(note.slot, 1)))
+                sstore(note.slot, 0)
+                sstore(add(note.slot, 1), 0)
+            }
+
+            emit PendingNoteDeposited(index++);
+        }
+        batch_deposit_pub[32] = _out_commit;
+        // verify that _out_commit corresponds to zero output account + 16 chosen notes + 111 empty notes
+        require(
+            batch_deposit_verifier.verifyProof(batch_deposit_pub, _batch_deposit_proof),
+            "ZkBobPool: bad batch deposit proof"
+        );
+
+        uint256[3] memory tree_pub = [roots[_pool_index], _root_after, _out_commit];
+        require(tree_verifier.verifyProof(tree_pub, _tree_proof), "ZkBobPool: bad tree proof");
+
+        pendingNoteIndex = uint32(index);
+        _pool_index += 128;
+        roots[_pool_index] = _tree_root_after();
+        bytes memory message = ""; // TODO
+        bytes32 message_hash = keccak256(message);
+        bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
+        all_messages_hash = _all_messages_hash;
+        emit Message(_pool_index, _all_messages_hash, message);
+    }
+
+    // TODO: deposit compliance
+    function onTokenTransfer(address _from, uint256 _value, bytes calldata _data) external returns (bool) {
+        require(msg.sender == token, "ZkBobPool: not a token caller");
+
+        (uint80 d, uint256 pk) = abi.decode(_data, (uint80, uint256));
+
+        uint64 depositAmount = uint64(_value / TOKEN_DENOMINATOR);
+        uint64 fee = pendingNoteFee;
+
+        require(depositAmount > fee, "ZkBobPool: deposit amount too low");
+        unchecked {
+            depositAmount -= fee;
+        }
+
+        // TODO: check deposit limits
+
+        uint256 index = pendingNoteCount++;
+        pendingNotes[index] = PublicNote(pk, d, depositAmount, 0);
+
+        emit PendingNote(index, _from, d, pk, depositAmount);
+
+        return true;
     }
 
     /**
