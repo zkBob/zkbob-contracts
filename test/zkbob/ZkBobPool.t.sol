@@ -8,6 +8,7 @@ import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import "../shared/Env.t.sol";
 import "../mocks/TransferVerifierMock.sol";
 import "../mocks/TreeUpdateVerifierMock.sol";
+import "../mocks/BatchDepositVerifierMock.sol";
 import "../mocks/DummyImpl.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPool.sol";
@@ -35,10 +36,11 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         bob = BobToken(address(bobProxy));
         bob.updateMinter(address(this), true, true);
 
-        ZkBobPool impl = new ZkBobPool(0, address(bob), new TransferVerifierMock(), new TreeUpdateVerifierMock());
+        ZkBobPool impl =
+        new ZkBobPool(0, address(bob), new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock());
         EIP1967Proxy poolProxy = new EIP1967Proxy(address(this), address(impl), abi.encodeWithSelector(
             ZkBobPool.initialize.selector, initialRoot,
-            1_000_000 ether, 100_000 ether, 100_000 ether, 10_000 ether, 10_000 ether
+            1_000_000 ether, 100_000 ether, 100_000 ether, 10_000 ether, 10_000 ether, 0, 0
         ));
         pool = ZkBobPool(address(poolProxy));
 
@@ -79,23 +81,23 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         vm.startPrank(user1);
 
         vm.expectRevert("ZkBobPool: not initializer");
-        pool.initialize(0, 0, 0, 0, 0, 0);
+        pool.initialize(0, 0, 0, 0, 0, 0, 0, 0);
         vm.expectRevert("Ownable: caller is not the owner");
         pool.setOperatorManager(IOperatorManager(address(0)));
         vm.expectRevert("Ownable: caller is not the owner");
         pool.setTokenSeller(address(0));
         vm.expectRevert("Ownable: caller is not the owner");
-        pool.setLimits(0, 0, 0, 0, 0, 0);
+        pool.setLimits(0, 0, 0, 0, 0, 0, 0, 0);
         vm.expectRevert("Ownable: caller is not the owner");
         pool.setUsersTier(0, new address[](1));
         vm.expectRevert("Ownable: caller is not the owner");
-        pool.resetDailyLimits();
+        pool.resetDailyLimits(0);
 
         vm.stopPrank();
     }
 
     function testUsersTiers() public {
-        pool.setLimits(1, 2_000_000 ether, 200_000 ether, 200_000 ether, 20_000 ether, 20_000 ether);
+        pool.setLimits(1, 2_000_000 ether, 200_000 ether, 200_000 ether, 20_000 ether, 20_000 ether, 0, 0);
         address[] memory users = new address[](1);
         users[0] = user2;
         pool.setUsersTier(1, users);
@@ -116,9 +118,9 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         _transact(data2);
 
         assertEq(pool.getLimitsFor(user1).dailyDepositCapUsage, 5 gwei);
-        assertEq(pool.getLimitsFor(user1).dailyWithdrawalCapUsage, 4 gwei);
+        assertEq(pool.getLimitsFor(user1).dailyWithdrawalCapUsage, 4.01 gwei);
 
-        pool.resetDailyLimits();
+        pool.resetDailyLimits(0);
 
         assertEq(pool.getLimitsFor(user1).dailyDepositCapUsage, 0);
         assertEq(pool.getLimitsFor(user1).dailyWithdrawalCapUsage, 0);

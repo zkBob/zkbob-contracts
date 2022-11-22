@@ -8,8 +8,10 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/IPeripheryImmutableState.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol";
+import "../libraries/ZkAddress.sol";
 import "../interfaces/ITransferVerifier.sol";
 import "../interfaces/ITreeVerifier.sol";
+import "../interfaces/IBatchDepositVerifier.sol";
 import "../interfaces/IMintableERC20.sol";
 import "../interfaces/IOperatorManager.sol";
 import "../interfaces/IERC20Permit.sol";
@@ -32,6 +34,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;
     ITreeVerifier public immutable tree_verifier;
+    IBatchDepositVerifier public immutable batch_deposit_verifier;
     address public immutable token;
 
     IOperatorManager public operatorManager;
@@ -44,13 +47,54 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
     ITokenSeller public tokenSeller;
 
+    enum DirectDepositStatus {
+        Missing,
+        Pending,
+        Completed,
+        Refunded
+    }
+
+    struct DirectDeposit {
+        address user;
+        uint96 amount;
+        uint64 deposit;
+        uint64 fee;
+        uint40 timestamp;
+        DirectDepositStatus status;
+        bytes10 diversifier;
+        bytes32 pk;
+    }
+
+    mapping(uint256 => DirectDeposit) public directDeposits;
+    uint32 public directDepositNonce;
+    uint64 public directDepositFee;
+    uint40 public directDepositTimeout;
+
     event UpdateTokenSeller(address seller);
     event UpdateOperatorManager(address manager);
+    event UpdateDirectDepositFee(uint64 fee);
+    event UpdateDirectDepositTimeout(uint40 timeout);
     event WithdrawFee(address indexed operator, uint256 fee);
 
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
 
-    constructor(uint256 __pool_id, address _token, ITransferVerifier _transfer_verifier, ITreeVerifier _tree_verifier) {
+    event SubmitDirectDeposit(
+        address indexed sender,
+        uint256 indexed nonce,
+        address fallbackUser,
+        ZkAddress.ZkAddress zkAddress,
+        uint64 deposit
+    );
+    event RefundDirectDeposit(uint256 indexed nonce, address receiver, uint256 amount);
+    event CompleteDirectDepositBatch(uint256 indexed treeIndex, uint256[] indices);
+
+    constructor(
+        uint256 __pool_id,
+        address _token,
+        ITransferVerifier _transfer_verifier,
+        ITreeVerifier _tree_verifier,
+        IBatchDepositVerifier _batch_deposit_verifier
+    ) {
         require(__pool_id <= MAX_POOL_ID, "ZkBobPool: exceeds max pool id");
         require(Address.isContract(_token), "ZkBobPool: not a contract");
         require(Address.isContract(address(_transfer_verifier)), "ZkBobPool: not a contract");
@@ -59,6 +103,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         token = _token;
         transfer_verifier = _transfer_verifier;
         tree_verifier = _tree_verifier;
+        batch_deposit_verifier = _batch_deposit_verifier;
     }
 
     /**
@@ -77,8 +122,9 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
      * @param _dailyDepositCap initial daily limit on the sum of all deposits, 18 decimals.
      * @param _dailyWithdrawalCap initial daily limit on the sum of all withdrawals, 18 decimals.
      * @param _dailyUserDepositCap initial daily limit on the sum of all per-address deposits, 18 decimals.
-     * @param _dailyUserDepositCap initial daily limit on the sum of all per-address deposits, 18 decimals.
      * @param _depositCap initial limit on the amount of a single deposit, 18 decimals.
+     * @param _dailyUserDirectDepositCap initial daily limit on the sum of all per-address direct deposits, 18 decimals.
+     * @param _directDepositCap initial limit on the amount of a single direct deposit, 18 decimals.
      */
     function initialize(
         uint256 _root,
@@ -86,7 +132,9 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         uint256 _dailyDepositCap,
         uint256 _dailyWithdrawalCap,
         uint256 _dailyUserDepositCap,
-        uint256 _depositCap
+        uint256 _depositCap,
+        uint256 _dailyUserDirectDepositCap,
+        uint256 _directDepositCap
     )
         external
     {
@@ -100,7 +148,9 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             _dailyDepositCap / TOKEN_DENOMINATOR,
             _dailyWithdrawalCap / TOKEN_DENOMINATOR,
             _dailyUserDepositCap / TOKEN_DENOMINATOR,
-            _depositCap / TOKEN_DENOMINATOR
+            _depositCap / TOKEN_DENOMINATOR,
+            _dailyUserDirectDepositCap / TOKEN_DENOMINATOR,
+            _directDepositCap / TOKEN_DENOMINATOR
         );
     }
 
@@ -123,6 +173,27 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         require(address(_operatorManager) != address(0), "ZkBobPool: manager is zero address");
         operatorManager = _operatorManager;
         emit UpdateOperatorManager(address(_operatorManager));
+    }
+
+    /**
+     * @dev Updates direct deposit fee.
+     * Callable only by the contract owner / proxy admin.
+     * @param _fee new absolute fee value for making a direct deposit, in zkBOB units.
+     */
+    function setDirectDepositFee(uint64 _fee) external onlyOwner {
+        directDepositFee = _fee;
+        emit UpdateDirectDepositFee(_fee);
+    }
+
+    /**
+     * @dev Updates direct deposit timeout.
+     * Callable only by the contract owner / proxy admin.
+     * @param _timeout new timeout value for refunding non-fulfilled/rejected direct deposits.
+     */
+    function setDirectDepositTimeout(uint40 _timeout) external onlyOwner {
+        require(_timeout <= 7 days, "ZkBobPool: timeout too large");
+        directDepositTimeout = _timeout;
+        emit UpdateDirectDepositTimeout(_timeout);
     }
 
     /**
@@ -242,6 +313,144 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         }
     }
 
+    function appendDirectDeposits(
+        uint256 _root_after,
+        uint256[] calldata _indices,
+        uint256 _out_commit,
+        uint256[8] memory _batch_deposit_proof,
+        uint256[8] memory _tree_proof
+    )
+        external
+        onlyOperator
+    {
+        require(_indices.length > 0, "ZkBobPool: empty deposit list");
+        require(_indices.length < 17, "ZkBobPool: too many deposits");
+
+        uint256[33] memory batch_deposit_pub;
+        uint256 total = 0;
+        for (uint256 i = 0; i < _indices.length; i++) {
+            DirectDeposit storage dd = directDeposits[_indices[i]];
+            (bytes10 diversifier, uint64 deposit, DirectDepositStatus status) = (dd.diversifier, dd.deposit, dd.status);
+            require(status == DirectDepositStatus.Pending, "ZkBobPool: direct deposit not pending");
+
+            // TODO format
+            batch_deposit_pub[2 * i] = uint256(dd.pk);
+            batch_deposit_pub[2 * i + 1] = uint256(bytes32(diversifier) | bytes32(uint256(deposit)));
+
+            dd.status = DirectDepositStatus.Completed;
+        }
+        batch_deposit_pub[32] = _out_commit;
+
+        uint256 txCount = _processDirectDepositBatch(total);
+        uint256 _pool_index = txCount << 7;
+
+        // verify that _out_commit corresponds to zero output account + 16 chosen notes + 111 empty notes
+        require(
+            batch_deposit_verifier.verifyProof(batch_deposit_pub, _batch_deposit_proof),
+            "ZkBobPool: bad batch deposit proof"
+        );
+
+        uint256[3] memory tree_pub = [roots[_pool_index], _root_after, _out_commit];
+        require(tree_verifier.verifyProof(tree_pub, _tree_proof), "ZkBobPool: bad tree proof");
+
+        _pool_index += 128;
+        roots[_pool_index] = _tree_root_after();
+        bytes memory message; // TODO
+        assembly {
+            message := batch_deposit_pub
+            mstore(message, mul(64, calldataload(_indices.offset)))
+        }
+        bytes32 message_hash = keccak256(message);
+        bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
+        all_messages_hash = _all_messages_hash;
+        emit Message(_pool_index, _all_messages_hash, message);
+        emit CompleteDirectDepositBatch(_pool_index, _indices);
+    }
+
+    function directDeposit(address _fallbackUser, uint256 _amount, bytes memory _rawZkAddress) external {
+        IERC20(token).safeTransferFrom(msg.sender, address(this), _amount);
+        _recordDirectDeposit(_fallbackUser, _amount, _rawZkAddress);
+    }
+
+    function onTokenTransfer(address _from, uint256 _value, bytes calldata _data) external returns (bool) {
+        require(msg.sender == token, "ZkBobPool: not a token caller");
+
+        (address fallbackUser, bytes memory rawZkAddress) = abi.decode(_data, (address, bytes));
+
+        _recordDirectDeposit(fallbackUser, _value, rawZkAddress);
+
+        return true;
+    }
+
+    function refundDirectDeposit(uint256 _index) external {
+        bool isOperator = operatorManager.isOperator(msg.sender);
+        DirectDeposit storage dd = directDeposits[_index];
+        require(dd.status == DirectDepositStatus.Pending, "ZkBobPool: direct deposit not pending");
+        require(
+            isOperator || dd.timestamp + directDepositTimeout < block.timestamp,
+            "ZkBobPool: direct deposit timeout not passed"
+        );
+        _refundDirectDeposit(_index, dd);
+    }
+
+    function refundDirectDeposit(uint256[] calldata _indices) external {
+        bool isOperator = operatorManager.isOperator(msg.sender);
+
+        for (uint256 i = 0; i < _indices.length; i++) {
+            DirectDeposit storage dd = directDeposits[_indices[i]];
+
+            if (dd.status == DirectDepositStatus.Pending) {
+                require(
+                    isOperator || dd.timestamp + directDepositTimeout < block.timestamp,
+                    "ZkBobPool: direct deposit timeout not passed"
+                );
+                _refundDirectDeposit(_indices[i], dd);
+            }
+        }
+    }
+
+    function _refundDirectDeposit(uint256 _index, DirectDeposit storage _dd) internal {
+        _dd.status = DirectDepositStatus.Refunded;
+
+        (address user, uint96 amount) = (_dd.user, _dd.amount);
+
+        IERC20(token).safeTransfer(user, amount);
+
+        emit RefundDirectDeposit(_index, user, amount);
+    }
+
+    function _recordDirectDeposit(address _fallbackUser, uint256 _amount, bytes memory _rawZkAddress) internal {
+        // TODO do something about remaining deposit dust (_amount % 1_000_000_000)
+        require(_fallbackUser != address(0), "ZkBobPool: fallback user is zero");
+
+        uint64 fee = directDepositFee;
+        uint64 depositAmount = uint64(_amount / TOKEN_DENOMINATOR);
+        require(depositAmount > fee, "ZkBobPool: direct deposit amount is too low");
+        unchecked {
+            depositAmount -= fee;
+        }
+
+        _checkDirectDepositLimits(msg.sender, depositAmount);
+
+        ZkAddress.ZkAddress memory zkAddress = ZkAddress.parseZkAddress(_rawZkAddress, uint24(pool_id));
+
+        DirectDeposit memory dd = DirectDeposit({
+            user: _fallbackUser,
+            amount: uint96(_amount),
+            deposit: depositAmount,
+            fee: fee,
+            timestamp: uint40(block.timestamp),
+            status: DirectDepositStatus.Pending,
+            diversifier: zkAddress.diversifier,
+            pk: zkAddress.pk
+        });
+
+        uint256 nonce = directDepositNonce++;
+        directDeposits[nonce] = dd;
+
+        emit SubmitDirectDeposit(msg.sender, nonce, _fallbackUser, zkAddress, depositAmount);
+    }
+
     /**
      * @dev Withdraws accumulated fee on behalf of an operator.
      * Callable only by the operator itself, or by a pre-configured operator fee receiver address.
@@ -268,8 +477,9 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
      * @param _dailyDepositCap new daily limit on the sum of all deposits, 18 decimals.
      * @param _dailyWithdrawalCap new daily limit on the sum of all withdrawals, 18 decimals.
      * @param _dailyUserDepositCap new daily limit on the sum of all per-address deposits, 18 decimals.
-     * @param _dailyUserDepositCap new daily limit on the sum of all per-address deposits, 18 decimals.
      * @param _depositCap new limit on the amount of a single deposit, 18 decimals.
+     * @param _dailyUserDirectDepositCap new daily limit on the sum of all per-address direct deposits, 18 decimals.
+     * @param _directDepositCap new limit on the amount of a single direct deposit, 18 decimals.
      */
     function setLimits(
         uint8 _tier,
@@ -277,7 +487,9 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         uint256 _dailyDepositCap,
         uint256 _dailyWithdrawalCap,
         uint256 _dailyUserDepositCap,
-        uint256 _depositCap
+        uint256 _depositCap,
+        uint256 _dailyUserDirectDepositCap,
+        uint256 _directDepositCap
     )
         external
         onlyOwner
@@ -288,16 +500,19 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             _dailyDepositCap / TOKEN_DENOMINATOR,
             _dailyWithdrawalCap / TOKEN_DENOMINATOR,
             _dailyUserDepositCap / TOKEN_DENOMINATOR,
-            _depositCap / TOKEN_DENOMINATOR
+            _depositCap / TOKEN_DENOMINATOR,
+            _dailyUserDirectDepositCap / TOKEN_DENOMINATOR,
+            _directDepositCap / TOKEN_DENOMINATOR
         );
     }
 
     /**
      * @dev Resets daily limit usage for the current day.
      * Callable only by the contract owner / proxy admin.
+     * @param _tier tier id to reset daily limits for.
      */
-    function resetDailyLimits() external onlyOwner {
-        _resetDailyLimits();
+    function resetDailyLimits(uint8 _tier) external onlyOwner {
+        _resetDailyLimits(_tier);
     }
 
     /**

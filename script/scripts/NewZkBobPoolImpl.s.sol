@@ -18,7 +18,8 @@ contract DeployNewZkBobPoolImpl is Script {
             pool.pool_id(),
             pool.token(),
             pool.transfer_verifier(),
-            pool.tree_verifier()
+            pool.tree_verifier(),
+            pool.batch_deposit_verifier()
         );
 
         vm.stopBroadcast();

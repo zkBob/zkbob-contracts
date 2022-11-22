@@ -7,6 +7,7 @@ import "./Env.s.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
+import "../../test/mocks/BatchDepositVerifierMock.sol";
 
 contract DeployZkBobPool is Script {
     function run() external {
@@ -14,6 +15,7 @@ contract DeployZkBobPool is Script {
 
         ITransferVerifier transferVerifier;
         ITreeVerifier treeVerifier;
+        IBatchDepositVerifier batchDepositVerifier = new BatchDepositVerifierMock(); // TODO
         bytes memory code1 =
             vm.getCode(string.concat("out/", zkBobVerifiers, "/TransferVerifier.sol/TransferVerifier.json"));
         bytes memory code2 =
@@ -27,11 +29,13 @@ contract DeployZkBobPool is Script {
             zkBobPoolId,
             bobVanityAddr,
             transferVerifier,
-            treeVerifier
+            treeVerifier,
+            batchDepositVerifier
         );
         EIP1967Proxy proxy = new EIP1967Proxy(tx.origin, address(impl), abi.encodeWithSelector(
             ZkBobPool.initialize.selector, zkBobInitialRoot,
-            zkBobPoolCap, zkBobDailyDepositCap, zkBobDailyWithdrawalCap, zkBobDailyUserDepositCap, zkBobDepositCap
+            zkBobPoolCap, zkBobDailyDepositCap, zkBobDailyWithdrawalCap, zkBobDailyUserDepositCap, zkBobDepositCap,
+            zkBobDailyUserDirectDepositCap, zkBobDirectDepositCap
         ));
         ZkBobPool pool = ZkBobPool(address(proxy));
 
