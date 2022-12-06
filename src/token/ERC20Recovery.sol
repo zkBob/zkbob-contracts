@@ -154,22 +154,21 @@ abstract contract ERC20Recovery is Ownable, BaseERC20 {
      */
     function executeRecovery(address[] calldata _accounts, uint256[] calldata _values) external onlyRecoveryAdmin {
         uint256 executionTimestamp = recoveryRequestExecutionTimestamp;
+        delete recoveryRequestExecutionTimestamp;
         require(executionTimestamp > 0, "Recovery: no active recovery request");
         require(executionTimestamp <= block.timestamp, "Recovery: request still timelocked");
         uint256 limit = _remainingRecoveryLimit();
         require(limit > 0, "Recovery: not enabled");
 
         bytes32 storedHash = recoveryRequestHash;
+        delete recoveryRequestHash;
         bytes32 receivedHash = keccak256(abi.encode(executionTimestamp, _accounts, _values));
         require(storedHash == receivedHash, "Recovery: request hashes do not match");
 
         uint256 value = _recoverTokens(_accounts, _values);
-        totalRecovered += value;
 
         require(value <= limit, "Recovery: exceed recovery limit");
 
-        delete recoveryRequestHash;
-        delete recoveryRequestExecutionTimestamp;
         emit ExecutedRecovery(storedHash, value);
     }
 
@@ -202,6 +201,8 @@ abstract contract ERC20Recovery is Ownable, BaseERC20 {
         }
 
         _increaseBalance(receiver, total);
+
+        totalRecovered += total;
 
         if (Address.isContract(receiver)) {
             require(IERC677Receiver(receiver).onTokenTransfer(address(this), total, new bytes(0)));
