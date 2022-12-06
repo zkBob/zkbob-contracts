@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.15;
 
+import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./yield/YieldConnector.sol";
@@ -57,6 +58,7 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
     event Give(address indexed token, uint256 amount);
 
     constructor(address _bobToken) {
+        require(Address.isContract(_bobToken), "BobVault: not a contract");
         bobToken = IERC20(_bobToken);
     }
 
