@@ -106,18 +106,29 @@ contract ZkBobPoolTest is Test {
         // create BOB-USDC 0.05% pool at Uniswap V3
         deal(usdc, address(this), 1e9);
         IERC20(usdc).approve(uniV3Positions, 1e9);
-        INonfungiblePositionManager(uniV3Positions).createAndInitializePoolIfNecessary(
-            usdc, address(bob), 500, TickMath.getSqrtRatioAtTick(276320)
-        );
+        address token0 = usdc;
+        address token1 = address(bob);
+        int24 tickLower = 276320;
+        int24 tickUpper = 276330;
+        uint256 amount0Desired = 1e9;
+        uint256 amount1Desired = 0;
+        uint160 price = TickMath.getSqrtRatioAtTick(tickLower);
+        if (token1 < token0) {
+            (token0, token1) = (token1, token0);
+            (tickLower, tickUpper) = (-tickUpper, -tickLower);
+            (amount0Desired, amount1Desired) = (amount1Desired, amount0Desired);
+            price = TickMath.getSqrtRatioAtTick(tickUpper);
+        }
+        INonfungiblePositionManager(uniV3Positions).createAndInitializePoolIfNecessary(token0, token1, 500, price);
         INonfungiblePositionManager(uniV3Positions).mint(
             INonfungiblePositionManager.MintParams({
-                token0: usdc,
-                token1: address(bob),
+                token0: token0,
+                token1: token1,
                 fee: 500,
-                tickLower: 276320,
-                tickUpper: 276330,
-                amount0Desired: 1e9,
-                amount1Desired: 0,
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                amount0Desired: amount0Desired,
+                amount1Desired: amount1Desired,
                 amount0Min: 0,
                 amount1Min: 0,
                 recipient: address(this),
