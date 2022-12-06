@@ -97,6 +97,7 @@ contract ZkBobAccounting {
     mapping(uint256 => Snapshot) private snapshots; // single linked list of hourly snapshots
     mapping(address => UserStats) private userStats;
 
+    event UpdateLimits(uint8 indexed tier, PoolLimits limits);
     event UpdateTier(address user, uint8 tier);
 
     /**
@@ -252,13 +253,15 @@ contract ZkBobAccounting {
         require(_dailyDepositCap >= _dailyUserDepositCap, "ZkBobAccounting: daily deposit cap too low");
         require(_tvlCap >= _dailyDepositCap, "ZkBobAccounting: tvl cap too low");
         require(_dailyWithdrawalCap > 0, "ZkBobAccounting: zero daily withdrawal cap");
-        poolLimits[_tier] = PoolLimits({
+        PoolLimits memory pl = PoolLimits({
             tvlCap: uint56(_tvlCap / PRECISION),
             dailyDepositCap: uint32(_dailyDepositCap / PRECISION),
             dailyWithdrawalCap: uint32(_dailyWithdrawalCap / PRECISION),
             dailyUserDepositCap: uint32(_dailyUserDepositCap / PRECISION),
             depositCap: uint32(_depositCap / PRECISION)
         });
+        poolLimits[_tier] = pl;
+        emit UpdateLimits(_tier, pl);
     }
 
     function _setUsersTier(uint8 _tier, address[] memory _users) internal {
