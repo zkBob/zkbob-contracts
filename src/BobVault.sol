@@ -58,6 +58,7 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
 
     constructor(address _bobToken) {
         bobToken = IERC20(_bobToken);
+        _transferOwnership(address(0));
     }
 
     /**
