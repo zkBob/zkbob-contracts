@@ -27,6 +27,10 @@ contract AAVEYieldImplementation is IYieldImplementation {
         lendingPool = ILendingPool(_lendingPoolAddress);
     }
 
+    /**
+     * @dev Initializes yield earning for the particular token through AAVE.
+     * @param _token address of the invested token contract.
+     */
     function initialize(address _token) external {
         uint256[12] memory reserveData = lendingPool.getReserveData(_token);
         // 7th slot for AAVE v2, 8th slot for AAVE v3
@@ -79,10 +83,8 @@ contract AAVEYieldImplementation is IYieldImplementation {
     }
 
     /**
-     * @dev Last-resort function for returning assets to the Omnibridge contract in case of some failures in the logic.
-     * Disables this contract and transfers locked tokens back to the mediator.
-     * Only owner is allowed to call this method.
-     * @param _token address of the invested token contract that should be disabled.
+     * @dev Redeems full token balance from the yield earning protocol, effectively disabling it.
+     * @param _token address of the invested token contract, for which interest should be disabled.
      */
     function exit(address _token) external {
         address aToken = interestToken[_token];
