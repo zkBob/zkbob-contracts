@@ -128,8 +128,8 @@ contract CustomABIDecoder {
             // 8
             r = 8;
         } else if (t == 2) {
-            // fee + recipient + native amount
-            // 8 + 20 + 8
+            // fee + native amount + recipient
+            // 8 + 8 + 20
             r = 36;
         } else if (t == 3) {
             // fee + deadline + address
