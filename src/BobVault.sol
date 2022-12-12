@@ -485,7 +485,7 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         if (balance > _buffer) {
             uint256 value = balance - _buffer;
             _delegateInvest(_yield, _token, value);
-            emit Invest(_token, _yield, _buffer);
+            emit Invest(_token, _yield, value);
         }
     }
 
