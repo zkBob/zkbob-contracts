@@ -43,6 +43,8 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
     ITokenSeller public tokenSeller;
 
+    event UpdateTokenSeller(address seller);
+
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
 
     constructor(uint256 __pool_id, address _token, ITransferVerifier _transfer_verifier, ITreeVerifier _tree_verifier) {
@@ -102,6 +104,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
      */
     function setTokenSeller(address _seller) external onlyOwner {
         tokenSeller = ITokenSeller(_seller);
+        emit UpdateTokenSeller(_seller);
     }
 
     /**
