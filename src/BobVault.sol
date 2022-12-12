@@ -88,7 +88,9 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
     }
 
     /**
-     * @dev Adds a new collateral token.
+     * @dev Adds a new collateral token. 
+     * Any tokens with reentrant transfers, such as an ERC777 token, MUST NOT be used as collateral. Otherwise
+     * it could lead to inconsistent event orderings or potentially more severe issues.
      * Callable only by the contract owner / proxy admin.
      * @param _token address of added collateral token. Token can be added only once.
      * @param _collateral added collateral settings.
