@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.15;
 
+import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
@@ -46,7 +47,10 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
 
     constructor(uint256 __pool_id, address _token, ITransferVerifier _transfer_verifier, ITreeVerifier _tree_verifier) {
-        require(__pool_id <= MAX_POOL_ID);
+        require(__pool_id <= MAX_POOL_ID, "ZkBobPool: exceeds max pool id");
+        require(Address.isContract(_token), "ZkBobPool: not a contract");
+        require(Address.isContract(address(_transfer_verifier)), "ZkBobPool: not a contract");
+        require(Address.isContract(address(_tree_verifier)), "ZkBobPool: not a contract");
         pool_id = __pool_id;
         token = _token;
         transfer_verifier = _transfer_verifier;
@@ -84,6 +88,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     {
         require(msg.sender == address(this), "ZkBobPool: not initializer");
         require(roots[0] == 0, "ZkBobPool: already initialized");
+        require(_root != 0, "ZkBobPool: zero root");
         roots[0] = _root;
         _setLimits(
             0,
@@ -110,6 +115,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
      * @param _operatorManager new operator manager implementation.
      */
     function setOperatorManager(IOperatorManager _operatorManager) external onlyOwner {
+        require(address(_operatorManager) != address(0), "ZkBobPool: manager is zero address");
         operatorManager = _operatorManager;
     }
 
