@@ -525,13 +525,13 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
      * @param _token address of collateral to collect rewards for.
      * @param _data arbitrary extra data required for rewards collection.
      */
-    function farmExtra(address _token, bytes calldata _data) external {
+    function farmExtra(address _token, bytes calldata _data) external returns (bytes memory returnData) {
         require(msg.sender == yieldAdmin || _isOwner(), "BobVault: not authorized");
 
         Collateral memory token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
 
-        _delegateFarmExtra(token.yield, _token, msg.sender, _data);
+        returnData = _delegateFarmExtra(token.yield, _token, msg.sender, _data);
 
         emit FarmExtra(_token, token.yield);
     }
