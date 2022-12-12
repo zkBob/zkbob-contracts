@@ -131,6 +131,26 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
     }
 
     /**
+     * @dev Updates yield-earning parameters on the particular collateral token.
+     * Callable only by the contract owner / proxy admin.
+     * @param _token address of the collateral token.
+     * @param _buffer amount of non-invested collateral.
+     * @param _dust small amount of non-withdrawable yield.
+     */
+    function updateCollateralYield(address _token, uint128 _buffer, uint96 _dust) external onlyOwner {
+        Collateral storage token = collateral[_token];
+        require(token.price > 0, "BobVault: unsupported collateral");
+        address yield = token.yield;
+        require(yield != address(0), "BobVault: yield not enabled");
+
+        (token.buffer, token.dust) = (_buffer, _dust);
+
+        _investExcess(_token, yield, _buffer);
+
+        emit UpdateYield(_token, yield, _buffer, _dust);
+    }
+
+    /**
      * @dev Internal function that enables yield-earning on the particular collateral token.
      * Delegate-calls initialize and invest functions on the yield provider contract.
      * @param _token address of the collateral token.
