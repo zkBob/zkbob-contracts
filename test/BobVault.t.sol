@@ -339,6 +339,14 @@ contract BobVaultTest is Test, EIP2470Test {
         vm.stopPrank();
     }
 
+    function _getAToken(address _lendingPool, address _token) internal returns (IERC20) {
+        uint256[12] memory reserveData = ILendingPool(_lendingPool).getReserveData(_token);
+        // 7th slot for AAVE v2, 8th slot for AAVE v3
+        address aToken = address(uint160(reserveData[reserveData[7] <= type(uint16).max ? 8 : 7]));
+
+        return IERC20(aToken);
+    }
+
     function _testAAVEIntegration(address _lendingPool) internal {
         vm.startPrank(deployer);
 
@@ -386,15 +394,10 @@ contract BobVaultTest is Test, EIP2470Test {
         vm.stopPrank();
         vm.startPrank(user2);
 
-        if (usdc.balanceOf(user2) > 0) {
-            usdc.transfer(deployer, usdc.balanceOf(user2));
-        }
-        if (usdt.balanceOf(user2) > 0) {
-            ILegacyERC20(address(usdt)).transfer(deployer, usdt.balanceOf(user2));
-        }
-        if (dai.balanceOf(user2) > 0) {
-            dai.transfer(deployer, dai.balanceOf(user2));
-        }
+        deal(address(usdc), user2, 0);
+        deal(address(usdt), user2, 0);
+        deal(address(dai), user2, 0);
+
         vault.farm(address(usdc));
         vault.farm(address(usdt));
         vault.farm(address(dai));
@@ -410,29 +413,113 @@ contract BobVaultTest is Test, EIP2470Test {
         vault.disableCollateralYield(address(dai));
 
         vm.stopPrank();
+
+        assertEq(_getAToken(_lendingPool, address(usdc)).balanceOf(address(vault)), 0);
+        assertEq(_getAToken(_lendingPool, address(usdt)).balanceOf(address(vault)), 0);
+        assertEq(_getAToken(_lendingPool, address(dai)).balanceOf(address(vault)), 0);
+    }
+
+    function _testAAVEYieldParamsUpdates(address _lendingPool) internal {
+        vm.startPrank(deployer);
+
+        vault.setYieldAdmin(user2);
+
+        AAVEYieldImplementation aImpl = new AAVEYieldImplementation(_lendingPool);
+        vault.addCollateral(
+            address(usdc), BobVault.Collateral(0, 1e6 * 1e6, 1e6, address(aImpl), 1000000, 0.001 ether, 0.002 ether)
+        );
+
+        bob.mint(address(vault), 1e8 ether);
+
+        usdc.transfer(user1, 1e7 * 1e6);
+
+        vm.stopPrank();
+        vm.startPrank(user1);
+
+        vault.buy(address(usdc), 1e7 * 1e6);
+
+        vm.stopPrank();
+        vm.startPrank(deployer);
+
+        vault.invest(address(usdc));
+
+        assertEq(usdc.balanceOf(address(vault)), 1e6 * 1e6);
+
+        vm.warp(block.timestamp + 100 days);
+        vm.roll(block.number + 100 days / 12 seconds);
+
+        BobVault.Stat memory stat = vault.stat(address(usdc));
+        assertGt(stat.total, (1e7 + 2) * 1e6);
+        assertEq(stat.required, 9_990_001 * 1e6);
+        assertGt(stat.farmed, 10_001 * 1e6);
+
+        uint256 investedAmount1 = _getAToken(_lendingPool, address(usdc)).balanceOf(address(vault));
+        assertGt(investedAmount1, 0);
+
+        vault.updateCollateralYield(address(usdc), 100_000 * 1e6, 10 * 1e6);
+
+        uint256 investedAmount2 = _getAToken(_lendingPool, address(usdc)).balanceOf(address(vault));
+        assertGt(investedAmount2, investedAmount1);
+
+        assertEq(usdc.balanceOf(address(vault)), 100_000 * 1e6);
+
+        stat = vault.stat(address(usdc));
+        assertGt(stat.total, (1e7 + 2) * 1e6);
+        assertEq(stat.required, 9_990_010 * 1e6);
+        assertGt(stat.farmed, 10_001 * 1e6);
+
+        vault.disableCollateralYield(address(usdc));
+
+        stat = vault.stat(address(usdc));
+        assertGt(stat.total, (1e7 + 2) * 1e6);
+        assertEq(stat.required, 9_990_000 * 1e6);
+        assertGt(stat.farmed, 10_001 * 1e6);
+
+        vm.stopPrank();
+        vm.startPrank(user2);
+
+        deal(address(usdc), user2, 0);
+        vault.farm(address(usdc));
+        assertGt(usdc.balanceOf(user2), 1e6);
+
+        vm.stopPrank();
+
+        assertEq(_getAToken(_lendingPool, address(usdc)).balanceOf(address(vault)), 0);
     }
 
     function testAAVEv2Mainnet() public {
         _forkMainnet();
 
+        uint256 sid = vm.snapshot();
         _testAAVEIntegration(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
+        vm.revertTo(sid);
+        _testAAVEYieldParamsUpdates(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
     }
 
     function testAAVEv2Polygon() public {
         _forkPolygon();
 
+        uint256 sid = vm.snapshot();
         _testAAVEIntegration(0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf);
+        vm.revertTo(sid);
+        _testAAVEYieldParamsUpdates(0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf);
     }
 
     function testAAVEv3Polygon() public {
         _forkPolygon();
 
+        uint256 sid = vm.snapshot();
         _testAAVEIntegration(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
+        vm.revertTo(sid);
+        _testAAVEYieldParamsUpdates(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
     }
 
     function testAAVEv3Optimism() public {
         _forkOptimism();
 
+        uint256 sid = vm.snapshot();
         _testAAVEIntegration(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
+        vm.revertTo(sid);
+        _testAAVEYieldParamsUpdates(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
     }
 }
