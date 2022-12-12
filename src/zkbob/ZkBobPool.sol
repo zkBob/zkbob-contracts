@@ -44,6 +44,8 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     ITokenSeller public tokenSeller;
 
     event UpdateTokenSeller(address seller);
+    event UpdateOperatorManager(address manager);
+    event WithdrawFee(address indexed operator, uint256 fee);
 
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
 
@@ -114,6 +116,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
      */
     function setOperatorManager(IOperatorManager _operatorManager) external onlyOwner {
         operatorManager = _operatorManager;
+        emit UpdateOperatorManager(address(_operatorManager));
     }
 
     /**
@@ -243,10 +246,11 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             _operator == msg.sender || operatorManager.isOperatorFeeReceiver(_operator, msg.sender),
             "ZkBobPool: not authorized"
         );
-        uint256 fee = accumulatedFee[_operator];
+        uint256 fee = accumulatedFee[_operator] * TOKEN_DENOMINATOR;
         require(fee > 0, "ZkBobPool: no fee to withdraw");
-        IERC20(token).safeTransfer(_to, fee * TOKEN_DENOMINATOR);
+        IERC20(token).safeTransfer(_to, fee);
         accumulatedFee[_operator] = 0;
+        emit WithdrawFee(_operator, fee);
     }
 
     /**
