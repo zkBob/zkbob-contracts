@@ -60,6 +60,7 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
     constructor(address _bobToken) {
         require(Address.isContract(_bobToken), "BobVault: not a contract");
         bobToken = IERC20(_bobToken);
+        _transferOwnership(address(0));
     }
 
     /**

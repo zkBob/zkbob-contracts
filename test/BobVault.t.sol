@@ -124,9 +124,9 @@ contract BobVaultTest is Test, EIP2470Test {
 
         bob.mint(address(vault), _bobAmount);
 
-        usdc.transfer(user1, 10000000);
-        ILegacyERC20(address(usdt)).transfer(user1, 10000000);
-        dai.transfer(user1, 10 ether);
+        deal(address(usdc), user1, 10000000);
+        deal(address(usdt), user1, 10000000);
+        deal(address(dai), user1, 10 ether);
 
         vm.stopPrank();
     }
