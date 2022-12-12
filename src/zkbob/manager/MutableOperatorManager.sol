@@ -18,6 +18,8 @@ contract MutableOperatorManager is IOperatorManager, Ownable {
     // current operator public API URL
     string public operatorURI;
 
+    event UpdateOperator(address indexed operator, address feeReceiver, string operatorURI);
+
     constructor(address _operator, address _feeReceiver, string memory _operatorURI) Ownable() {
         _setOperator(_operator, _feeReceiver, _operatorURI);
     }
@@ -36,6 +38,8 @@ contract MutableOperatorManager is IOperatorManager, Ownable {
         }
         operator = _operator;
         operatorURI = _operatorURI;
+
+        emit UpdateOperator(_operator, _feeReceiver, _operatorURI);
     }
 
     function isOperator(address _addr) external view override returns (bool) {
