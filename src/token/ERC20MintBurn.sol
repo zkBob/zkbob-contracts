@@ -3,7 +3,6 @@
 pragma solidity 0.8.15;
 
 import "../utils/Ownable.sol";
-import "../interfaces/IMintableERC20.sol";
 import "./BaseERC20.sol";
 import "../interfaces/IMintableERC20.sol";
 import "../interfaces/IBurnableERC20.sol";
@@ -57,5 +56,19 @@ abstract contract ERC20MintBurn is IMintableERC20, IBurnableERC20, Ownable, Base
         require(isBurner(msg.sender), "ERC20MintBurn: not a burner");
 
         _burn(msg.sender, _value);
+    }
+
+    /**
+     * @dev Burns pre-approved tokens from the other address.
+     * Callable only by one of the burner addresses.
+     * @param _from account to burn tokens from.
+     * @param _value amount of tokens to burn. Should be less than or equal to account balance.
+     */
+    function burnFrom(address _from, uint256 _value) external virtual {
+        require(isBurner(msg.sender), "ERC20MintBurn: not a burner");
+
+        _spendAllowance(_from, msg.sender, _value);
+
+        _burn(_from, _value);
     }
 }
