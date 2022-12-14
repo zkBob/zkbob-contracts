@@ -42,7 +42,7 @@ abstract contract ERC20MintBurn is IMintableERC20, IBurnableERC20, Ownable, Base
      * @param _to address of the tokens receiver.
      * @param _amount amount of tokens to mint.
      */
-    function mint(address _to, uint256 _amount) external {
+    function mint(address _to, uint256 _amount) public {
         require(isMinter(msg.sender), "ERC20MintBurn: not a minter");
 
         _mint(_to, _amount);
@@ -57,5 +57,19 @@ abstract contract ERC20MintBurn is IMintableERC20, IBurnableERC20, Ownable, Base
         require(isBurner(msg.sender), "ERC20MintBurn: not a burner");
 
         _burn(msg.sender, _value);
+    }
+
+    /**
+     * @dev Burns pre-approved tokens from the other address.
+     * Callable only by one of the burner addresses.
+     * @param _from account to burn tokens from.
+     * @param _value amount of tokens to burn. Should be less than or equal to caller balance.
+     */
+    function burnFrom(address _from, uint256 _value) external virtual {
+        require(isBurner(msg.sender), "ERC20MintBurn: not a burner");
+
+        _spendAllowance(_from, msg.sender, _value);
+
+        _burn(_from, _value);
     }
 }
