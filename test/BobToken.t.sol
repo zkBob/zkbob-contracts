@@ -94,6 +94,30 @@ contract BobTokenTest is Test, EIP2470Test {
         assertEq(bob.balanceOf(user2), 0 ether);
     }
 
+    function testBurnFrom() public {
+        vm.prank(user1);
+        bob.mint(user1, 1 ether);
+
+        vm.expectRevert("ERC20MintBurn: not a burner");
+        bob.burnFrom(user1, 1 ether);
+
+        vm.prank(user2);
+        vm.expectRevert("ERC20: insufficient allowance");
+        bob.burnFrom(user1, 1 ether);
+
+        vm.prank(user1);
+        bob.approve(user2, 10 ether);
+
+        vm.prank(user2);
+        vm.expectEmit(true, true, false, true);
+        emit Transfer(user1, address(0), 1 ether);
+        bob.burnFrom(user1, 1 ether);
+
+        assertEq(bob.totalSupply(), 0);
+        assertEq(bob.balanceOf(user1), 0);
+        assertEq(bob.allowance(user1, user2), 9 ether);
+    }
+
     function testMinterChange() public {
         vm.expectRevert("Ownable: caller is not the owner");
         bob.updateMinter(user3, true, true);
