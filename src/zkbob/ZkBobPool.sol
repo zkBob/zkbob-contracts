@@ -166,7 +166,8 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         } else if (txType == 3) {
             user = _memo_permit_holder();
         }
-        (,, uint256 txCount) = _recordOperation(user, _transfer_token_amount());
+        int256 transfer_token_delta = _transfer_token_amount();
+        (,, uint256 txCount) = _recordOperation(user, transfer_token_delta);
 
         uint256 nullifier = _transfer_nullifier();
         {
@@ -190,12 +191,12 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         }
 
         uint256 fee = _memo_fee();
-        int256 token_amount = _transfer_token_amount() + int256(fee);
+        int256 token_amount = transfer_token_delta + int256(fee);
         int256 energy_amount = _transfer_energy_amount();
 
         if (txType == 0) {
             // Deposit
-            require(token_amount >= 0 && energy_amount == 0, "ZkBobPool: incorrect deposit amounts");
+            require(transfer_token_delta > 0 && energy_amount == 0, "ZkBobPool: incorrect deposit amounts");
             IERC20(token).safeTransferFrom(user, address(this), uint256(token_amount) * TOKEN_DENOMINATOR);
         } else if (txType == 1) {
             // Transfer
@@ -227,7 +228,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             }
         } else if (txType == 3) {
             // Permittable token deposit
-            require(token_amount >= 0 && energy_amount == 0, "ZkBobPool: incorrect deposit amounts");
+            require(transfer_token_delta > 0 && energy_amount == 0, "ZkBobPool: incorrect deposit amounts");
             (uint8 v, bytes32 r, bytes32 s) = _permittable_deposit_signature();
             IERC20Permit(token).receiveWithSaltedPermit(
                 user, uint256(token_amount) * TOKEN_DENOMINATOR, _memo_permit_deadline(), bytes32(nullifier), v, r, s
