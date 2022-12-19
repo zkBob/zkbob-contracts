@@ -189,12 +189,13 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         address yield = token.yield;
         require(yield != address(0), "BobVault: yield not enabled");
 
+        (token.buffer, token.dust, token.yield) = (0, 0, address(0));
+
         uint256 invested = _delegateInvestedAmount(yield, _token);
         _delegateWithdraw(yield, _token, invested);
         emit Withdraw(_token, yield, invested);
 
         _delegateExit(yield, _token);
-        (token.buffer, token.dust, token.yield) = (0, 0, address(0));
         emit DisableYield(_token, yield);
     }
 
