@@ -173,6 +173,9 @@ contract BobTokenTest is Test, EIP2470Test {
         uint256 expiry = block.timestamp + 1 days;
         (uint8 v, bytes32 r, bytes32 s) = _signPermit(pk1, user1, user2, 1 ether, 0, expiry);
 
+        vm.prank(user1);
+        bob.approve(user2, 0.1 ether);
+
         vm.expectRevert("ERC20Permit: invalid ERC2612 signature");
         bob.receiveWithPermit(user1, 1 ether, expiry, v, r, s);
         vm.prank(user2);
@@ -185,36 +188,7 @@ contract BobTokenTest is Test, EIP2470Test {
         bob.receiveWithPermit(user1, 1 ether, expiry, v, r, s);
         assertEq(bob.balanceOf(user1), 0 ether);
         assertEq(bob.balanceOf(user2), 1 ether);
-    }
-
-    function testSaltedPermit() public {
-        vm.prank(user1);
-        bob.mint(user1, 1 ether);
-
-        uint256 expiry = block.timestamp + 1 days;
-        bytes32 salt = bytes32(uint256(123));
-        (uint8 v, bytes32 r, bytes32 s) = _signSaltedPermit(pk1, user1, user2, 1 ether, 0, expiry, salt);
-
-        // different message
-        vm.expectRevert("ERC20Permit: invalid signature");
-        bob.saltedPermit(user1, user2, 2 ether, expiry, salt, v, r, s);
-
-        // expired message
-        vm.warp(expiry + 1 days);
-        vm.expectRevert("ERC20Permit: expired permit");
-        bob.saltedPermit(user1, user2, 1 ether, expiry, salt, v, r, s);
-        vm.warp(expiry - 1 days);
-
-        // correct permit with nonce 0
         assertEq(bob.allowance(user1, user2), 0 ether);
-        vm.expectEmit(true, true, false, true);
-        emit Approval(user1, user2, 1 ether);
-        bob.saltedPermit(user1, user2, 1 ether, expiry, salt, v, r, s);
-        assertEq(bob.allowance(user1, user2), 1 ether);
-
-        // expired nonce
-        vm.expectRevert("ERC20Permit: invalid signature");
-        bob.saltedPermit(user1, user2, 1 ether, expiry, salt, v, r, s);
     }
 
     function testReceiveWithSaltedPermit() public {
@@ -224,6 +198,9 @@ contract BobTokenTest is Test, EIP2470Test {
         uint256 expiry = block.timestamp + 1 days;
         bytes32 salt = bytes32(uint256(123));
         (uint8 v, bytes32 r, bytes32 s) = _signSaltedPermit(pk1, user1, user2, 1 ether, 0, expiry, salt);
+
+        vm.prank(user1);
+        bob.approve(user2, 0.1 ether);
 
         vm.expectRevert("ERC20Permit: invalid signature");
         bob.receiveWithSaltedPermit(user1, 1 ether, expiry, salt, v, r, s);
@@ -237,6 +214,7 @@ contract BobTokenTest is Test, EIP2470Test {
         bob.receiveWithSaltedPermit(user1, 1 ether, expiry, salt, v, r, s);
         assertEq(bob.balanceOf(user1), 0 ether);
         assertEq(bob.balanceOf(user2), 1 ether);
+        assertEq(bob.allowance(user1, user2), 0 ether);
     }
 
     function _signPermit(

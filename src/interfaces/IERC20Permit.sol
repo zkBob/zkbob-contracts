@@ -32,18 +32,6 @@ interface IERC20Permit {
     )
         external;
 
-    function saltedPermit(
-        address _holder,
-        address _spender,
-        uint256 _value,
-        uint256 _deadline,
-        bytes32 _salt,
-        uint8 _v,
-        bytes32 _r,
-        bytes32 _s
-    )
-        external;
-
     function receiveWithSaltedPermit(
         address _holder,
         uint256 _value,
