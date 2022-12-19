@@ -175,7 +175,7 @@ contract CustomABIDecoder {
         r = address(uint160(_loaduint256(memo_receiver_pos + memo_receiver_size - uint256_size)));
     }
 
-    // Peermittable token deposit specific data
+    // Permittable token deposit specific data
 
     uint256 constant memo_permit_deadline_pos = memo_fee_pos + memo_fee_size;
     uint256 constant memo_permit_deadline_size = 8;
