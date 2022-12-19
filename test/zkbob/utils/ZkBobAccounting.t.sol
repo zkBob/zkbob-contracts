@@ -497,4 +497,13 @@ contract ZkBobAccountingTest is Test {
         assertEq(limits3.depositCap, 0 gwei);
         assertEq(limits3.tier, 255);
     }
+
+    function testPoolLimitsTooLarge() public {
+        vm.expectRevert("ZkBobAccounting: tvl cap too large");
+        pool.setLimits(0, 1e18 ether, 500 ether, 400 ether, 300 ether, 150 ether);
+        vm.expectRevert("ZkBobAccounting: daily deposit cap too large");
+        pool.setLimits(0, 1e16 ether, 1e10 ether, 400 ether, 300 ether, 150 ether);
+        vm.expectRevert("ZkBobAccounting: daily withdrawal cap too large");
+        pool.setLimits(0, 1e16 ether, 500 ether, 1e10 ether, 300 ether, 150 ether);
+    }
 }

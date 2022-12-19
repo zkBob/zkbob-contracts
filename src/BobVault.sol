@@ -369,7 +369,10 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         uint256 fee = _amount * uint256(token.inFee) / 1 ether;
         uint256 sellAmount = _amount - fee;
         uint256 buyAmount = sellAmount * 1 ether / token.price;
-        token.balance += uint128(sellAmount);
+        unchecked {
+            require(token.balance + sellAmount <= type(uint128).max, "BobVault: amount too large");
+            token.balance += uint128(sellAmount);
+        }
 
         bobToken.transfer(msg.sender, buyAmount);
 
@@ -438,7 +441,10 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
 
         uint256 fee = _amount * uint256(inToken.inFee) / 1 ether;
         uint256 sellAmount = _amount - fee;
-        inToken.balance += uint128(sellAmount);
+        unchecked {
+            require(inToken.balance + sellAmount <= type(uint128).max, "BobVault: amount too large");
+            inToken.balance += uint128(sellAmount);
+        }
         uint256 bobAmount = sellAmount * 1 ether / inToken.price;
 
         // sell virtual bob
@@ -548,7 +554,10 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
 
         IERC20(_token).safeTransferFrom(msg.sender, address(this), _amount);
 
-        token.balance += uint128(_amount);
+        unchecked {
+            require(token.balance + _amount <= type(uint128).max, "BobVault: amount too large");
+            token.balance += uint128(_amount);
+        }
 
         emit Give(_token, _amount);
     }
