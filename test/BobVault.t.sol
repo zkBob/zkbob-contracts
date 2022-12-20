@@ -50,7 +50,7 @@ contract BobVaultTest is Test, EIP2470Test {
         usdt = IERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7);
         dai = IERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
 
-        vm.createSelectFork(forkRpcUrlMainnet);
+        vm.createSelectFork(forkRpcUrlMainnet, forkBlockMainnet);
 
         _forkApprovals();
 
@@ -64,7 +64,7 @@ contract BobVaultTest is Test, EIP2470Test {
         usdt = IERC20(0xc2132D05D31c914a87C6611C10748AEb04B58e8F);
         dai = IERC20(0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063);
 
-        vm.createSelectFork(forkRpcUrlPolygon);
+        vm.createSelectFork(forkRpcUrlPolygon, forkBlockPolygon);
 
         _forkApprovals();
 
@@ -78,7 +78,7 @@ contract BobVaultTest is Test, EIP2470Test {
         usdt = IERC20(0x94b008aA00579c1307B0EF2c499aD98a8ce58e58);
         dai = IERC20(0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1);
 
-        vm.createSelectFork(forkRpcUrlOptimism);
+        vm.createSelectFork(forkRpcUrlOptimism, forkBlockOptimism);
 
         _forkApprovals();
 

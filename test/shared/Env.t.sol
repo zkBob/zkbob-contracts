@@ -16,9 +16,12 @@ address constant mockImpl = address(0xdead);
 address constant bobVanityAddr = address(0xB0B195aEFA3650A6908f15CdaC7D92F8a5791B0B);
 bytes32 constant bobSalt = bytes32(uint256(285834900769));
 
+uint256 constant forkBlockMainnet = 16200000;
 string constant forkRpcUrlMainnet = "https://rpc.ankr.com/eth";
+uint256 constant forkBlockPolygon = 37000000;
 string constant forkRpcUrlPolygon = "https://polygon-rpc.com";
-string constant forkRpcUrlOptimism = "https://rpc.ankr.com/optimism";
+uint256 constant forkBlockOptimism = 52000000;
+string constant forkRpcUrlOptimism = "https://1rpc.io/op";
 
 address constant uniV3Router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
 address constant uniV3Quoter = 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6;
