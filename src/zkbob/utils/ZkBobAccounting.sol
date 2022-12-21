@@ -218,6 +218,7 @@ contract ZkBobAccounting {
             }
         } else {
             uint256 withdrawAmount = uint256(-_txAmount);
+            require(withdrawAmount <= type(uint32).max * PRECISION, "ZkBobAccounting: withdrawal amount too large");
             s1.tvl -= uint72(withdrawAmount);
 
             if (isDayTransition) {
@@ -249,6 +250,9 @@ contract ZkBobAccounting {
     {
         require(_tier < 255, "ZkBobAccounting: invalid limit tier");
         require(_depositCap > 0, "ZkBobAccounting: zero deposit cap");
+        require(_tvlCap <= type(uint56).max * PRECISION, "ZkBobAccounting: tvl cap too large");
+        require(_dailyDepositCap <= type(uint32).max * PRECISION, "ZkBobAccounting: daily deposit cap too large");
+        require(_dailyWithdrawalCap <= type(uint32).max * PRECISION, "ZkBobAccounting: daily withdrawal cap too large");
         require(_dailyUserDepositCap >= _depositCap, "ZkBobAccounting: daily user deposit cap too low");
         require(_dailyDepositCap >= _dailyUserDepositCap, "ZkBobAccounting: daily deposit cap too low");
         require(_tvlCap >= _dailyDepositCap, "ZkBobAccounting: tvl cap too low");
