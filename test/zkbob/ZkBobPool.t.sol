@@ -14,12 +14,19 @@ import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/BobToken.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
 import "../../src/utils/UniswapV3Seller.sol";
+import "../shared/ForkTests.t.sol";
 
-contract ZkBobPoolTest is Test {
+contract ZkBobPoolTest is AbstractMainnetForkTest {
     uint256 private constant initialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
+
+    address constant uniV3Router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
+    address constant uniV3Quoter = 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6;
+    address constant uniV3Positions = 0xC36442b4a4522E871399CD717aBDD847Ab11FE88;
+    address constant usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
 
     ZkBobPool pool;
     BobToken bob;
+    IOperatorManager operatorManager;
 
     function setUp() public {
         EIP1967Proxy bobProxy = new EIP1967Proxy(address(this), mockImpl, "");
@@ -35,7 +42,8 @@ contract ZkBobPoolTest is Test {
         ));
         pool = ZkBobPool(address(poolProxy));
 
-        pool.setOperatorManager(new MutableOperatorManager(user2, user3, "https://example.com"));
+        operatorManager = new MutableOperatorManager(user2, user3, "https://example.com");
+        pool.setOperatorManager(operatorManager);
 
         bob.mint(address(user1), 1 ether);
     }
@@ -50,6 +58,79 @@ contract ZkBobPoolTest is Test {
         vm.prank(user3);
         pool.withdrawFee(user2, user3);
         assertEq(bob.balanceOf(user3), 0.02 ether);
+    }
+
+    function testGetters() public {
+        assertEq(pool.pool_index(), 0);
+        assertEq(pool.denominator(), 1 gwei);
+
+        bytes memory data1 = _encodePermitDeposit(0.5 ether, 0.01 ether);
+        _transact(data1);
+
+        assertEq(pool.pool_index(), 128);
+
+        bytes memory data2 = _encodeTransfer();
+        _transact(data2);
+
+        assertEq(pool.pool_index(), 256);
+    }
+
+    function testAuthRights() public {
+        vm.startPrank(user1);
+
+        vm.expectRevert("ZkBobPool: not initializer");
+        pool.initialize(0, 0, 0, 0, 0, 0);
+        vm.expectRevert("Ownable: caller is not the owner");
+        pool.setOperatorManager(IOperatorManager(address(0)));
+        vm.expectRevert("Ownable: caller is not the owner");
+        pool.setTokenSeller(address(0));
+        vm.expectRevert("Ownable: caller is not the owner");
+        pool.setLimits(0, 0, 0, 0, 0, 0);
+        vm.expectRevert("Ownable: caller is not the owner");
+        pool.setUsersTier(0, new address[](1));
+        vm.expectRevert("Ownable: caller is not the owner");
+        pool.resetDailyLimits();
+
+        vm.stopPrank();
+    }
+
+    function testUsersTiers() public {
+        pool.setLimits(1, 2_000_000 ether, 200_000 ether, 200_000 ether, 20_000 ether, 20_000 ether);
+        address[] memory users = new address[](1);
+        users[0] = user2;
+        pool.setUsersTier(1, users);
+
+        assertEq(pool.getLimitsFor(user1).tier, 0);
+        assertEq(pool.getLimitsFor(user1).depositCap, 10_000 gwei);
+        assertEq(pool.getLimitsFor(user2).tier, 1);
+        assertEq(pool.getLimitsFor(user2).depositCap, 20_000 gwei);
+    }
+
+    function testResetDailyLimits() public {
+        bob.mint(address(user1), 10 ether);
+
+        bytes memory data1 = _encodePermitDeposit(5 ether, 0.01 ether);
+        _transact(data1);
+
+        bytes memory data2 = _encodeWithdrawal(user1, 4 ether, 0 ether);
+        _transact(data2);
+
+        assertEq(pool.getLimitsFor(user1).dailyDepositCapUsage, 5 gwei);
+        assertEq(pool.getLimitsFor(user1).dailyWithdrawalCapUsage, 4 gwei);
+
+        pool.resetDailyLimits();
+
+        assertEq(pool.getLimitsFor(user1).dailyDepositCapUsage, 0);
+        assertEq(pool.getLimitsFor(user1).dailyWithdrawalCapUsage, 0);
+    }
+
+    function testSetOperatorManager() public {
+        assertEq(address(pool.operatorManager()), address(operatorManager));
+
+        IOperatorManager newOperatorManager = new MutableOperatorManager(user2, user3, "https://example.com");
+        pool.setOperatorManager(newOperatorManager);
+
+        assertEq(address(pool.operatorManager()), address(newOperatorManager));
     }
 
     function testPermitDeposit() public {
@@ -101,7 +182,7 @@ contract ZkBobPoolTest is Test {
         );
 
         // fork mainnet
-        vm.createSelectFork(forkRpcUrlMainnet);
+        vm.createSelectFork(forkRpcUrl, forkBlock);
 
         // create BOB-USDC 0.05% pool at Uniswap V3
         deal(usdc, address(this), 1e9);

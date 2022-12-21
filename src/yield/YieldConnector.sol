@@ -45,7 +45,7 @@ contract YieldConnector {
 
     function _delegate(address _impl, bytes memory _data) private returns (bytes memory) {
         (bool status, bytes memory data) = _impl.delegatecall(_data);
-        require(status, "YieldConnector: delegatecall failed with");
+        require(status, "YieldConnector: delegatecall failed");
         return data;
     }
 }

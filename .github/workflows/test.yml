@@ -47,6 +47,11 @@ jobs:
         with:
           submodules: recursive
 
+      - uses: actions/cache@v3
+        with:
+          path: "~/.foundry/cache/rpc"
+          key: "${{ runner.os }}-rpc-cache-v1"
+
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
@@ -62,3 +67,44 @@ jobs:
         run: |
           forge test -vvv
         id: test
+  coverage:
+    name: Foundry Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - uses: actions/cache@v3
+        with:
+          path: "~/.foundry/cache/rpc"
+          key: "${{ runner.os }}-rpc-cache-v1"
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Run Forge build
+        run: |
+          forge --version
+          forge build --sizes
+        id: build
+
+      - name: Run Forge coverage
+        run: |
+          forge coverage -vvv --report lcov --report summary
+        id: coverage
+
+      - name: Sanitize lcov report
+        run: |
+          sudo apt install lcov
+          lcov --remove ./lcov.info -o ./clean_lcov.info 'test/*' 'script/*' 'src/zkbob/verifiers/*'
+          lcov --list clean_lcov.info
+
+      - name: Report code coverage
+        uses: zgosalvez/github-actions-report-lcov@v2
+        with:
+          coverage-files: ./clean_lcov.info
+          artifact-name: solidity-coverage-report
+          working-directory: ./

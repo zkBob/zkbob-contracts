@@ -21,14 +21,17 @@ contract EIP1967Test is Test {
         target.increment();
         assertEq(target.value(), 1);
         assertEq(target.const(), 1);
+
+        assertEq(proxy.admin(), address(this));
+        assertEq(proxy.implementation(), address(impl));
     }
 
     function testProxyInitializaion() public {
         DummyImpl impl = new DummyImpl(1);
 
-        vm.expectEmit(false, false, false, false);
+        vm.expectEmit(false, false, false, true);
         emit AdminChanged(address(0), address(this));
-        vm.expectEmit(true, false, false, false);
+        vm.expectEmit(true, false, false, true);
         emit Upgraded(address(impl));
         EIP1967Proxy proxy =
             new EIP1967Proxy(address(this), address(impl), abi.encodeWithSelector(DummyImpl.initialize.selector));
@@ -46,14 +49,16 @@ contract EIP1967Test is Test {
 
         target.increment();
 
-        impl = new DummyImpl(2);
+        DummyImpl newImpl = new DummyImpl(2);
 
         assertEq(target.value(), 1);
         assertEq(target.const(), 1);
 
-        vm.expectEmit(true, false, false, false);
-        emit Upgraded(address(impl));
-        proxy.upgradeTo(address(impl));
+        assertEq(proxy.implementation(), address(impl));
+        vm.expectEmit(true, false, false, true);
+        emit Upgraded(address(newImpl));
+        proxy.upgradeTo(address(newImpl));
+        assertEq(proxy.implementation(), address(newImpl));
 
         assertEq(target.value(), 1);
         assertEq(target.const(), 2);
@@ -70,13 +75,27 @@ contract EIP1967Test is Test {
         vm.prank(user1);
         vm.expectRevert("EIP1967Admin: not an admin");
         proxy.upgradeTo(address(impl));
+        vm.prank(user1);
+        vm.expectRevert("EIP1967Admin: not an admin");
+        proxy.setAdmin(user1);
+    }
+
+    function testProxySetAdmin() public {
+        DummyImpl impl = new DummyImpl(1);
+        EIP1967Proxy proxy = new EIP1967Proxy(address(this), address(impl), "");
+
+        assertEq(proxy.admin(), address(this));
+        vm.expectEmit(false, false, false, true);
+        emit AdminChanged(address(this), user1);
+        proxy.setAdmin(user1);
+        assertEq(proxy.admin(), user1);
     }
 
     function testProxyUpgradeAndCall() public {
         EIP1967Proxy proxy = new EIP1967Proxy(address(this), address(0xdead), "");
         DummyImpl impl = new DummyImpl(1);
 
-        vm.expectEmit(true, false, false, false);
+        vm.expectEmit(true, false, false, true);
         emit Upgraded(address(impl));
         proxy.upgradeToAndCall(address(impl), abi.encodeWithSelector(DummyImpl.initialize.selector));
 

@@ -2,95 +2,132 @@
 
 pragma solidity 0.8.15;
 
-import "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
+import "@openzeppelin/contracts/mocks/ERC20Mock.sol";
 import "forge-std/Test.sol";
 import "./shared/Env.t.sol";
-import "./shared/EIP2470.t.sol";
 import "../src/BobToken.sol";
 import "../src/proxy/EIP1967Proxy.sol";
 import "./mocks/ERC677Receiver.sol";
 import "../src/BobVault.sol";
 import "../src/interfaces/ILegacyERC20.sol";
 import "../src/yield/AAVEYieldImplementation.sol";
+import "./shared/ForkTests.t.sol";
 
-contract BobVaultTest is Test, EIP2470Test {
+abstract contract AbstractBobVaultTest is Test {
     EIP1967Proxy bobProxy;
     EIP1967Proxy vaultProxy;
     BobToken bob;
     BobVault vault;
 
+    function _setUpBobVault() internal {
+        bobProxy = new EIP1967Proxy(address(this), mockImpl, "");
+        BobToken bobImpl = new BobToken(address(bobProxy));
+        bobProxy.upgradeTo(address(bobImpl));
+        bob = BobToken(address(bobProxy));
+
+        bob.updateMinter(address(this), true, true);
+
+        vault = new BobVault(address(bob));
+        vaultProxy = new EIP1967Proxy(address(this), address(vault), "");
+        vault = BobVault(address(vaultProxy));
+
+        assertEq(address(vault.bobToken()), address(bob));
+
+        vm.label(address(bob), "BOB");
+        vm.label(address(vault), "VAULT");
+    }
+}
+
+contract BobVaultTest is AbstractBobVaultTest {
+    IERC20 tokenA;
+    IERC20 tokenB;
+
+    function setUp() public {
+        _setUpBobVault();
+
+        tokenA = IERC20(new ERC20Mock("Mock Token A", "MA", address(this), 1_000_000 ether));
+        tokenB = IERC20(new ERC20Mock("Mock Token B", "MB", address(this), 1_000_000 ether));
+    }
+
+    function testAuthRights() public {
+        vm.startPrank(user1);
+
+        vm.expectRevert("Ownable: caller is not the owner");
+        vault.addCollateral(address(tokenA), BobVault.Collateral(0, 0, 0, address(0), 1000000, 0.01 ether, 0.01 ether));
+        vm.expectRevert("Ownable: caller is not the owner");
+        vault.setInvestAdmin(user2);
+        vm.expectRevert("Ownable: caller is not the owner");
+        vault.setYieldAdmin(user2);
+        vm.expectRevert("Ownable: caller is not the owner");
+        vault.setCollateralFees(address(tokenA), 0.01 ether, 0.01 ether);
+        vm.expectRevert("Ownable: caller is not the owner");
+        vault.enableCollateralYield(address(tokenA), address(0), 1_000_000 * 1e6, 1e6);
+        vm.expectRevert("Ownable: caller is not the owner");
+        vault.disableCollateralYield(address(tokenA));
+        vm.expectRevert("Ownable: caller is not the owner");
+        vault.updateCollateralYield(address(tokenA), 1_000_000 * 1e6, 1e6);
+        vm.expectRevert("Ownable: caller is not the owner");
+        vault.reclaim(user1, 1e6);
+        vm.expectRevert("Ownable: caller is not the owner");
+        vault.transferOwnership(user1);
+        vm.expectRevert("BobVault: not authorized");
+        vault.invest(address(tokenA));
+        vm.expectRevert("BobVault: not authorized");
+        vault.farm(address(tokenA));
+        vm.expectRevert("BobVault: not authorized");
+        vault.farmExtra(address(tokenA), "");
+
+        vm.stopPrank();
+
+        vault.setInvestAdmin(user2);
+        vault.setYieldAdmin(user3);
+
+        vm.prank(user2);
+        vm.expectRevert("BobVault: unsupported collateral");
+        vault.invest(address(tokenA));
+        vm.prank(user3);
+        vm.expectRevert("BobVault: unsupported collateral");
+        vault.farm(address(tokenA));
+        vm.prank(user3);
+        vm.expectRevert("BobVault: unsupported collateral");
+        vault.farmExtra(address(tokenA), "");
+    }
+
+    function testRoleUpdates() public {
+        assertEq(vaultProxy.admin(), address(this));
+        assertEq(vault.owner(), address(0));
+        assertEq(vault.investAdmin(), address(0));
+        assertEq(vault.yieldAdmin(), address(0));
+
+        vault.transferOwnership(user1);
+        vault.setInvestAdmin(user2);
+        vault.setYieldAdmin(user3);
+
+        assertEq(vaultProxy.admin(), address(this));
+        assertEq(vault.owner(), user1);
+        assertEq(vault.investAdmin(), user2);
+        assertEq(vault.yieldAdmin(), user3);
+    }
+}
+
+abstract contract AbstractBobVault3poolTest is AbstractBobVaultTest, AbstractForkTest {
     IERC20 usdc;
     IERC20 usdt;
     IERC20 dai;
 
     function setUp() public {
-        EIP1967Proxy bobProxy = new EIP1967Proxy(deployer, mockImpl, "");
-        BobToken bobImpl = new BobToken(address(bobProxy));
-        vm.prank(deployer);
-        bobProxy.upgradeTo(address(bobImpl));
-        bob = BobToken(address(bobProxy));
-        vm.prank(deployer);
-        bob.updateMinter(deployer, true, true);
+        vm.createSelectFork(forkRpcUrl, forkBlock);
 
-        vault = new BobVault(address(bob));
-        vaultProxy = new EIP1967Proxy(deployer, address(vault), "");
-        vault = BobVault(address(vaultProxy));
+        _setUpBobVault();
 
-        assertEq(address(vault.bobToken()), address(bob));
+        deal(address(usdc), address(this), 100_000_000 * 1e6);
+        deal(address(usdt), address(this), 100_000_000 * 1e6);
+        deal(address(dai), address(this), 100_000_000 ether);
 
-        vm.makePersistent(address(bobProxy), address(bobImpl));
-        vm.makePersistent(address(vaultProxy), address(vaultProxy.implementation()));
-
-        vm.label(address(bob), "BOB");
-        vm.label(address(vault), "VAULT");
-    }
-
-    function _forkMainnet() internal {
-        usdc = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
-        usdt = IERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7);
-        dai = IERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
-
-        vm.createSelectFork(forkRpcUrlMainnet);
-
-        _forkApprovals();
-
-        vm.label(address(usdc), "USDC");
-        vm.label(address(usdt), "USDT");
-        vm.label(address(dai), "DAI");
-    }
-
-    function _forkPolygon() internal {
-        usdc = IERC20(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
-        usdt = IERC20(0xc2132D05D31c914a87C6611C10748AEb04B58e8F);
-        dai = IERC20(0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063);
-
-        vm.createSelectFork(forkRpcUrlPolygon);
-
-        _forkApprovals();
-
-        vm.label(address(usdc), "USDC");
-        vm.label(address(usdt), "USDT");
-        vm.label(address(dai), "DAI");
-    }
-
-    function _forkOptimism() internal {
-        usdc = IERC20(0x7F5c764cBc14f9669B88837ca1490cCa17c31607);
-        usdt = IERC20(0x94b008aA00579c1307B0EF2c499aD98a8ce58e58);
-        dai = IERC20(0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1);
-
-        vm.createSelectFork(forkRpcUrlOptimism);
-
-        _forkApprovals();
-
-        vm.label(address(usdc), "USDC");
-        vm.label(address(usdt), "USDT");
-        vm.label(address(dai), "DAI");
-    }
-
-    function _forkApprovals() internal {
-        deal(address(usdc), deployer, 1e12 * 1e6);
-        deal(address(usdt), deployer, 1e12 * 1e6);
-        deal(address(dai), deployer, 1e12 * 1e18);
+        usdc.approve(address(vault), type(uint256).max);
+        ILegacyERC20(address(usdt)).approve(address(vault), type(uint256).max);
+        dai.approve(address(vault), type(uint256).max);
+        bob.approve(address(vault), type(uint256).max);
 
         vm.startPrank(user1);
         usdc.approve(address(vault), type(uint256).max);
@@ -99,24 +136,17 @@ contract BobVaultTest is Test, EIP2470Test {
         bob.approve(address(vault), type(uint256).max);
         vm.stopPrank();
 
-        vm.startPrank(deployer);
-        usdc.approve(address(vault), type(uint256).max);
-        ILegacyERC20(address(usdt)).approve(address(vault), type(uint256).max);
-        dai.approve(address(vault), type(uint256).max);
-        bob.approve(address(vault), type(uint256).max);
-        vm.stopPrank();
+        vm.label(address(usdc), "USDC");
+        vm.label(address(usdt), "USDT");
+        vm.label(address(dai), "DAI");
     }
 
     function _setup3pool(uint256 _bobAmount) internal {
-        _forkMainnet();
-
-        vm.startPrank(deployer);
-
         assertEq(vault.isCollateral(address(usdc)), false);
         assertEq(vault.isCollateral(address(usdt)), false);
         assertEq(vault.isCollateral(address(dai)), false);
-        vault.addCollateral(address(usdc), BobVault.Collateral(0, 0, 0, address(0), 1000000, 0.001 ether, 0.002 ether));
-        vault.addCollateral(address(usdt), BobVault.Collateral(0, 0, 0, address(0), 1000000, 0.003 ether, 0.004 ether));
+        vault.addCollateral(address(usdc), BobVault.Collateral(0, 0, 0, address(0), 1e6, 0.001 ether, 0.002 ether));
+        vault.addCollateral(address(usdt), BobVault.Collateral(0, 0, 0, address(0), 1e6, 0.003 ether, 0.004 ether));
         vault.addCollateral(address(dai), BobVault.Collateral(0, 0, 0, address(0), 1 ether, 0.005 ether, 0.006 ether));
         assertEq(vault.isCollateral(address(usdc)), true);
         assertEq(vault.isCollateral(address(usdt)), true);
@@ -124,25 +154,23 @@ contract BobVaultTest is Test, EIP2470Test {
 
         bob.mint(address(vault), _bobAmount);
 
-        deal(address(usdc), user1, 10000000);
-        deal(address(usdt), user1, 10000000);
+        deal(address(usdc), user1, 10 * 1e6);
+        deal(address(usdt), user1, 10 * 1e6);
         deal(address(dai), user1, 10 ether);
-
-        vm.stopPrank();
     }
 
     function test3pool() public {
         _setup3pool(100 ether);
         vm.startPrank(user1);
 
-        vault.buy(address(usdc), 10000000);
+        vault.buy(address(usdc), 10 * 1e6);
         assertEq(usdc.balanceOf(user1), 0);
-        assertEq(usdc.balanceOf(address(vault)), 10000000);
+        assertEq(usdc.balanceOf(address(vault)), 10 * 1e6);
         assertEq(bob.balanceOf(user1), 9.99 ether); // 0.1% inFee
 
-        vault.buy(address(usdt), 10000000);
+        vault.buy(address(usdt), 10 * 1e6);
         assertEq(usdt.balanceOf(user1), 0);
-        assertEq(usdt.balanceOf(address(vault)), 10000000);
+        assertEq(usdt.balanceOf(address(vault)), 10 * 1e6);
         assertEq(bob.balanceOf(user1), 9.99 ether + 9.97 ether); // 0.1% inFee + 0.3% inFee
 
         vault.buy(address(dai), 10 ether);
@@ -151,13 +179,13 @@ contract BobVaultTest is Test, EIP2470Test {
         assertEq(bob.balanceOf(user1), 9.99 ether + 9.97 ether + 9.95 ether); // 0.1% inFee + 0.3% inFee + 0.5% inFee
 
         vault.sell(address(usdc), 1 ether);
-        assertEq(usdc.balanceOf(user1), 998000);
-        assertEq(usdc.balanceOf(address(vault)), 9002000);
+        assertEq(usdc.balanceOf(user1), 998_000);
+        assertEq(usdc.balanceOf(address(vault)), 9_002_000);
         assertEq(bob.balanceOf(user1), 8.99 ether + 9.97 ether + 9.95 ether);
 
         vault.sell(address(usdt), 1 ether);
-        assertEq(usdt.balanceOf(user1), 996000);
-        assertEq(usdt.balanceOf(address(vault)), 9004000);
+        assertEq(usdt.balanceOf(user1), 996_000);
+        assertEq(usdt.balanceOf(address(vault)), 9_004_000);
         assertEq(bob.balanceOf(user1), 8.99 ether + 8.97 ether + 9.95 ether);
 
         vault.sell(address(dai), 1 ether);
@@ -165,18 +193,10 @@ contract BobVaultTest is Test, EIP2470Test {
         assertEq(dai.balanceOf(address(vault)), 9.006 ether);
         assertEq(bob.balanceOf(user1), 8.99 ether + 8.97 ether + 8.95 ether);
 
-        usdc.transfer(address(0xdead), usdc.balanceOf(user1));
-        ILegacyERC20(address(usdt)).transfer(address(0xdead), usdt.balanceOf(user1));
-        dai.transfer(address(0xdead), dai.balanceOf(user1));
-
-        vm.stopPrank();
-        vm.startPrank(deployer);
-
-        uint256 value = 1000000;
-        usdc.transfer(user1, value);
-
-        vm.stopPrank();
-        vm.startPrank(user1);
+        uint256 value = 1e6;
+        deal(address(usdc), user1, value);
+        deal(address(usdt), user1, 0);
+        deal(address(dai), user1, 0);
 
         vault.swap(address(usdc), address(usdt), value);
 
@@ -200,6 +220,7 @@ contract BobVaultTest is Test, EIP2470Test {
         value = value - value * 0.002 ether / 1 ether;
         assertEq(dai.balanceOf(user1), 0);
         assertEq(usdc.balanceOf(user1), value);
+        vm.stopPrank();
     }
 
     function testAmountEstimation() public {
@@ -217,11 +238,9 @@ contract BobVaultTest is Test, EIP2470Test {
         vm.expectRevert("BobVault: exceeds available liquidity");
         vault.getAmountIn(address(usdc), address(bob), 1e18 ether);
 
-        vm.startPrank(deployer);
-        vault.buy(address(usdc), 1e6 * 1e6);
-        vault.buy(address(usdt), 1e6 * 1e6);
-        vault.buy(address(dai), 1e6 ether);
-        vm.stopPrank();
+        vault.buy(address(usdc), 1_000_000 * 1e6);
+        vault.buy(address(usdt), 1_000_000 * 1e6);
+        vault.buy(address(dai), 1_000_000 ether);
 
         // bob -> collateral
         assertEq(vault.getAmountOut(address(bob), address(usdc), 100 ether), 99.8 * 1e6);
@@ -235,10 +254,10 @@ contract BobVaultTest is Test, EIP2470Test {
         vm.expectRevert("BobVault: insufficient liquidity for collateral");
         vault.getAmountIn(address(bob), address(usdc), 1e18 * 1e6);
 
-        assertEq(vault.stat(address(usdc)).required, 1e6 * 1e6 * 0.999);
+        assertEq(vault.stat(address(usdc)).required, 1_000_000 * 1e6 * 0.999);
         vm.expectRevert("BobVault: insufficient liquidity for collateral");
-        vault.getAmountIn(address(bob), address(usdc), 1e6 * 1e6 * 0.999 * 0.998 + 1);
-        vault.getAmountIn(address(bob), address(usdc), 1e6 * 1e6 * 0.999 * 0.998);
+        vault.getAmountIn(address(bob), address(usdc), 1_000_000 * 1e6 * 0.999 * 0.998 + 1);
+        vault.getAmountIn(address(bob), address(usdc), 1_000_000 * 1e6 * 0.999 * 0.998);
 
         // collateral -> collateral
         assertEq(vault.getAmountOut(address(usdc), address(usdt), 100 * 1e6), 99_500_400); // 0.1% + 0.4%
@@ -258,16 +277,15 @@ contract BobVaultTest is Test, EIP2470Test {
         vm.expectRevert("BobVault: insufficient liquidity for collateral");
         vault.getAmountIn(address(usdt), address(usdc), 1 ether);
 
-        assertEq(vault.stat(address(usdc)).required, 1e6 * 1e6 * 0.999);
+        assertEq(vault.stat(address(usdc)).required, 1_000_000 * 1e6 * 0.999);
         vm.expectRevert("BobVault: insufficient liquidity for collateral");
-        vault.getAmountIn(address(usdt), address(usdc), 1e6 * 1e6 * 0.999 * 0.998 + 1);
-        vault.getAmountIn(address(usdt), address(usdc), 1e6 * 1e6 * 0.999 * 0.998);
+        vault.getAmountIn(address(usdt), address(usdc), 1_000_000 * 1e6 * 0.999 * 0.998 + 1);
+        vault.getAmountIn(address(usdt), address(usdc), 1_000_000 * 1e6 * 0.999 * 0.998);
     }
 
     function testCollateralPause() public {
         _setup3pool(100 ether);
 
-        vm.startPrank(deployer);
         vault.buy(address(usdc), 10 * 1e6);
         vault.buy(address(usdt), 10 * 1e6);
         vault.buy(address(dai), 10 ether);
@@ -280,16 +298,13 @@ contract BobVaultTest is Test, EIP2470Test {
         vault.swap(address(usdt), address(dai), 1e6);
         vault.swap(address(dai), address(usdc), 1 ether);
         vault.swap(address(dai), address(usdt), 1 ether);
-        vm.stopPrank();
 
+        vm.prank(user1);
         vm.expectRevert("Ownable: caller is not the owner");
         vault.setCollateralFees(address(usdc), 0.001 ether, 1 ether);
-        vm.startPrank(deployer);
         vault.setCollateralFees(address(usdc), 0.001 ether, 1 ether);
         vault.setCollateralFees(address(usdt), 1 ether, 0.004 ether);
-        vm.stopPrank();
 
-        vm.startPrank(deployer);
         vault.buy(address(usdc), 10 * 1e6);
         vm.expectRevert("BobVault: collateral deposit suspended");
         vault.buy(address(usdt), 10 * 1e6);
@@ -307,7 +322,6 @@ contract BobVaultTest is Test, EIP2470Test {
         vm.expectRevert("BobVault: collateral withdrawal suspended");
         vault.swap(address(dai), address(usdc), 1 ether);
         vault.swap(address(dai), address(usdt), 1 ether);
-        vm.stopPrank();
     }
 
     function testBalanceAdjustments() public {
@@ -317,81 +331,123 @@ contract BobVaultTest is Test, EIP2470Test {
         assertEq(vault.stat(address(usdt)).farmed, 0);
         assertEq(vault.stat(address(dai)).farmed, 0);
 
-        vm.startPrank(deployer);
         vault.buy(address(usdc), 100 * 1e6);
         vault.buy(address(usdt), 100 * 1e6);
         vault.buy(address(dai), 100 ether);
-        vm.stopPrank();
 
         assertEq(vault.stat(address(usdc)).farmed, 0.1 * 1e6);
         assertEq(vault.stat(address(usdt)).farmed, 0.3 * 1e6);
         assertEq(vault.stat(address(dai)).farmed, 0.5 ether);
 
-        vm.startPrank(deployer);
         vault.give(address(usdc), 100 * 1e6);
         assertEq(vault.stat(address(usdc)).farmed, 0.1 * 1e6);
         usdc.transfer(address(vault), 1e6);
         assertEq(vault.stat(address(usdc)).farmed, 1.1 * 1e6);
 
-        assertGt(bob.balanceOf(address(vault)), 500 ether);
-        vault.reclaim(deployer, 1000 ether);
+        assertGt(bob.balanceOf(address(vault)), 700 ether);
+        assertEq(bob.balanceOf(user1), 0);
+        vault.reclaim(user1, 1000 ether);
         assertEq(bob.balanceOf(address(vault)), 0);
+        assertGt(bob.balanceOf(user1), 700 ether);
         vm.stopPrank();
     }
+}
 
-    function _getAToken(address _lendingPool, address _token) internal returns (IERC20) {
-        uint256[12] memory reserveData = ILendingPool(_lendingPool).getReserveData(_token);
-        // 7th slot for AAVE v2, 8th slot for AAVE v3
-        address aToken = address(uint160(reserveData[reserveData[7] <= type(uint16).max ? 8 : 7]));
+abstract contract AbstractBobVaultAAVETest is AbstractBobVaultTest, AbstractForkTest {
+    IERC20 usdc;
+    IERC20 usdt;
+    IERC20 dai;
 
-        return IERC20(aToken);
+    address lendingPool;
+
+    function setUp() public {
+        vm.createSelectFork(forkRpcUrl, forkBlock);
+
+        _setUpBobVault();
+
+        deal(address(usdc), address(this), 100_000_000 * 1e6);
+        deal(address(usdt), address(this), 100_000_000 * 1e6);
+        deal(address(dai), address(this), 100_000_000 ether);
+
+        usdc.approve(address(vault), type(uint256).max);
+        ILegacyERC20(address(usdt)).approve(address(vault), type(uint256).max);
+        dai.approve(address(vault), type(uint256).max);
+        bob.approve(address(vault), type(uint256).max);
+
+        vm.startPrank(user1);
+        usdc.approve(address(vault), type(uint256).max);
+        ILegacyERC20(address(usdt)).approve(address(vault), type(uint256).max);
+        dai.approve(address(vault), type(uint256).max);
+        bob.approve(address(vault), type(uint256).max);
+        vm.stopPrank();
+
+        vm.label(address(usdc), "USDC");
+        vm.label(address(usdt), "USDT");
+        vm.label(address(dai), "DAI");
     }
 
-    function _testAAVEIntegration(address _lendingPool) internal {
-        vm.startPrank(deployer);
-
+    function _setupAAVEYieldForUSDC() internal {
         vault.setYieldAdmin(user2);
 
-        AAVEYieldImplementation aImpl = new AAVEYieldImplementation(_lendingPool);
+        AAVEYieldImplementation aImpl = new AAVEYieldImplementation(lendingPool);
         vault.addCollateral(
-            address(usdc), BobVault.Collateral(0, 1e6 * 1e6, 1e6, address(aImpl), 1000000, 0.001 ether, 0.002 ether)
+            address(usdc), BobVault.Collateral(0, 1_000_000 * 1e6, 1e6, address(aImpl), 1e6, 0.001 ether, 0.002 ether)
+        );
+
+        bob.mint(address(vault), 100_000_000 ether);
+
+        deal(address(usdc), user1, 10_000_000 * 1e6);
+        vm.prank(user1);
+        vault.buy(address(usdc), 10_000_000 * 1e6);
+
+        vault.invest(address(usdc));
+
+        vm.warp(block.timestamp + 100 days);
+        vm.roll(block.number + 100 days / 12 seconds);
+
+        assertEq(usdc.balanceOf(address(vault)), 1_000_000 * 1e6);
+    }
+
+    function testAAVEIntegration() public {
+        vault.setYieldAdmin(user2);
+
+        AAVEYieldImplementation aImpl = new AAVEYieldImplementation(lendingPool);
+        vault.addCollateral(
+            address(usdc), BobVault.Collateral(0, 1_000_000 * 1e6, 1e6, address(aImpl), 1e6, 0.001 ether, 0.002 ether)
         );
         vault.addCollateral(
-            address(usdt), BobVault.Collateral(0, 1e6 * 1e6, 1e6, address(aImpl), 1000000, 0.003 ether, 0.004 ether)
+            address(usdt), BobVault.Collateral(0, 1_000_000 * 1e6, 1e6, address(aImpl), 1e6, 0.003 ether, 0.004 ether)
         );
         vault.addCollateral(
             address(dai),
-            BobVault.Collateral(0, 1e6 * 1 ether, 1 ether, address(aImpl), 1 ether, 0.005 ether, 0.006 ether)
+            BobVault.Collateral(0, 1_000_000 ether, 1 ether, address(aImpl), 1 ether, 0.005 ether, 0.006 ether)
         );
 
-        bob.mint(address(vault), 1e8 ether);
+        bob.mint(address(vault), 100_000_000 ether);
 
-        usdc.transfer(user1, 1e7 * 1e6);
-        ILegacyERC20(address(usdt)).transfer(user1, 1e7 * 1e6);
-        dai.transfer(user1, 1e7 ether);
+        deal(address(usdc), user1, 10_000_000 * 1e6);
+        deal(address(usdt), user1, 10_000_000 * 1e6);
+        deal(address(dai), user1, 10_000_000 ether);
 
-        vm.stopPrank();
         vm.startPrank(user1);
 
-        vault.buy(address(usdc), 1e7 * 1e6);
-        vault.buy(address(usdt), 1e7 * 1e6);
-        vault.buy(address(dai), 1e7 ether);
+        vault.buy(address(usdc), 10_000_000 * 1e6);
+        vault.buy(address(usdt), 10_000_000 * 1e6);
+        vault.buy(address(dai), 10_000_000 ether);
 
         vm.stopPrank();
-        vm.startPrank(deployer);
 
         vault.invest(address(usdc));
         vault.invest(address(usdt));
         vault.invest(address(dai));
 
-        assertEq(usdc.balanceOf(address(vault)), 1e6 * 1e6);
-        assertEq(usdt.balanceOf(address(vault)), 1e6 * 1e6);
-        assertEq(dai.balanceOf(address(vault)), 1e6 ether);
+        assertEq(usdc.balanceOf(address(vault)), 1_000_000 * 1e6);
+        assertEq(usdt.balanceOf(address(vault)), 1_000_000 * 1e6);
+        assertEq(dai.balanceOf(address(vault)), 1_000_000 ether);
 
         vm.warp(block.timestamp + 100 days);
         vm.roll(block.number + 100 days / 12 seconds);
 
-        vm.stopPrank();
         vm.startPrank(user2);
 
         deal(address(usdc), user2, 0);
@@ -404,74 +460,47 @@ contract BobVaultTest is Test, EIP2470Test {
         assertGt(usdc.balanceOf(user2), 1e6);
         assertGt(usdt.balanceOf(user2), 1e6);
         assertGt(dai.balanceOf(user2), 1 ether);
+        vm.expectRevert("YieldConnector: delegatecall failed");
+        vault.farmExtra(address(usdc), "");
 
         vm.stopPrank();
-        vm.startPrank(deployer);
 
         vault.disableCollateralYield(address(usdc));
         vault.disableCollateralYield(address(usdt));
         vault.disableCollateralYield(address(dai));
 
-        vm.stopPrank();
-
-        assertEq(_getAToken(_lendingPool, address(usdc)).balanceOf(address(vault)), 0);
-        assertEq(_getAToken(_lendingPool, address(usdt)).balanceOf(address(vault)), 0);
-        assertEq(_getAToken(_lendingPool, address(dai)).balanceOf(address(vault)), 0);
+        assertEq(_getAToken(address(usdc)).balanceOf(address(vault)), 0);
+        assertEq(_getAToken(address(usdt)).balanceOf(address(vault)), 0);
+        assertEq(_getAToken(address(dai)).balanceOf(address(vault)), 0);
     }
 
-    function _testAAVEYieldParamsUpdates(address _lendingPool) internal {
-        vm.startPrank(deployer);
-
-        vault.setYieldAdmin(user2);
-
-        AAVEYieldImplementation aImpl = new AAVEYieldImplementation(_lendingPool);
-        vault.addCollateral(
-            address(usdc), BobVault.Collateral(0, 1e6 * 1e6, 1e6, address(aImpl), 1000000, 0.001 ether, 0.002 ether)
-        );
-
-        bob.mint(address(vault), 1e8 ether);
-
-        usdc.transfer(user1, 1e7 * 1e6);
-
-        vm.stopPrank();
-        vm.startPrank(user1);
-
-        vault.buy(address(usdc), 1e7 * 1e6);
-
-        vm.stopPrank();
-        vm.startPrank(deployer);
-
-        vault.invest(address(usdc));
-
-        assertEq(usdc.balanceOf(address(vault)), 1e6 * 1e6);
-
-        vm.warp(block.timestamp + 100 days);
-        vm.roll(block.number + 100 days / 12 seconds);
+    function testAAVEYieldParamsUpdates() public {
+        _setupAAVEYieldForUSDC();
 
         BobVault.Stat memory stat = vault.stat(address(usdc));
-        assertGt(stat.total, (1e7 + 2) * 1e6);
+        assertGt(stat.total, 10_000_002 * 1e6);
         assertEq(stat.required, 9_990_001 * 1e6);
         assertGt(stat.farmed, 10_001 * 1e6);
 
-        uint256 investedAmount1 = _getAToken(_lendingPool, address(usdc)).balanceOf(address(vault));
+        uint256 investedAmount1 = _getAToken(address(usdc)).balanceOf(address(vault));
         assertGt(investedAmount1, 0);
 
         vault.updateCollateralYield(address(usdc), 100_000 * 1e6, 10 * 1e6);
 
-        uint256 investedAmount2 = _getAToken(_lendingPool, address(usdc)).balanceOf(address(vault));
+        uint256 investedAmount2 = _getAToken(address(usdc)).balanceOf(address(vault));
         assertGt(investedAmount2, investedAmount1);
 
         assertEq(usdc.balanceOf(address(vault)), 100_000 * 1e6);
 
         stat = vault.stat(address(usdc));
-        assertGt(stat.total, (1e7 + 2) * 1e6);
+        assertGt(stat.total, 10_000_002 * 1e6);
         assertEq(stat.required, 9_990_010 * 1e6);
         assertGt(stat.farmed, 10_001 * 1e6);
 
         vault.disableCollateralYield(address(usdc));
 
         stat = vault.stat(address(usdc));
-        assertGt(stat.total, (1e7 + 2) * 1e6);
+        assertGt(stat.total, 10_000_002 * 1e6);
         assertEq(stat.required, 9_990_000 * 1e6);
         assertGt(stat.farmed, 10_001 * 1e6);
 
@@ -484,42 +513,124 @@ contract BobVaultTest is Test, EIP2470Test {
 
         vm.stopPrank();
 
-        assertEq(_getAToken(_lendingPool, address(usdc)).balanceOf(address(vault)), 0);
+        assertEq(_getAToken(address(usdc)).balanceOf(address(vault)), 0);
     }
 
-    function testAAVEv2Mainnet() public {
-        _forkMainnet();
+    function testAAVEYieldEnabling() public {
+        _setupAAVEYieldForUSDC();
 
-        uint256 sid = vm.snapshot();
-        _testAAVEIntegration(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
-        vm.revertTo(sid);
-        _testAAVEYieldParamsUpdates(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
+        BobVault.Stat memory stat = vault.stat(address(usdc));
+        assertGt(stat.total, 10_000_002 * 1e6);
+        assertEq(stat.required, 9_990_001 * 1e6);
+        assertGt(stat.farmed, 10_001 * 1e6);
+        assertEq(usdc.balanceOf(address(vault)), 1_000_000 * 1e6);
+        assertGt(_getAToken(address(usdc)).balanceOf(address(vault)), 9_000_000 * 1e6);
+
+        vault.disableCollateralYield(address(usdc));
+
+        stat = vault.stat(address(usdc));
+        assertGt(stat.total, 10_000_002 * 1e6);
+        assertEq(stat.required, 9_990_000 * 1e6);
+        assertGt(stat.farmed, 10_001 * 1e6);
+        assertGt(usdc.balanceOf(address(vault)), 10_000_000 * 1e6);
+        assertEq(_getAToken(address(usdc)).balanceOf(address(vault)), 0);
+
+        address aImpl = address(new AAVEYieldImplementation(lendingPool));
+        vault.enableCollateralYield(address(usdc), aImpl, 100_000 * 1e6, 10 * 1e6);
+
+        stat = vault.stat(address(usdc));
+        assertGt(stat.total, 10_000_002 * 1e6);
+        assertEq(stat.required, 9_990_010 * 1e6);
+        assertGt(stat.farmed, 10_001 * 1e6);
+        assertEq(usdc.balanceOf(address(vault)), 100_000 * 1e6);
+        assertGt(_getAToken(address(usdc)).balanceOf(address(vault)), 9_900_000 * 1e6);
     }
 
-    function testAAVEv2Polygon() public {
-        _forkPolygon();
+    function testAAVEWithdrawalOnDemand() public {
+        _setupAAVEYieldForUSDC();
 
-        uint256 sid = vm.snapshot();
-        _testAAVEIntegration(0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf);
-        vm.revertTo(sid);
-        _testAAVEYieldParamsUpdates(0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf);
+        BobVault.Stat memory stat = vault.stat(address(usdc));
+        assertGt(stat.total, 10_000_000 * 1e6);
+        assertEq(usdc.balanceOf(address(vault)), 1_000_000 * 1e6);
+
+        vm.prank(user1);
+        vault.sell(address(usdc), 100_000 ether);
+
+        stat = vault.stat(address(usdc));
+        assertGt(stat.total, 9_900_000 * 1e6);
+        assertEq(usdc.balanceOf(address(vault)), 900_200 * 1e6);
+
+        vm.prank(user1);
+        vault.sell(address(usdc), 1_100_000 ether);
+
+        stat = vault.stat(address(usdc));
+        assertGt(stat.total, 8_800_000 * 1e6);
+        assertEq(usdc.balanceOf(address(vault)), 1_000_000 * 1e6);
+
+        vm.prank(user1);
+        vault.sell(address(usdc), 8_000_000 ether);
+
+        stat = vault.stat(address(usdc));
+        assertGt(stat.total, 800_000 * 1e6);
+        assertGt(usdc.balanceOf(address(vault)), 800_000 * 1e6);
+        assertLt(usdc.balanceOf(address(vault)), 900_000 * 1e6);
+
+        assertEq(_getAToken(address(usdc)).balanceOf(address(vault)), 0);
     }
 
-    function testAAVEv3Polygon() public {
-        _forkPolygon();
+    function _getAToken(address _token) internal returns (IERC20) {
+        uint256[12] memory reserveData = ILendingPool(lendingPool).getReserveData(_token);
+        // 7th slot for AAVE v2, 8th slot for AAVE v3
+        address aToken = address(uint160(reserveData[reserveData[7] <= type(uint16).max ? 8 : 7]));
 
-        uint256 sid = vm.snapshot();
-        _testAAVEIntegration(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
-        vm.revertTo(sid);
-        _testAAVEYieldParamsUpdates(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
+        return IERC20(aToken);
     }
+}
 
-    function testAAVEv3Optimism() public {
-        _forkOptimism();
+contract BobVault3PoolTest is AbstractBobVault3poolTest, AbstractMainnetForkTest {
+    constructor() {
+        usdc = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
+        usdt = IERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7);
+        dai = IERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
+    }
+}
 
-        uint256 sid = vm.snapshot();
-        _testAAVEIntegration(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
-        vm.revertTo(sid);
-        _testAAVEYieldParamsUpdates(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
+contract BobVaultAAVEv2MainnetTest is AbstractBobVaultAAVETest, AbstractMainnetForkTest {
+    constructor() {
+        usdc = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
+        usdt = IERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7);
+        dai = IERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
+
+        lendingPool = address(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
+    }
+}
+
+contract BobVaultAAVEv2PolygonTest is AbstractBobVaultAAVETest, AbstractPolygonForkTest {
+    constructor() {
+        usdc = IERC20(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
+        usdt = IERC20(0xc2132D05D31c914a87C6611C10748AEb04B58e8F);
+        dai = IERC20(0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063);
+
+        lendingPool = address(0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf);
+    }
+}
+
+contract BobVaultAAVEv3PolygonTest is AbstractBobVaultAAVETest, AbstractPolygonForkTest {
+    constructor() {
+        usdc = IERC20(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
+        usdt = IERC20(0xc2132D05D31c914a87C6611C10748AEb04B58e8F);
+        dai = IERC20(0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063);
+
+        lendingPool = address(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
+    }
+}
+
+contract BobVaultAAVEv3OptimismTest is AbstractBobVaultAAVETest, AbstractOptimismForkTest {
+    constructor() {
+        usdc = IERC20(0x7F5c764cBc14f9669B88837ca1490cCa17c31607);
+        usdt = IERC20(0x94b008aA00579c1307B0EF2c499aD98a8ce58e58);
+        dai = IERC20(0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1);
+
+        lendingPool = address(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
     }
 }
