@@ -32,6 +32,9 @@ abstract contract ERC20Permit is IERC20Permit, BaseERC20, EIP712 {
      * @dev Allows to spend holder's unlimited amount by the specified spender according to EIP2612.
      * The function can be called by anyone, but requires having allowance parameters
      * signed by the holder according to EIP712.
+     * Note: call to permit can be executed in the front-running transaction sent by other party,
+     * contracts using permit/receiveWithPermit are advised to implement necessary fallbacks for failing permit calls,
+     * avoiding entire transaction failures if possible.
      * @param _holder The holder's address.
      * @param _spender The spender's address.
      * @param _value Allowance value to set as a result of the call.
@@ -59,6 +62,9 @@ abstract contract ERC20Permit is IERC20Permit, BaseERC20, EIP712 {
 
     /**
      * @dev Cheap shortcut for making sequential calls to permit() + transferFrom() functions.
+     * Note: signatures from receiveWithPermit can be re-used in the front-running permit transaction sent by other party,
+     * contracts using permit/receiveWithPermit are advised to implement necessary fallbacks for failing
+     * receiveWithPermit calls, avoiding entire transaction failures if possible.
      */
     function receiveWithPermit(
         address _holder,
@@ -76,28 +82,9 @@ abstract contract ERC20Permit is IERC20Permit, BaseERC20, EIP712 {
         // we don't make calls to _approve to avoid unnecessary storage writes
         // however, emitting ERC20 events is still desired
         emit Approval(_holder, msg.sender, _value);
-        emit Approval(_holder, msg.sender, 0);
 
+        _approve(_holder, msg.sender, 0);
         _transfer(_holder, msg.sender, _value);
-    }
-
-    /**
-     * @dev Salted permit modification.
-     */
-    function saltedPermit(
-        address _holder,
-        address _spender,
-        uint256 _value,
-        uint256 _deadline,
-        bytes32 _salt,
-        uint8 _v,
-        bytes32 _r,
-        bytes32 _s
-    )
-        external
-    {
-        _checkSaltedPermit(_holder, _spender, _value, _deadline, _salt, _v, _r, _s);
-        _approve(_holder, _spender, _value);
     }
 
     /**
@@ -120,8 +107,8 @@ abstract contract ERC20Permit is IERC20Permit, BaseERC20, EIP712 {
         // we don't make calls to _approve to avoid unnecessary storage writes
         // however, emitting ERC20 events is still desired
         emit Approval(_holder, msg.sender, _value);
-        emit Approval(_holder, msg.sender, 0);
 
+        _approve(_holder, msg.sender, 0);
         _transfer(_holder, msg.sender, _value);
     }
 
