@@ -41,6 +41,8 @@ contract UniswapV3Seller is ITokenSeller {
     /**
      * @dev Sells tokens for ETH.
      * Prior to calling this function, contract balance of token0 should be greater than or equal to the sold amount.
+     * Note: this implementation does not include any slippage/sandwich protection,
+     * users are strongly discouraged from using this contract for exchanging significant amounts.
      * @param _receiver native ETH receiver.
      * @param _amount amount of tokens to sell.
      * @return (received eth amount, refunded token amount).
