@@ -14,8 +14,9 @@ import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/BobToken.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
 import "../../src/utils/UniswapV3Seller.sol";
+import "../shared/ForkTests.t.sol";
 
-contract ZkBobPoolTest is Test {
+contract ZkBobPoolTest is AbstractMainnetForkTest {
     uint256 private constant initialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
 
     ZkBobPool pool;
@@ -101,7 +102,7 @@ contract ZkBobPoolTest is Test {
         );
 
         // fork mainnet
-        vm.createSelectFork(forkRpcUrlMainnet, forkBlockMainnet);
+        vm.createSelectFork(forkRpcUrl, forkBlock);
 
         // create BOB-USDC 0.05% pool at Uniswap V3
         deal(usdc, address(this), 1e9);
