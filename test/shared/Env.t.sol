@@ -22,8 +22,3 @@ uint256 constant forkBlockPolygon = 37000000;
 string constant forkRpcUrlPolygon = "https://polygon-rpc.com";
 uint256 constant forkBlockOptimism = 52000000;
 string constant forkRpcUrlOptimism = "https://1rpc.io/op";
-
-address constant uniV3Router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
-address constant uniV3Quoter = 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6;
-address constant uniV3Positions = 0xC36442b4a4522E871399CD717aBDD847Ab11FE88;
-address constant usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
