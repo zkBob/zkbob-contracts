@@ -32,6 +32,9 @@ abstract contract ERC20Permit is IERC20Permit, BaseERC20, EIP712 {
      * @dev Allows to spend holder's unlimited amount by the specified spender according to EIP2612.
      * The function can be called by anyone, but requires having allowance parameters
      * signed by the holder according to EIP712.
+     * Note: call to permit can be executed in the front-running transaction sent by other party,
+     * contracts using permit/receiveWithPermit are advised to implement necessary fallbacks for failing permit calls,
+     * avoiding entire transaction failures if possible.
      * @param _holder The holder's address.
      * @param _spender The spender's address.
      * @param _value Allowance value to set as a result of the call.
@@ -59,6 +62,9 @@ abstract contract ERC20Permit is IERC20Permit, BaseERC20, EIP712 {
 
     /**
      * @dev Cheap shortcut for making sequential calls to permit() + transferFrom() functions.
+     * Note: signatures from receiveWithPermit can be re-used in the front-running permit transaction sent by other party,
+     * contracts using permit/receiveWithPermit are advised to implement necessary fallbacks for failing
+     * receiveWithPermit calls, avoiding entire transaction failures if possible.
      */
     function receiveWithPermit(
         address _holder,
