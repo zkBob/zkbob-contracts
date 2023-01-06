@@ -12,21 +12,21 @@ abstract contract AbstractForkTest is Test {
 
 abstract contract AbstractMainnetForkTest is AbstractForkTest {
     constructor() {
-        forkRpcUrl = forkRpcUrlMainnet;
-        forkBlock = forkBlockMainnet;
+        forkRpcUrl = vm.envOr("FORK_RPC_URL_MAINNET", forkRpcUrlMainnet);
+        forkBlock = vm.envOr("FORK_BLOCK_NUMBER_MAINNET", forkBlockMainnet);
     }
 }
 
 abstract contract AbstractPolygonForkTest is AbstractForkTest {
     constructor() {
-        forkRpcUrl = forkRpcUrlPolygon;
-        forkBlock = forkBlockPolygon;
+        forkRpcUrl = vm.envOr("FORK_RPC_URL_POLYGON", forkRpcUrlPolygon);
+        forkBlock = vm.envOr("FORK_BLOCK_NUMBER_POLYGON", forkBlockPolygon);
     }
 }
 
 abstract contract AbstractOptimismForkTest is AbstractForkTest {
     constructor() {
-        forkRpcUrl = forkRpcUrlOptimism;
-        forkBlock = forkBlockOptimism;
+        forkRpcUrl = vm.envOr("FORK_RPC_URL_OPTIMISM", forkRpcUrlOptimism);
+        forkBlock = vm.envOr("FORK_BLOCK_NUMBER_OPTIMISM", forkBlockOptimism);
     }
 }
