@@ -369,7 +369,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
     function directDeposit(address _fallbackUser, uint256 _amount, bytes memory _rawZkAddress) external {
         IERC20(token).safeTransferFrom(msg.sender, address(this), _amount);
-        _recordDirectDeposit(_fallbackUser, _amount, _rawZkAddress);
+        _recordDirectDeposit(msg.sender, _fallbackUser, _amount, _rawZkAddress);
     }
 
     function onTokenTransfer(address _from, uint256 _value, bytes calldata _data) external returns (bool) {
@@ -377,7 +377,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
         (address fallbackUser, bytes memory rawZkAddress) = abi.decode(_data, (address, bytes));
 
-        _recordDirectDeposit(fallbackUser, _value, rawZkAddress);
+        _recordDirectDeposit(_from, fallbackUser, _value, rawZkAddress);
 
         return true;
     }
@@ -419,7 +419,14 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         emit RefundDirectDeposit(_index, user, amount);
     }
 
-    function _recordDirectDeposit(address _fallbackUser, uint256 _amount, bytes memory _rawZkAddress) internal {
+    function _recordDirectDeposit(
+        address _sender,
+        address _fallbackUser,
+        uint256 _amount,
+        bytes memory _rawZkAddress
+    )
+        internal
+    {
         // TODO do something about remaining deposit dust (_amount % 1_000_000_000)
         require(_fallbackUser != address(0), "ZkBobPool: fallback user is zero");
 
@@ -430,7 +437,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             depositAmount -= fee;
         }
 
-        _checkDirectDepositLimits(msg.sender, depositAmount);
+        _checkDirectDepositLimits(_sender, depositAmount);
 
         ZkAddress.ZkAddress memory zkAddress = ZkAddress.parseZkAddress(_rawZkAddress, uint24(pool_id));
 
@@ -448,7 +455,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         uint256 nonce = directDepositNonce++;
         directDeposits[nonce] = dd;
 
-        emit SubmitDirectDeposit(msg.sender, nonce, _fallbackUser, zkAddress, depositAmount);
+        emit SubmitDirectDeposit(_sender, nonce, _fallbackUser, zkAddress, depositAmount);
     }
 
     /**
