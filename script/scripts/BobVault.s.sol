@@ -38,7 +38,9 @@ contract DeployBobVault is Script {
                     yield: yield,
                     price: vaultCollateralPrice,
                     inFee: vaultCollateralInFee,
-                    outFee: vaultCollateralOutFee
+                    outFee: vaultCollateralOutFee,
+                    maxBalance: type(uint128).max,
+                    maxInvested: type(uint128).max
                 })
             );
 

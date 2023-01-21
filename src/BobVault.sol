@@ -33,6 +33,8 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         uint128 price; // X tokens / 1 bob
         uint64 inFee; // fee for TOKEN->BOB buys
         uint64 outFee; // fee for BOB->TOKEN sells
+        uint256 maxBalance; // limit on the amount of the specific collateral
+        uint256 maxInvested; // limit on the amount of the specific collateral subject to investment
     }
 
     struct Stat {
@@ -43,8 +45,9 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
 
     event AddCollateral(address indexed token, uint128 price);
     event UpdateFees(address indexed token, uint64 inFee, uint64 outFee);
-    event EnableYield(address indexed token, address indexed yield, uint128 buffer, uint96 dust);
-    event UpdateYield(address indexed token, address indexed yield, uint128 buffer, uint96 dust);
+    event UpdateMaxBalance(address indexed token, uint256 maxBalance);
+    event EnableYield(address indexed token, address indexed yield, uint128 buffer, uint96 dust, uint256 maxInvested);
+    event UpdateYield(address indexed token, address indexed yield, uint128 buffer, uint96 dust, uint256 maxInvested);
     event DisableYield(address indexed token, address indexed yield);
 
     event Invest(address indexed token, address indexed yield, uint256 amount);
@@ -106,12 +109,18 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         require(_collateral.inFee <= MAX_FEE, "BobVault: invalid inFee");
         require(_collateral.outFee <= MAX_FEE, "BobVault: invalid outFee");
 
-        emit UpdateFees(_token, _collateral.inFee, _collateral.outFee);
+        require(_collateral.maxBalance <= type(uint128).max, "BobVault: max balance too large");
 
-        (token.price, token.inFee, token.outFee) = (_collateral.price, _collateral.inFee, _collateral.outFee);
+        emit UpdateFees(_token, _collateral.inFee, _collateral.outFee);
+        emit UpdateMaxBalance(_token, _collateral.maxBalance);
+
+        (token.price, token.inFee, token.outFee, token.maxBalance) =
+            (_collateral.price, _collateral.inFee, _collateral.outFee, _collateral.maxBalance);
 
         if (_collateral.yield != address(0)) {
-            _enableCollateralYield(_token, _collateral.yield, _collateral.buffer, _collateral.dust);
+            _enableCollateralYield(
+                _token, _collateral.yield, _collateral.buffer, _collateral.dust, _collateral.maxInvested
+            );
         }
 
         emit AddCollateral(_token, _collateral.price);
@@ -126,13 +135,23 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
      * @param _yield address of the yield provider contract.
      * @param _buffer amount of non-invested collateral.
      * @param _dust small amount of non-withdrawable yield.
+     * @param _maxInvested max amount to be invested.
      */
-    function enableCollateralYield(address _token, address _yield, uint128 _buffer, uint96 _dust) external onlyOwner {
+    function enableCollateralYield(
+        address _token,
+        address _yield,
+        uint128 _buffer,
+        uint96 _dust,
+        uint256 _maxInvested
+    )
+        external
+        onlyOwner
+    {
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
         require(token.yield == address(0), "BobVault: yield already enabled");
 
-        _enableCollateralYield(_token, _yield, _buffer, _dust);
+        _enableCollateralYield(_token, _yield, _buffer, _dust, _maxInvested);
     }
 
     /**
@@ -141,18 +160,27 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
      * @param _token address of the collateral token.
      * @param _buffer amount of non-invested collateral.
      * @param _dust small amount of non-withdrawable yield.
+     * @param _maxInvested max amount to be invested.
      */
-    function updateCollateralYield(address _token, uint128 _buffer, uint96 _dust) external onlyOwner {
+    function updateCollateralYield(
+        address _token,
+        uint128 _buffer,
+        uint96 _dust,
+        uint256 _maxInvested
+    )
+        external
+        onlyOwner
+    {
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
         address yield = token.yield;
         require(yield != address(0), "BobVault: yield not enabled");
 
-        (token.buffer, token.dust) = (_buffer, _dust);
+        (token.buffer, token.dust, token.maxInvested) = (_buffer, _dust, _maxInvested);
 
-        _investExcess(_token, yield, _buffer);
+        _investExcess(_token, yield, _buffer, _maxInvested);
 
-        emit UpdateYield(_token, yield, _buffer, _dust);
+        emit UpdateYield(_token, yield, _buffer, _dust, _maxInvested);
     }
 
     /**
@@ -162,18 +190,27 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
      * @param _yield address of the yield provider contract.
      * @param _buffer amount of non-invested collateral.
      * @param _dust small amount of non-withdrawable yield.
+     * @param _maxInvested max amount to be invested.
      */
-    function _enableCollateralYield(address _token, address _yield, uint128 _buffer, uint96 _dust) internal {
+    function _enableCollateralYield(
+        address _token,
+        address _yield,
+        uint128 _buffer,
+        uint96 _dust,
+        uint256 _maxInvested
+    )
+        internal
+    {
         Collateral storage token = collateral[_token];
 
         require(Address.isContract(_yield), "BobVault: yield not a contract");
 
-        (token.buffer, token.dust, token.yield) = (_buffer, _dust, _yield);
+        (token.buffer, token.dust, token.yield, token.maxInvested) = (_buffer, _dust, _yield, _maxInvested);
         _delegateInitialize(_yield, _token);
 
-        _investExcess(_token, _yield, _buffer);
+        _investExcess(_token, _yield, _buffer, _maxInvested);
 
-        emit EnableYield(_token, _yield, _buffer, _dust);
+        emit EnableYield(_token, _yield, _buffer, _dust, _maxInvested);
     }
 
     /**
@@ -217,6 +254,23 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         (token.inFee, token.outFee) = (_inFee, _outFee);
 
         emit UpdateFees(_token, _inFee, _outFee);
+    }
+
+    /**
+     * @dev Updates max balance of the particular collateral.
+     * Callable only by the contract owner / proxy admin.
+     * Can only be called on already whitelisted collaterals.
+     * @param _token address of the collateral token.
+     * @param _maxBalance new max balance of the particular collateral.
+     */
+    function setMaxBalance(address _token, uint256 _maxBalance) external onlyOwner {
+        Collateral storage token = collateral[_token];
+        require(token.price > 0, "BobVault: unsupported collateral");
+        require(_maxBalance <= type(uint128).max, "BobVault: max balance too large");
+
+        token.maxBalance = _maxBalance;
+
+        emit UpdateMaxBalance(_token, _maxBalance);
     }
 
     /**
@@ -371,7 +425,7 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         uint256 sellAmount = _amount - fee;
         uint256 buyAmount = sellAmount * 1 ether / token.price;
         unchecked {
-            require(token.balance + sellAmount <= type(uint128).max, "BobVault: amount too large");
+            require(token.balance + sellAmount <= token.maxBalance, "BobVault: exceeds max balance");
             token.balance += uint128(sellAmount);
         }
 
@@ -443,7 +497,7 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         uint256 fee = _amount * uint256(inToken.inFee) / 1 ether;
         uint256 sellAmount = _amount - fee;
         unchecked {
-            require(inToken.balance + sellAmount <= type(uint128).max, "BobVault: amount too large");
+            require(inToken.balance + sellAmount <= inToken.maxBalance, "BobVault: exceeds max balance");
             inToken.balance += uint128(sellAmount);
         }
         uint256 bobAmount = sellAmount * 1 ether / inToken.price;
@@ -478,7 +532,7 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         Collateral storage token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
 
-        _investExcess(_token, token.yield, token.buffer);
+        _investExcess(_token, token.yield, token.buffer, token.maxInvested);
     }
 
     /**
@@ -486,13 +540,20 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
      * Delegate-calls invest function on the yield provider contract.
      * @param _token address of collateral to invest.
      */
-    function _investExcess(address _token, address _yield, uint256 _buffer) internal {
+    function _investExcess(address _token, address _yield, uint256 _buffer, uint256 _maxInvested) internal {
         uint256 balance = IERC20(_token).balanceOf(address(this));
 
         if (balance > _buffer) {
             uint256 value = balance - _buffer;
-            _delegateInvest(_yield, _token, value);
-            emit Invest(_token, _yield, value);
+
+            uint256 invested = _delegateInvestedAmount(_yield, _token);
+            if (invested < _maxInvested) {
+                if (value > _maxInvested - invested) {
+                    value = _maxInvested - invested;
+                }
+                _delegateInvest(_yield, _token, value);
+                emit Invest(_token, _yield, value);
+            }
         }
     }
 
