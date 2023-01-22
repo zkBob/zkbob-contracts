@@ -338,6 +338,8 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             batch_deposit_pub[2 * i + 1] = uint256(bytes32(diversifier) | bytes32(uint256(deposit)));
 
             dd.status = DirectDepositStatus.Completed;
+
+            total += deposit;
         }
         batch_deposit_pub[32] = _out_commit;
 
