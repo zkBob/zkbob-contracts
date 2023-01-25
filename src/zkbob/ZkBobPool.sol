@@ -356,7 +356,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         require(tree_verifier.verifyProof(tree_pub, _tree_proof), "ZkBobPool: bad tree proof");
 
         _pool_index += 128;
-        roots[_pool_index] = _tree_root_after();
+        roots[_pool_index] = _root_after;
         bytes memory message; // TODO
         assembly {
             message := batch_deposit_pub
