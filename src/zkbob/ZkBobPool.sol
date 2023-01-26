@@ -359,8 +359,8 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         roots[_pool_index] = _root_after;
         bytes memory message; // TODO
         assembly {
-            message := batch_deposit_pub
-            mstore(message, mul(64, calldataload(_indices.offset)))
+            message := sub(batch_deposit_pub, 32)
+            mstore(message, mul(64, _indices.length))
         }
         bytes32 message_hash = keccak256(message);
         bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));

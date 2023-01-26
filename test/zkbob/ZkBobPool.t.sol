@@ -25,9 +25,23 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
     address constant uniV3Positions = 0xC36442b4a4522E871399CD717aBDD847Ab11FE88;
     address constant usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
 
+    bytes constant zkAddress = "QsnTijXekjRm9hKcq5kLNPsa6P4HtMRrc3RxVx3jsLHeo2AiysYxVJP86mriHfN";
+
     ZkBobPool pool;
     BobToken bob;
     IOperatorManager operatorManager;
+
+    event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
+
+    event SubmitDirectDeposit(
+        address indexed sender,
+        uint256 indexed nonce,
+        address fallbackUser,
+        ZkAddress.ZkAddress zkAddress,
+        uint64 deposit
+    );
+    event RefundDirectDeposit(uint256 indexed nonce, address receiver, uint256 amount);
+    event CompleteDirectDepositBatch(uint256 indexed treeIndex, uint256[] indices);
 
     function setUp() public {
         EIP1967Proxy bobProxy = new EIP1967Proxy(address(this), mockImpl, "");
@@ -300,6 +314,88 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         _transactReverted(data3, "ZkBobPool: incorrect deposit amounts");
     }
 
+    function _setUpDD() internal {
+        deal(address(bob), user1, 100 ether);
+        deal(address(bob), user2, 100 ether);
+
+        pool.setLimits(1, 2_000_000 ether, 200_000 ether, 200_000 ether, 20_000 ether, 20_000 ether, 25 ether, 10 ether);
+        address[] memory users = new address[](1);
+        users[0] = user1;
+        pool.setUsersTier(1, users);
+
+        pool.setDirectDepositFee(0.1 gwei);
+    }
+
+    function testDirectDepositSubmit() public {
+        _setUpDD();
+
+        vm.prank(user2);
+        vm.expectRevert("ZkBobAccounting: single direct deposit cap exceeded");
+        bob.transferAndCall(address(pool), 10 ether, abi.encode(user2, zkAddress));
+
+        vm.prank(user1);
+        vm.expectRevert("ZkBobPool: direct deposit amount is too low");
+        bob.transferAndCall(address(pool), 0.01 ether, abi.encode(user2, zkAddress));
+
+        vm.prank(user1);
+        vm.expectRevert(ZkAddress.InvalidZkAddressLength.selector);
+        bob.transferAndCall(address(pool), 10 ether, abi.encode(user2, "invalid"));
+
+        vm.prank(user1);
+        vm.expectRevert("ZkBobAccounting: single direct deposit cap exceeded");
+        bob.transferAndCall(address(pool), 15 ether, abi.encode(user2, zkAddress));
+
+        vm.expectEmit(true, true, false, true);
+        emit SubmitDirectDeposit(user1, 0, user2, ZkAddress.parseZkAddress(zkAddress, 0), 9.9 gwei);
+        vm.prank(user1);
+        bob.transferAndCall(address(pool), 10 ether, abi.encode(user2, zkAddress));
+
+        vm.expectEmit(true, true, false, true);
+        emit SubmitDirectDeposit(user1, 1, user2, ZkAddress.parseZkAddress(zkAddress, 0), 9.9 gwei);
+        vm.prank(user1);
+        bob.transferAndCall(address(pool), 10 ether, abi.encode(user2, zkAddress));
+
+        vm.prank(user1);
+        vm.expectRevert("ZkBobAccounting: daily user direct deposit cap exceeded");
+        bob.transferAndCall(address(pool), 10 ether, abi.encode(user2, zkAddress));
+
+        for (uint256 i = 0; i < 2; i++) {
+            ZkBobPool.DirectDeposit memory deposit;
+            (deposit.user, deposit.amount, deposit.deposit, deposit.fee,, deposit.status,,) = pool.directDeposits(i);
+            assertEq(deposit.user, user2);
+            assertEq(deposit.amount, 10 ether);
+            assertEq(deposit.deposit, 9.9 gwei);
+            assertEq(deposit.fee, 0.1 gwei);
+            assertEq(uint8(deposit.status), uint8(ZkBobPool.DirectDepositStatus.Pending));
+        }
+    }
+
+    function testAppenDirectDeposits() public {
+        _setUpDD();
+
+        vm.prank(user1);
+        bob.transferAndCall(address(pool), 10 ether, abi.encode(user2, zkAddress));
+
+        vm.prank(user1);
+        bob.transferAndCall(address(pool), 10 ether, abi.encode(user2, zkAddress));
+
+        uint256[] memory indices = new uint256[](2);
+        indices[0] = 0;
+        indices[1] = 1;
+        vm.expectEmit(true, false, false, true);
+        bytes memory message = abi.encode(
+            0xefe3e4b9b0a0e53e5b66ed19ad100afe5289ea732bfd5ac002969523f26e6f2f,
+            0xda9ee1b1b651c87a76c20000000000000000000000000000000000024e160300,
+            0xefe3e4b9b0a0e53e5b66ed19ad100afe5289ea732bfd5ac002969523f26e6f2f,
+            0xda9ee1b1b651c87a76c20000000000000000000000000000000000024e160300
+        );
+        emit Message(128, bytes32(0), message);
+        vm.expectEmit(true, false, false, true);
+        emit CompleteDirectDepositBatch(128, indices);
+        vm.prank(user2);
+        pool.appendDirectDeposits(_randFR(), indices, _randFR(), _randProof(), _randProof());
+    }
+
     function _encodePermitDeposit(int256 _amount, uint256 _fee) internal returns (bytes memory) {
         uint256 expiry = block.timestamp + 1 hours;
         bytes32 nullifier = bytes32(_randFR());
@@ -410,5 +506,9 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
     function _randFR() private returns (uint256) {
         return uint256(keccak256(abi.encode(gasleft())))
             % 21888242871839275222246405745257275088696311157297823662689037894645226208583;
+    }
+
+    function _randProof() private returns (uint256[8] memory) {
+        return [_randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR()];
     }
 }
