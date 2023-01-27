@@ -369,9 +369,16 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         emit CompleteDirectDepositBatch(_pool_index, _indices);
     }
 
-    function directDeposit(address _fallbackUser, uint256 _amount, bytes memory _rawZkAddress) external {
+    function directDeposit(
+        address _fallbackUser,
+        uint256 _amount,
+        bytes memory _rawZkAddress
+    )
+        external
+        returns (uint256)
+    {
         IERC20(token).safeTransferFrom(msg.sender, address(this), _amount);
-        _recordDirectDeposit(msg.sender, _fallbackUser, _amount, _rawZkAddress);
+        return _recordDirectDeposit(msg.sender, _fallbackUser, _amount, _rawZkAddress);
     }
 
     function onTokenTransfer(address _from, uint256 _value, bytes calldata _data) external returns (bool) {
@@ -428,6 +435,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         bytes memory _rawZkAddress
     )
         internal
+        returns (uint256 nonce)
     {
         // TODO do something about remaining deposit dust (_amount % 1_000_000_000)
         require(_fallbackUser != address(0), "ZkBobPool: fallback user is zero");
@@ -454,7 +462,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             pk: zkAddress.pk
         });
 
-        uint256 nonce = directDepositNonce++;
+        nonce = directDepositNonce++;
         directDeposits[nonce] = dd;
 
         emit SubmitDirectDeposit(_sender, nonce, _fallbackUser, zkAddress, depositAmount);
