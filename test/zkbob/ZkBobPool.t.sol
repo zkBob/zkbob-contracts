@@ -370,24 +370,29 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         }
     }
 
-    function testAppenDirectDeposits() public {
+    function testAppendDirectDeposits() public {
         _setUpDD();
 
         vm.prank(user1);
         bob.transferAndCall(address(pool), 10 ether, abi.encode(user2, zkAddress));
 
         vm.prank(user1);
-        bob.transferAndCall(address(pool), 10 ether, abi.encode(user2, zkAddress));
+        bob.transferAndCall(address(pool), 5 ether, abi.encode(user2, zkAddress));
 
         uint256[] memory indices = new uint256[](2);
         indices[0] = 0;
         indices[1] = 1;
         vm.expectEmit(true, false, false, true);
-        bytes memory message = abi.encode(
-            0xefe3e4b9b0a0e53e5b66ed19ad100afe5289ea732bfd5ac002969523f26e6f2f,
-            0xda9ee1b1b651c87a76c20000000000000000000000000000000000024e160300,
-            0xefe3e4b9b0a0e53e5b66ed19ad100afe5289ea732bfd5ac002969523f26e6f2f,
-            0xda9ee1b1b651c87a76c20000000000000000000000000000000000024e160300
+        bytes memory message = abi.encodePacked(
+            bytes4(0x02000001), // uint16(2) in little endian ++ MESSAGE_PREFIX_DIRECT_DEPOSIT_V1
+            uint32(0), // first deposit nonce
+            uint64(9.9 gwei), // first deposit amount
+            bytes10(0xda9ee1b1b651c87a76c2), // first deposit receiver zk address (42 bytes)
+            bytes32(0xefe3e4b9b0a0e53e5b66ed19ad100afe5289ea732bfd5ac002969523f26e6f2f),
+            uint32(1), // second deposit nonce
+            uint64(4.9 gwei), // second deposit amount
+            bytes10(0xda9ee1b1b651c87a76c2), // second deposit receiver zk address (42 bytes)
+            bytes32(0xefe3e4b9b0a0e53e5b66ed19ad100afe5289ea732bfd5ac002969523f26e6f2f)
         );
         emit Message(128, bytes32(0), message);
         vm.expectEmit(true, false, false, true);
@@ -409,14 +414,7 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
             data = abi.encodePacked(data, _randFR());
         }
         data = abi.encodePacked(
-            data,
-            uint16(3),
-            uint16(80),
-            uint64(_fee / 1 gwei),
-            uint64(expiry),
-            user1,
-            bytes32(_randFR()),
-            bytes12(bytes32(_randFR()))
+            data, uint16(3), uint16(72), uint64(_fee / 1 gwei), uint64(expiry), user1, bytes4(0x01000000), _randFR()
         );
         return abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
     }
@@ -430,8 +428,7 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());
         }
-        data =
-            abi.encodePacked(data, uint16(0), uint16(48), uint64(_fee / 1 gwei), _randFR(), bytes8(bytes32(_randFR())));
+        data = abi.encodePacked(data, uint16(0), uint16(44), uint64(_fee / 1 gwei), bytes4(0x01000000), _randFR());
         return abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
     }
 
@@ -450,12 +447,12 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         return abi.encodePacked(
             data,
             uint16(2),
-            uint16(80),
+            uint16(72),
             uint64(0.01 ether / 1 gwei),
             uint64(_nativeAmount / 1 gwei),
             _to,
-            _randFR(),
-            bytes12(bytes32(_randFR()))
+            bytes4(0x01000000),
+            _randFR()
         );
     }
 
@@ -466,9 +463,7 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());
         }
-        return abi.encodePacked(
-            data, uint16(1), uint16(48), uint64(0.01 ether / 1 gwei), _randFR(), bytes8(bytes32(_randFR()))
-        );
+        return abi.encodePacked(data, uint16(1), uint16(44), uint64(0.01 ether / 1 gwei), bytes4(0x01000000), _randFR());
     }
 
     function _transact(bytes memory _data) internal {

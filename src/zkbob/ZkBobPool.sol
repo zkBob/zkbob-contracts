@@ -30,6 +30,8 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
     uint256 internal constant TOKEN_DENOMINATOR = 1_000_000_000;
+    bytes2 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x0000;
+    bytes2 internal constant MESSAGE_PREFIX_DIRECT_DEPOSIT_V1 = 0x0001;
 
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;
@@ -255,6 +257,8 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             _pool_index += 128;
             roots[_pool_index] = _tree_root_after();
             bytes memory message = _memo_message();
+            // restrict memo message prefix (items count in little endian) to be < 2**16
+            require(bytes4(message) & 0x0000ffff == bytes4(MESSAGE_PREFIX_COMMON_V1), "ZkBobPool: bad message prefix");
             bytes32 message_hash = keccak256(message);
             bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
             all_messages_hash = _all_messages_hash;
@@ -323,19 +327,33 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         external
         onlyOperator
     {
-        require(_indices.length > 0, "ZkBobPool: empty deposit list");
-        require(_indices.length < 17, "ZkBobPool: too many deposits");
+        uint256 count = _indices.length;
+        require(count > 0, "ZkBobPool: empty deposit list");
+        require(count < 17, "ZkBobPool: too many deposits");
 
         uint256[33] memory batch_deposit_pub;
+        bytes memory message = new bytes(4 + count * 54);
+        assembly {
+            mstore(add(message, 32), or(shl(248, count), shr(16, MESSAGE_PREFIX_DIRECT_DEPOSIT_V1)))
+        }
         uint256 total = 0;
-        for (uint256 i = 0; i < _indices.length; i++) {
-            DirectDeposit storage dd = directDeposits[_indices[i]];
-            (bytes10 diversifier, uint64 deposit, DirectDepositStatus status) = (dd.diversifier, dd.deposit, dd.status);
+        for (uint256 i = 0; i < count; i++) {
+            uint256 index = _indices[i];
+            DirectDeposit storage dd = directDeposits[index];
+            (bytes32 pk, bytes10 diversifier, uint64 deposit, DirectDepositStatus status) =
+                (dd.pk, dd.diversifier, dd.deposit, dd.status);
             require(status == DirectDepositStatus.Pending, "ZkBobPool: direct deposit not pending");
 
             // TODO format
-            batch_deposit_pub[2 * i] = uint256(dd.pk);
+            batch_deposit_pub[2 * i] = uint256(pk);
             batch_deposit_pub[2 * i + 1] = uint256(bytes32(diversifier) | bytes32(uint256(deposit)));
+
+            assembly {
+                // bytes4(dd.index) ++ bytes8(dd.deposit) ++ bytes10(dd.diversifier) ++ bytes32(dd.pk)
+                let part := or(shl(224, index), or(shl(160, deposit), shr(96, diversifier)))
+                mstore(add(message, add(36, mul(i, 54))), part)
+                mstore(add(message, add(58, mul(i, 54))), pk)
+            }
 
             dd.status = DirectDepositStatus.Completed;
 
@@ -357,11 +375,6 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
         _pool_index += 128;
         roots[_pool_index] = _root_after;
-        bytes memory message; // TODO
-        assembly {
-            message := sub(batch_deposit_pub, 32)
-            mstore(message, mul(64, _indices.length))
-        }
         bytes32 message_hash = keccak256(message);
         bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
         all_messages_hash = _all_messages_hash;
