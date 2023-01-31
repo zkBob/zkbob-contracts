@@ -30,8 +30,8 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
     uint256 internal constant TOKEN_DENOMINATOR = 1_000_000_000;
-    bytes2 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x0000;
-    bytes2 internal constant MESSAGE_PREFIX_DIRECT_DEPOSIT_V1 = 0x0001;
+    bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
+    bytes4 internal constant MESSAGE_PREFIX_DIRECT_DEPOSIT_V1 = 0x00000001;
 
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;
@@ -258,7 +258,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
             roots[_pool_index] = _tree_root_after();
             bytes memory message = _memo_message();
             // restrict memo message prefix (items count in little endian) to be < 2**16
-            require(bytes4(message) & 0x0000ffff == bytes4(MESSAGE_PREFIX_COMMON_V1), "ZkBobPool: bad message prefix");
+            require(bytes4(message) & 0x0000ffff == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
             bytes32 message_hash = keccak256(message);
             bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
             all_messages_hash = _all_messages_hash;
@@ -334,7 +334,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         uint256[33] memory batch_deposit_pub;
         bytes memory message = new bytes(4 + count * 54);
         assembly {
-            mstore(add(message, 32), or(shl(248, count), shr(16, MESSAGE_PREFIX_DIRECT_DEPOSIT_V1)))
+            mstore(add(message, 32), or(shl(248, count), MESSAGE_PREFIX_DIRECT_DEPOSIT_V1))
         }
         uint256 total = 0;
         for (uint256 i = 0; i < count; i++) {
