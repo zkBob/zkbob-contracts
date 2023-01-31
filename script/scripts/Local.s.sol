@@ -53,6 +53,8 @@ contract DeployLocal is Script {
         IOperatorManager operatorManager =
             new MutableOperatorManager(zkBobRelayer, zkBobRelayerFeeReceiver, zkBobRelayerURL);
         pool.setOperatorManager(operatorManager);
+        pool.setDirectDepositFee(uint64(zkBobDirectDepositFee));
+        pool.setDirectDepositTimeout(uint40(zkBobDirectDepositTimeout));
 
         if (owner != address(0)) {
             bob.transferOwnership(owner);

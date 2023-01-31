@@ -60,6 +60,8 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
 
         operatorManager = new MutableOperatorManager(user2, user3, "https://example.com");
         pool.setOperatorManager(operatorManager);
+        pool.setDirectDepositFee(0.1 gwei);
+        pool.setDirectDepositTimeout(1 days);
 
         bob.mint(address(user1), 1 ether);
     }
@@ -399,6 +401,42 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         emit CompleteDirectDepositBatch(128, indices);
         vm.prank(user2);
         pool.appendDirectDeposits(_randFR(), indices, _randFR(), _randProof(), _randProof());
+    }
+
+    function testRefundDirectDeposit() public {
+        _setUpDD();
+
+        vm.prank(user1);
+        bob.transferAndCall(address(pool), 10 ether + 1, abi.encode(user2, zkAddress));
+
+        vm.prank(user1);
+        bob.transferAndCall(address(pool), 5 ether + 1, abi.encode(user2, zkAddress));
+
+        vm.expectRevert("ZkBobPool: direct deposit timeout not passed");
+        pool.refundDirectDeposit(0);
+        vm.expectRevert("ZkBobPool: direct deposit timeout not passed");
+        pool.refundDirectDeposit(1);
+        vm.expectRevert("ZkBobPool: direct deposit not pending");
+        pool.refundDirectDeposit(2);
+
+        deal(address(bob), user2, 0);
+
+        vm.prank(user2);
+        vm.expectEmit(true, false, false, true);
+        emit RefundDirectDeposit(0, user2, 10 ether + 1);
+        pool.refundDirectDeposit(0);
+        vm.expectRevert("ZkBobPool: direct deposit not pending");
+        pool.refundDirectDeposit(0);
+        assertEq(bob.balanceOf(user2), 10 ether + 1);
+
+        skip(2 days);
+
+        vm.expectEmit(true, false, false, true);
+        emit RefundDirectDeposit(1, user2, 5 ether + 1);
+        pool.refundDirectDeposit(1);
+        vm.expectRevert("ZkBobPool: direct deposit not pending");
+        pool.refundDirectDeposit(1);
+        assertEq(bob.balanceOf(user2), 15 ether + 2);
     }
 
     function _encodePermitDeposit(int256 _amount, uint256 _fee) internal returns (bytes memory) {

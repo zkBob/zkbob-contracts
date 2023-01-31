@@ -450,10 +450,10 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         internal
         returns (uint256 nonce)
     {
-        // TODO do something about remaining deposit dust (_amount % 1_000_000_000)
         require(_fallbackUser != address(0), "ZkBobPool: fallback user is zero");
 
         uint64 fee = directDepositFee;
+        // small amount of wei might get lost during division, this amount will stay in the contract indefinitely
         uint64 depositAmount = uint64(_amount / TOKEN_DENOMINATOR);
         require(depositAmount > fee, "ZkBobPool: direct deposit amount is too low");
         unchecked {
