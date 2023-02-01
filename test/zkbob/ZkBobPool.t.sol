@@ -384,6 +384,19 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         uint256[] memory indices = new uint256[](2);
         indices[0] = 0;
         indices[1] = 1;
+        address verifier = address(pool.batch_deposit_verifier());
+        uint256 outCommitment = _randFR();
+        bytes memory data = abi.encodePacked(
+            outCommitment,
+            bytes10(0xda9ee1b1b651c87a76c2), // first deposit receiver zk address (42 bytes)
+            bytes32(0xefe3e4b9b0a0e53e5b66ed19ad100afe5289ea732bfd5ac002969523f26e6f2f),
+            uint64(9.9 gwei), // first deposit amount
+            bytes10(0xda9ee1b1b651c87a76c2), // second deposit receiver zk address (42 bytes)
+            bytes32(0xefe3e4b9b0a0e53e5b66ed19ad100afe5289ea732bfd5ac002969523f26e6f2f),
+            uint64(4.9 gwei), // second deposit amount
+            new bytes(125 * 50)
+        );
+        vm.expectCall(verifier, abi.encodeWithSelector(IBatchDepositVerifier.verifyProof.selector, [keccak256(data)]));
         vm.expectEmit(true, false, false, true);
         bytes memory message = abi.encodePacked(
             bytes4(0x02000001), // uint16(2) in little endian ++ MESSAGE_PREFIX_DIRECT_DEPOSIT_V1
@@ -400,7 +413,7 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         vm.expectEmit(true, false, false, true);
         emit CompleteDirectDepositBatch(128, indices);
         vm.prank(user2);
-        pool.appendDirectDeposits(_randFR(), indices, _randFR(), _randProof(), _randProof());
+        pool.appendDirectDeposits(_randFR(), indices, outCommitment, _randProof(), _randProof());
     }
 
     function testRefundDirectDeposit() public {

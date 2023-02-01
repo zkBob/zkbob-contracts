@@ -331,9 +331,10 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         require(count > 0, "ZkBobPool: empty deposit list");
         require(count < 17, "ZkBobPool: too many deposits");
 
-        uint256[33] memory batch_deposit_pub;
+        bytes memory input = new bytes(32 + (10 + 32 + 8) * 127);
         bytes memory message = new bytes(4 + count * 54);
         assembly {
+            mstore(add(input, 32), _out_commit)
             mstore(add(message, 32), or(shl(248, count), MESSAGE_PREFIX_DIRECT_DEPOSIT_V1))
         }
         uint256 total = 0;
@@ -344,29 +345,32 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
                 (dd.pk, dd.diversifier, dd.deposit, dd.status);
             require(status == DirectDepositStatus.Pending, "ZkBobPool: direct deposit not pending");
 
-            // TODO format
-            batch_deposit_pub[2 * i] = uint256(pk);
-            batch_deposit_pub[2 * i + 1] = uint256(bytes32(diversifier) | bytes32(uint256(deposit)));
-
+            assembly {
+                // bytes10(dd.diversifier) ++ bytes32(dd.pk) ++ bytes8(dd.deposit)
+                let offset := mul(i, 50)
+                mstore(add(input, add(64, offset)), diversifier)
+                mstore(add(input, add(82, offset)), deposit)
+                mstore(add(input, add(74, offset)), pk)
+            }
             assembly {
                 // bytes4(dd.index) ++ bytes8(dd.deposit) ++ bytes10(dd.diversifier) ++ bytes32(dd.pk)
+                let offset := mul(i, 54)
                 let part := or(shl(224, index), or(shl(160, deposit), shr(96, diversifier)))
-                mstore(add(message, add(36, mul(i, 54))), part)
-                mstore(add(message, add(58, mul(i, 54))), pk)
+                mstore(add(message, add(36, offset)), part)
+                mstore(add(message, add(58, offset)), pk)
             }
 
             dd.status = DirectDepositStatus.Completed;
 
             total += deposit;
         }
-        batch_deposit_pub[32] = _out_commit;
 
         uint256 txCount = _processDirectDepositBatch(total);
         uint256 _pool_index = txCount << 7;
 
         // verify that _out_commit corresponds to zero output account + 16 chosen notes + 111 empty notes
         require(
-            batch_deposit_verifier.verifyProof(batch_deposit_pub, _batch_deposit_proof),
+            batch_deposit_verifier.verifyProof([uint256(keccak256(input))], _batch_deposit_proof),
             "ZkBobPool: bad batch deposit proof"
         );
 
