@@ -32,6 +32,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     uint256 internal constant TOKEN_DENOMINATOR = 1_000_000_000;
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
     bytes4 internal constant MESSAGE_PREFIX_DIRECT_DEPOSIT_V1 = 0x00000001;
+    uint256 internal constant MAX_NUMBER_OF_DIRECT_DEPOSITS = 16;
 
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;
@@ -329,9 +330,9 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     {
         uint256 count = _indices.length;
         require(count > 0, "ZkBobPool: empty deposit list");
-        require(count < 17, "ZkBobPool: too many deposits");
+        require(count <= MAX_NUMBER_OF_DIRECT_DEPOSITS, "ZkBobPool: too many deposits");
 
-        bytes memory input = new bytes(32 + (10 + 32 + 8) * 127);
+        bytes memory input = new bytes(32 + (10 + 32 + 8) * MAX_NUMBER_OF_DIRECT_DEPOSITS);
         bytes memory message = new bytes(4 + count * 54);
         assembly {
             mstore(add(input, 32), _out_commit)
@@ -370,7 +371,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
         // verify that _out_commit corresponds to zero output account + 16 chosen notes + 111 empty notes
         require(
-            batch_deposit_verifier.verifyProof([uint256(keccak256(input))], _batch_deposit_proof),
+            batch_deposit_verifier.verifyProof([uint256(keccak256(input)) % R], _batch_deposit_proof),
             "ZkBobPool: bad batch deposit proof"
         );
 

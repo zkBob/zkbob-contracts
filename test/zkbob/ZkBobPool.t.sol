@@ -394,9 +394,17 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
             bytes10(0xda9ee1b1b651c87a76c2), // second deposit receiver zk address (42 bytes)
             bytes32(0xefe3e4b9b0a0e53e5b66ed19ad100afe5289ea732bfd5ac002969523f26e6f2f),
             uint64(4.9 gwei), // second deposit amount
-            new bytes(125 * 50)
+            new bytes(14 * 50)
         );
-        vm.expectCall(verifier, abi.encodeWithSelector(IBatchDepositVerifier.verifyProof.selector, [keccak256(data)]));
+        vm.expectCall(
+            verifier,
+            abi.encodeWithSelector(
+                IBatchDepositVerifier.verifyProof.selector,
+                [
+                    uint256(keccak256(data)) % 21888242871839275222246405745257275088548364400416034343698204186575808495617
+                ]
+            )
+        );
         vm.expectEmit(true, false, false, true);
         bytes memory message = abi.encodePacked(
             bytes4(0x02000001), // uint16(2) in little endian ++ MESSAGE_PREFIX_DIRECT_DEPOSIT_V1
