@@ -354,11 +354,12 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
                 mstore(add(input, add(74, offset)), pk)
             }
             assembly {
-                // bytes4(dd.index) ++ bytes8(dd.deposit) ++ bytes10(dd.diversifier) ++ bytes32(dd.pk)
+                // bytes4(dd.index) ++ bytes10(dd.diversifier) ++ bytes32(dd.pk) ++ bytes8(dd.deposit)
                 let offset := mul(i, 54)
-                let part := or(shl(224, index), or(shl(160, deposit), shr(96, diversifier)))
-                mstore(add(message, add(36, offset)), part)
-                mstore(add(message, add(58, offset)), pk)
+                mstore(add(message, add(36, offset)), shl(224, index))
+                mstore(add(message, add(40, offset)), diversifier)
+                mstore(add(message, add(58, offset)), deposit)
+                mstore(add(message, add(50, offset)), pk)
             }
 
             dd.status = DirectDepositStatus.Completed;
