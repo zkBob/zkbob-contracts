@@ -313,6 +313,7 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
             uint256 outAmount = sellAmount * 1 ether / token.price;
 
             require(outAmount <= bobToken.balanceOf(address(this)), "BobVault: exceeds available liquidity");
+            require(token.balance + sellAmount <= token.maxBalance, "BobVault: exceeds max balance");
 
             return outAmount;
         } else if (_inToken == address(bobToken)) {
@@ -345,6 +346,8 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
             require(outToken.balance >= outAmount, "BobVault: insufficient liquidity for collateral");
             outAmount -= outAmount * uint256(outToken.outFee) / 1 ether;
 
+            require(inToken.balance + sellAmount <= inToken.maxBalance, "BobVault: exceeds max balance");
+
             return outAmount;
         }
     }
@@ -369,6 +372,8 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
 
             uint256 sellAmount = _outAmount * token.price / 1 ether;
             uint256 inAmount = sellAmount * 1 ether / (1 ether - uint256(token.inFee));
+
+            require(token.balance + sellAmount <= token.maxBalance, "BobVault: exceeds max balance");
 
             return inAmount;
         } else if (_inToken == address(bobToken)) {
@@ -400,6 +405,8 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
             uint256 bobAmount = buyAmount * 1 ether / outToken.price;
             uint256 sellAmount = bobAmount * inToken.price / 1 ether;
             uint256 inAmount = sellAmount * 1 ether / (1 ether - uint256(inToken.inFee));
+
+            require(inToken.balance + sellAmount <= inToken.maxBalance, "BobVault: exceeds max balance");
 
             return inAmount;
         }
