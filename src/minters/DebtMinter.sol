@@ -12,9 +12,9 @@ contract DebtMinter is BaseMinter {
     struct Parameters {
         uint104 maxDebtLimit; // max possible debt limit
         uint104 minDebtLimit; // min possible debt limit
-        uint48 raiseDelay; // min delay between raises of debt limit
+        uint48 raiseDelay; // min delay between debt limit raises
         uint96 raise; // debt limit raising step
-        address treasury; // receiver of excess re-payed debt
+        address treasury; // receiver of repaid debt surplus
     }
 
     struct State {
@@ -51,6 +51,10 @@ contract DebtMinter is BaseMinter {
         return parameters;
     }
 
+    /**
+     * @dev Tells remaining mint amount subject to immediate debt limit.
+     * @return available mint amount.
+     */
     function maxDebtIncrease() external view returns (uint256) {
         Parameters memory p = parameters;
         State memory s = state;
@@ -58,6 +62,11 @@ contract DebtMinter is BaseMinter {
         return s.debtLimit - s.debt;
     }
 
+    /**
+     * @dev Updates limit configuration.
+     * Callable only by the contract owner.
+     * @param _params new parameters to apply.
+     */
     function updateParameters(Parameters calldata _params) external onlyOwner {
         require(_params.minDebtLimit + uint104(_params.raise) <= _params.maxDebtLimit, "DebtMinter: invalid raise");
         parameters = _params;
@@ -78,8 +87,9 @@ contract DebtMinter is BaseMinter {
         State memory s = state;
 
         _updateDebtLimit(p, s);
-        s.debt += uint104(_amount);
-        require(s.debt <= s.debtLimit, "DebtMinter: exceeds debt limit");
+        uint256 newDebt = uint256(s.debt) + _amount;
+        require(newDebt <= s.debtLimit, "DebtMinter: exceeds debt limit");
+        s.debt = uint104(newDebt);
 
         state = s;
 
@@ -103,12 +113,14 @@ contract DebtMinter is BaseMinter {
             }
         }
         _updateDebtLimit(p, s);
-
         state = s;
 
         emit UpdateDebt(s.debt, s.debtLimit);
     }
 
+    /**
+     * @dev Internal function for recalculating immediate debt limit.
+     */
     function _updateDebtLimit(Parameters memory p, State memory s) internal view {
         if (s.debt >= p.maxDebtLimit) {
             s.debtLimit = s.debt;
