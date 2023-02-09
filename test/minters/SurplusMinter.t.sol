@@ -40,6 +40,43 @@ contract SurplusMinterTest is Test {
         assertEq(minter.surplus(), 100 ether);
     }
 
+    function testRealizedSurplusAdd() public {
+        bob.mint(address(this), 1000 ether);
+
+        minter.add(100 ether);
+
+        assertEq(minter.surplus(), 100 ether);
+        assertEq(bob.balanceOf(address(minter)), 0 ether);
+
+        bob.transferAndCall(address(minter), 10 ether, "");
+
+        assertEq(minter.surplus(), 90 ether);
+        assertEq(bob.balanceOf(address(minter)), 10 ether);
+
+        vm.expectRevert("SurplusMinter: invalid value");
+        bob.transferAndCall(address(minter), 20 ether, abi.encode(30 ether));
+
+        bob.transferAndCall(address(minter), 20 ether, abi.encode(20 ether));
+        assertEq(minter.surplus(), 70 ether);
+        assertEq(bob.balanceOf(address(minter)), 30 ether);
+
+        bob.transferAndCall(address(minter), 20 ether, abi.encode(10 ether));
+        assertEq(minter.surplus(), 60 ether);
+        assertEq(bob.balanceOf(address(minter)), 50 ether);
+
+        bob.transferAndCall(address(minter), 70 ether, "");
+        assertEq(minter.surplus(), 0 ether);
+        assertEq(bob.balanceOf(address(minter)), 120 ether);
+
+        minter.add(10 ether);
+        assertEq(minter.surplus(), 10 ether);
+        assertEq(bob.balanceOf(address(minter)), 120 ether);
+
+        bob.transferAndCall(address(minter), 30 ether, abi.encode(20 ether));
+        assertEq(minter.surplus(), 0 ether);
+        assertEq(bob.balanceOf(address(minter)), 150 ether);
+    }
+
     function testSurplusBurn() public {
         minter.add(100 ether);
 
@@ -72,22 +109,28 @@ contract SurplusMinterTest is Test {
         vm.expectEmit(true, false, false, true);
         emit WithdrawSurplus(user1, 30 ether, 0 ether);
         minter.withdraw(user1, 30 ether);
-        assertEq(minter.surplus(), 70 ether);
+        assertEq(minter.surplus(), 100 ether);
         assertEq(bob.balanceOf(user1), 30 ether);
         assertEq(bob.balanceOf(address(minter)), 20 ether);
 
         vm.expectEmit(true, false, false, true);
         emit WithdrawSurplus(user1, 20 ether, 10 ether);
         minter.withdraw(user1, 30 ether);
-        assertEq(minter.surplus(), 40 ether);
+        assertEq(minter.surplus(), 90 ether);
         assertEq(bob.balanceOf(user1), 60 ether);
         assertEq(bob.balanceOf(address(minter)), 0 ether);
 
+        vm.expectRevert("SurplusMinter: exceeds surplus");
+        minter.withdraw(user1, 100 ether);
+
         vm.expectEmit(true, false, false, true);
-        emit WithdrawSurplus(user1, 0 ether, 40 ether);
-        minter.withdraw(user1, 40 ether);
+        emit WithdrawSurplus(user1, 0 ether, 90 ether);
+        minter.withdraw(user1, 90 ether);
         assertEq(minter.surplus(), 0 ether);
-        assertEq(bob.balanceOf(user1), 100 ether);
+        assertEq(bob.balanceOf(user1), 150 ether);
         assertEq(bob.balanceOf(address(minter)), 0 ether);
+
+        vm.expectRevert("SurplusMinter: exceeds surplus");
+        minter.withdraw(user1, 1 ether);
     }
 }

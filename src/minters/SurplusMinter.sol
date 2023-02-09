@@ -5,12 +5,13 @@ pragma solidity 0.8.15;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../utils/Ownable.sol";
 import "../interfaces/IMintableERC20.sol";
+import "../interfaces/IERC677Receiver.sol";
 
 /**
  * @title SurplusMinter
  * Managing realized and unrealized BOB surplus from debt-minting use-cases.
  */
-contract SurplusMinter is Ownable {
+contract SurplusMinter is IERC677Receiver, Ownable {
     address public immutable token;
 
     mapping(address => bool) public isMinter;
@@ -18,7 +19,7 @@ contract SurplusMinter is Ownable {
     uint256 public surplus; // unrealized surplus
 
     event WithdrawSurplus(address indexed to, uint256 realized, uint256 unrealized);
-    event AddSurplus(address indexed from, uint256 surplus);
+    event AddSurplus(address indexed from, uint256 unrealized);
 
     constructor(address _token) {
         token = _token;
@@ -35,9 +36,9 @@ contract SurplusMinter is Ownable {
     }
 
     /**
-     * @dev Mints potential unrealized surplus.
+     * @dev Records potential unrealized surplus.
      * Callable only by the pre-approved surplus minter.
-     * Once surplus is realized, it should be transferred to this contract via regular transfer.
+     * Once unrealized surplus is realized, it should be transferred to this contract via transferAndCall.
      * @param _surplus unrealized surplus to add.
      */
     function add(uint256 _surplus) external {
@@ -46,6 +47,35 @@ contract SurplusMinter is Ownable {
         surplus += _surplus;
 
         emit AddSurplus(msg.sender, _surplus);
+    }
+
+    /**
+     * @dev ERC677 callback. Converts previously recorded unrealized surplus into the realized one.
+     * Callable by anyone.
+     * @param _from tokens sender.
+     * @param _amount amount of tokens corresponding to realized interest.
+     * @param _data optional extra data, encoded uint256 amount of unrealized surplus to convert. Defaults to _amount.
+     */
+    function onTokenTransfer(address _from, uint256 _amount, bytes calldata _data) external override returns (bool) {
+        require(msg.sender == token, "SurplusMinter: invalid caller");
+
+        uint256 unrealized = _amount;
+        if (_data.length == 32) {
+            unrealized = abi.decode(_data, (uint256));
+            require(unrealized <= _amount, "SurplusMinter: invalid value");
+        }
+
+        if (surplus > unrealized) {
+            unchecked {
+                surplus -= unrealized;
+            }
+        } else {
+            unrealized = surplus;
+            surplus = 0;
+        }
+        emit WithdrawSurplus(address(this), 0, unrealized);
+
+        return true;
     }
 
     /**
@@ -70,18 +100,19 @@ contract SurplusMinter is Ownable {
      * @param _surplus surplus amount to withdraw/mint.
      */
     function withdraw(address _to, uint256 _surplus) external onlyOwner {
-        require(_surplus <= surplus, "SurplusMinter: exceeds surplus");
-        unchecked {
-            surplus -= _surplus;
-        }
-
         uint256 realized = IERC20(token).balanceOf(address(this));
 
         if (_surplus > realized) {
-            IERC20(token).transfer(_to, realized);
-            IMintableERC20(token).mint(_to, _surplus - realized);
+            uint256 unrealized = _surplus - realized;
+            require(unrealized <= surplus, "SurplusMinter: exceeds surplus");
+            unchecked {
+                surplus -= unrealized;
+            }
 
-            emit WithdrawSurplus(_to, realized, _surplus - realized);
+            IERC20(token).transfer(_to, realized);
+            IMintableERC20(token).mint(_to, unrealized);
+
+            emit WithdrawSurplus(_to, realized, unrealized);
         } else {
             IERC20(token).transfer(_to, _surplus);
 
