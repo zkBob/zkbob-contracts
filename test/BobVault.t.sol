@@ -386,15 +386,28 @@ abstract contract AbstractBobVault3poolTest is AbstractBobVaultTest, AbstractFor
         vault.buy(address(usdt), 30 * 1e6);
 
         vm.expectRevert("BobVault: exceeds max balance");
-        vault.buy(address(usdc), 30 * 1e6);
+        vault.getAmountOut(address(usdc), address(bob), 25 * 1e6);
         vm.expectRevert("BobVault: exceeds max balance");
-        vault.swap(address(usdc), address(usdt), 30 * 1e6);
+        vault.getAmountIn(address(usdc), address(bob), 25 ether);
+        vm.expectRevert("BobVault: exceeds max balance");
+        vault.buy(address(usdc), 25 * 1e6);
 
+        vm.expectRevert("BobVault: exceeds max balance");
+        vault.getAmountOut(address(usdc), address(usdt), 25 * 1e6);
+        vm.expectRevert("BobVault: exceeds max balance");
+        vault.getAmountIn(address(usdc), address(usdt), 25 * 1e6);
+        vm.expectRevert("BobVault: exceeds max balance");
+        vault.swap(address(usdc), address(usdt), 25 * 1e6);
+
+        assertEq(vault.getAmountOut(address(usdc), address(bob), 20 * 1e6), 19.98 ether);
+        assertEq(vault.getAmountIn(address(usdc), address(bob), 19.98 ether), 20 * 1e6);
         vault.buy(address(usdc), 20 * 1e6);
         vm.expectRevert("BobVault: exceeds max balance");
         vault.swap(address(usdc), address(usdt), 20 * 1e6);
 
         vault.sell(address(usdc), 20 ether);
+        assertEq(vault.getAmountOut(address(usdc), address(usdt), 20 * 1e6), 20 * 1e6 * 0.999 * 0.996);
+        assertEq(vault.getAmountIn(address(usdc), address(usdt), 20 * 1e6 * 0.999 * 0.996), 20 * 1e6);
         vault.swap(address(usdc), address(usdt), 20 * 1e6);
 
         BobVault.Stat memory stat = vault.stat(address(usdc));
