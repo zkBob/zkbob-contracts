@@ -333,7 +333,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         require(count <= MAX_NUMBER_OF_DIRECT_DEPOSITS, "ZkBobPool: too many deposits");
 
         bytes memory input = new bytes(32 + (10 + 32 + 8) * MAX_NUMBER_OF_DIRECT_DEPOSITS);
-        bytes memory message = new bytes(4 + count * 54);
+        bytes memory message = new bytes(4 + count * (8 + 10 + 32 + 8));
         assembly {
             mstore(add(input, 32), _out_commit)
             mstore(add(message, 32), or(shl(248, count), MESSAGE_PREFIX_DIRECT_DEPOSIT_V1))
@@ -354,12 +354,12 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
                 mstore(add(input, add(74, offset)), pk)
             }
             assembly {
-                // bytes4(dd.index) ++ bytes10(dd.diversifier) ++ bytes32(dd.pk) ++ bytes8(dd.deposit)
-                let offset := mul(i, 54)
-                mstore(add(message, add(36, offset)), shl(224, index))
-                mstore(add(message, add(40, offset)), diversifier)
-                mstore(add(message, add(58, offset)), deposit)
-                mstore(add(message, add(50, offset)), pk)
+                // bytes8(dd.index) ++ bytes10(dd.diversifier) ++ bytes32(dd.pk) ++ bytes8(dd.deposit)
+                let offset := mul(i, 58)
+                mstore(add(message, add(36, offset)), shl(192, index))
+                mstore(add(message, add(44, offset)), diversifier)
+                mstore(add(message, add(62, offset)), deposit)
+                mstore(add(message, add(54, offset)), pk)
             }
 
             dd.status = DirectDepositStatus.Completed;

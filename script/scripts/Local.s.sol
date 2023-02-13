@@ -9,7 +9,6 @@ import "../../src/BobToken.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
-import "../../test/mocks/BatchDepositVerifierMock.sol";
 
 contract DeployLocal is Script {
     function run() external {
@@ -26,14 +25,18 @@ contract DeployLocal is Script {
 
         ITransferVerifier transferVerifier;
         ITreeVerifier treeVerifier;
-        IBatchDepositVerifier batchDepositVerifier = new BatchDepositVerifierMock(); // TODO
+        IBatchDepositVerifier batchDepositVerifier;
         bytes memory code1 =
             vm.getCode(string.concat("out/", zkBobVerifiers, "/TransferVerifier.sol/TransferVerifier.json"));
         bytes memory code2 =
             vm.getCode(string.concat("out/", zkBobVerifiers, "/TreeUpdateVerifier.sol/TreeUpdateVerifier.json"));
+        bytes memory code3 = vm.getCode(
+            string.concat("out/", zkBobVerifiers, "/DelegatedDepositVerifier.sol/DelegatedDepositVerifier.json")
+        );
         assembly {
             transferVerifier := create(0, add(code1, 0x20), mload(code1))
             treeVerifier := create(0, add(code2, 0x20), mload(code2))
+            batchDepositVerifier := create(0, add(code3, 0x20), mload(code3))
         }
 
         ZkBobPool poolImpl = new ZkBobPool(
