@@ -362,13 +362,12 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         bob.transferAndCall(address(pool), 10 ether, abi.encode(user2, zkAddress));
 
         for (uint256 i = 0; i < 2; i++) {
-            ZkBobPool.DirectDeposit memory deposit;
-            (deposit.user, deposit.amount, deposit.deposit, deposit.fee,, deposit.status,,) = pool.directDeposits(i);
-            assertEq(deposit.user, user2);
-            assertEq(deposit.amount, 10 ether);
+            IZkBobDirectDeposits.DirectDeposit memory deposit = pool.getDirectDeposit(i);
+            assertEq(deposit.fallbackReceiver, user2);
+            assertEq(deposit.sent, 10 ether);
             assertEq(deposit.deposit, 9.9 gwei);
             assertEq(deposit.fee, 0.1 gwei);
-            assertEq(uint8(deposit.status), uint8(ZkBobPool.DirectDepositStatus.Pending));
+            assertEq(uint8(deposit.status), uint8(IZkBobDirectDeposits.DirectDepositStatus.Pending));
         }
     }
 

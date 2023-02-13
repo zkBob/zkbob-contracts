@@ -16,6 +16,7 @@ import "../interfaces/IMintableERC20.sol";
 import "../interfaces/IOperatorManager.sol";
 import "../interfaces/IERC20Permit.sol";
 import "../interfaces/ITokenSeller.sol";
+import "../interfaces/IZkBobDirectDeposits.sol";
 import "./utils/Parameters.sol";
 import "./utils/ZkBobAccounting.sol";
 import "../utils/Ownable.sol";
@@ -25,7 +26,7 @@ import "../proxy/EIP1967Admin.sol";
  * @title ZkBobPool
  * Shielded transactions pool for BOB tokens.
  */
-contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
+contract ZkBobPool is IZkBobDirectDeposits, EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     using SafeERC20 for IERC20;
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
@@ -50,25 +51,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
     ITokenSeller public tokenSeller;
 
-    enum DirectDepositStatus {
-        Missing,
-        Pending,
-        Completed,
-        Refunded
-    }
-
-    struct DirectDeposit {
-        address user;
-        uint96 amount;
-        uint64 deposit;
-        uint64 fee;
-        uint40 timestamp;
-        DirectDepositStatus status;
-        bytes10 diversifier;
-        bytes32 pk;
-    }
-
-    mapping(uint256 => DirectDeposit) public directDeposits;
+    mapping(uint256 => IZkBobDirectDeposits.DirectDeposit) internal directDeposits;
     uint32 public directDepositNonce;
     uint64 public directDepositFee;
     uint40 public directDepositTimeout;
@@ -222,6 +205,10 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
     function _pool_id() internal view override returns (uint256) {
         return pool_id;
+    }
+
+    function getDirectDeposit(uint256 _index) external view returns (IZkBobDirectDeposits.DirectDeposit memory) {
+        return directDeposits[_index];
     }
 
     /**
@@ -437,26 +424,26 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         }
     }
 
-    function _refundDirectDeposit(uint256 _index, DirectDeposit storage _dd) internal {
-        _dd.status = DirectDepositStatus.Refunded;
+    function _refundDirectDeposit(uint256 _index, IZkBobDirectDeposits.DirectDeposit storage _dd) internal {
+        _dd.status = IZkBobDirectDeposits.DirectDepositStatus.Refunded;
 
-        (address user, uint96 amount) = (_dd.user, _dd.amount);
+        (address fallbackReceiver, uint96 amount) = (_dd.fallbackReceiver, _dd.sent);
 
-        IERC20(token).safeTransfer(user, amount);
+        IERC20(token).safeTransfer(fallbackReceiver, amount);
 
-        emit RefundDirectDeposit(_index, user, amount);
+        emit RefundDirectDeposit(_index, fallbackReceiver, amount);
     }
 
     function _recordDirectDeposit(
         address _sender,
-        address _fallbackUser,
+        address _fallbackReceiver,
         uint256 _amount,
         bytes memory _rawZkAddress
     )
         internal
         returns (uint256 nonce)
     {
-        require(_fallbackUser != address(0), "ZkBobPool: fallback user is zero");
+        require(_fallbackReceiver != address(0), "ZkBobPool: fallback user is zero");
 
         uint64 fee = directDepositFee;
         // small amount of wei might get lost during division, this amount will stay in the contract indefinitely
@@ -470,9 +457,9 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
 
         ZkAddress.ZkAddress memory zkAddress = ZkAddress.parseZkAddress(_rawZkAddress, uint24(pool_id));
 
-        DirectDeposit memory dd = DirectDeposit({
-            user: _fallbackUser,
-            amount: uint96(_amount),
+        IZkBobDirectDeposits.DirectDeposit memory dd = IZkBobDirectDeposits.DirectDeposit({
+            fallbackReceiver: _fallbackReceiver,
+            sent: uint96(_amount),
             deposit: depositAmount,
             fee: fee,
             timestamp: uint40(block.timestamp),
@@ -484,7 +471,7 @@ contract ZkBobPool is EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
         nonce = directDepositNonce++;
         directDeposits[nonce] = dd;
 
-        emit SubmitDirectDeposit(_sender, nonce, _fallbackUser, zkAddress, depositAmount);
+        emit SubmitDirectDeposit(_sender, nonce, _fallbackReceiver, zkAddress, depositAmount);
     }
 
     /**
