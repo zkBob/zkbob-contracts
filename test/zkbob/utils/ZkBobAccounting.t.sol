@@ -5,9 +5,13 @@ pragma solidity 0.8.15;
 import "forge-std/Test.sol";
 import "../../shared/Env.t.sol";
 import "../../mocks/ZkBobAccountingMock.sol";
+import "../../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
+import "@openzeppelin/contracts/token/ERC721/presets/ERC721PresetMinterPauserAutoId.sol";
 
 contract ZkBobAccountingTest is Test {
     ZkBobAccountingMock pool;
+
+    uint8 internal constant TIER_FOR_KYC = 254;
 
     function setUp() public {
         pool = new ZkBobAccountingMock();
@@ -502,6 +506,23 @@ contract ZkBobAccountingTest is Test {
         assertEq(limits3.dailyUserDepositCapUsage, 0 gwei);
         assertEq(limits3.depositCap, 0 gwei);
         assertEq(limits3.tier, 255);
+    }
+
+    function _setKYCPorviderManager() internal returns (SimpleKYCProviderManager) {
+        ERC721PresetMinterPauserAutoId nft = new ERC721PresetMinterPauserAutoId("Test NFT", "tNFT", "http://nft.url/");
+
+        SimpleKYCProviderManager manager = new SimpleKYCProviderManager(nft, TIER_FOR_KYC);
+        pool.setKycProvidersManager(manager);
+
+        return manager;
+    }
+
+    function testSetKycProvidersManager() public {
+        address manager = address(_setKYCPorviderManager());
+        assertEq(address(pool.kycProvidersManager()), manager);
+
+        vm.expectRevert("ZkBobPool: manager is zero address");
+        pool.setKycProvidersManager(SimpleKYCProviderManager(address(0)));
     }
 
     function testPoolLimitsTooLarge() public {

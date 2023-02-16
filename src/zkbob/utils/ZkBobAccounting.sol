@@ -129,7 +129,8 @@ contract ZkBobAccounting is Ownable {
     function getLimitsFor(address _user) external view returns (Limits memory) {
         Slot1 memory s1 = slot1;
         UserStats memory us = userStats[_user];
-        Tier storage t = tiers[_getTierForUser(_user)];
+        uint8 tier = _getTierForUser(_user);
+        Tier storage t = tiers[tier];
         TierLimits memory tl = t.limits;
         TierStats memory ts = t.stats;
         uint24 curSlot = uint24(block.timestamp / SLOT_DURATION);
@@ -144,7 +145,7 @@ contract ZkBobAccounting is Ownable {
             dailyUserDepositCap: tl.dailyUserDepositCap * PRECISION,
             dailyUserDepositCapUsage: (us.day == today) ? us.dailyDeposit : 0,
             depositCap: tl.depositCap * PRECISION,
-            tier: us.tier,
+            tier: tier,
             dailyUserDirectDepositCap: tl.dailyUserDirectDepositCap * PRECISION,
             dailyUserDirectDepositCapUsage: (us.day == today) ? us.dailyDirectDeposit : 0,
             directDepositCap: tl.directDepositCap * PRECISION
@@ -230,6 +231,7 @@ contract ZkBobAccounting is Ownable {
 
             if (curDay > us.day) {
                 // user snapshot is outdated, day number and daily sum could be reset
+                // original user's tier (0) is preserved
                 userStats[_user] =
                     UserStats({day: curDay, dailyDeposit: uint72(depositAmount), tier: us.tier, dailyDirectDeposit: 0});
             } else {
@@ -276,7 +278,7 @@ contract ZkBobAccounting is Ownable {
         uint16 curDay = uint16(block.timestamp / SLOT_DURATION / DAY_SLOTS);
 
         UserStats memory us = userStats[_user];
-        TierLimits memory tl = tiers[us.tier].limits;
+        TierLimits memory tl = tiers[_getTierForUser(_user)].limits;
 
         // check all sorts of limits when processing a deposit
         require(
@@ -285,6 +287,7 @@ contract ZkBobAccounting is Ownable {
 
         if (curDay > us.day) {
             // user snapshot is outdated, day number and daily sum could be reset
+            // original user's tier (0) is preserved
             us = UserStats({day: curDay, dailyDeposit: 0, tier: us.tier, dailyDirectDeposit: uint72(_amount)});
         } else {
             us.dailyDirectDeposit += uint72(_amount);
@@ -342,6 +345,8 @@ contract ZkBobAccounting is Ownable {
         emit UpdateLimits(_tier, tl);
     }
 
+    // Tier is set as per the KYC Providers recomendation only in the case if no specific tier
+    // assigned to the user
     function _getTierForUser(address _user) internal view returns (uint8) {
         UserStats memory us = userStats[_user];
         uint8 tier = us.tier;
