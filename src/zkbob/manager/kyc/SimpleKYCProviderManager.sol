@@ -26,7 +26,7 @@ contract SimpleKYCProviderManager is IKycProvidersManager {
     }
 
     // In simple manager it is assumed that one tier is used for all users passed KYC.
-    // Also the assumption is that the method either always used after passesKYC or with 
+    // Also the assumption is that the method either always used after passesKYC or with
     // _checkKYC set to true.
     function getAssociatedLimitsTier(address _user, bool _checkKYC) external view override returns (uint8) {
         if (_checkKYC) {

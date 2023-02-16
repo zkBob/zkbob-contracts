@@ -517,12 +517,84 @@ contract ZkBobAccountingTest is Test {
         return manager;
     }
 
+    function _mintNFT(ERC721PresetMinterPauserAutoId _nft, address _user) internal returns (uint256) {
+        uint256 tokenId = 0;
+        vm.recordLogs();
+        _nft.mint(_user);
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].topics[0] == keccak256("Transfer(address,address,uint256)")) {
+                tokenId = uint256(entries[i].topics[3]);
+                emit log_uint(tokenId);
+                break;
+            }
+            // fail test if the event is not found
+            assertLt(i, entries.length - 1);
+        }
+        return tokenId;
+    }
+
     function testSetKycProvidersManager() public {
         address manager = address(_setKYCPorviderManager());
         assertEq(address(pool.kycProvidersManager()), manager);
 
         vm.expectRevert("ZkBobPool: manager is zero address");
         pool.setKycProvidersManager(SimpleKYCProviderManager(address(0)));
+    }
+
+    function testGetLimitsForTiersWithKYCProvider() public {
+        ZkBobAccounting.Limits memory limits;
+
+        SimpleKYCProviderManager manager = _setKYCPorviderManager();
+        ERC721PresetMinterPauserAutoId nft = ERC721PresetMinterPauserAutoId(address(manager.NFT()));
+
+        //                            dailyDepositCap                  depositCap
+        //                            |          dailyWithdrawalCap    |          dailyUserDirectDepositCap
+        //                tvlCap      |          |          dailyUserDepositCap   |  directDepositCap
+        pool.setLimits(0, 1000 ether, 500 ether, 400 ether, 300 ether, 150 ether, 0, 0);
+
+        //                           dailyDepositCap                  depositCap
+        //                           |          dailyWithdrawalCap    |          dailyUserDirectDepositCap
+        //                tvlCap     |          |          dailyUserDepositCap   |  directDepositCap
+        pool.setLimits(1, 900 ether, 400 ether, 300 ether, 200 ether, 100 ether, 0, 0);
+
+        //                                      dailyDepositCap                  depositCap
+        //                                      |          dailyWithdrawalCap    |         dailyUserDirectDepositCap
+        //                           tvlCap     |          |          dailyUserDepositCap  |  directDepositCap
+        pool.setLimits(TIER_FOR_KYC, 500 ether, 250 ether, 200 ether, 150 ether, 75 ether, 0, 0);
+
+        // Test 1: Limits for the user passed KYC but without a dedicated tier
+        uint256 tokenId = _mintNFT(nft, user3);
+
+        limits = pool.getLimitsFor(user3);
+        assertEq(limits.tvlCap, 500 gwei);
+        assertEq(limits.dailyDepositCap, 250 gwei);
+        assertEq(limits.dailyWithdrawalCap, 200 gwei);
+        assertEq(limits.dailyUserDepositCap, 150 gwei);
+        assertEq(limits.depositCap, 75 gwei);
+
+        // Test 2: Limits for the user passed KYC and with a dedicated tier
+        uint256 unused_tokenId = _mintNFT(nft, user2);
+        pool.setUserTier(1, user2);
+
+        limits = pool.getLimitsFor(user2);
+        assertEq(limits.tvlCap, 900 gwei);
+        assertEq(limits.dailyDepositCap, 400 gwei);
+        assertEq(limits.dailyWithdrawalCap, 300 gwei);
+        assertEq(limits.dailyUserDepositCap, 200 gwei);
+        assertEq(limits.depositCap, 100 gwei);
+
+        // Test 3: Limits for the user passed KYC initially and revoked later
+        vm.startPrank(user3);
+        nft.burn(tokenId);
+        vm.stopPrank();
+
+        limits = pool.getLimitsFor(user3);
+        assertEq(limits.tvlCap, 1000 gwei);
+        assertEq(limits.dailyDepositCap, 500 gwei);
+        assertEq(limits.dailyWithdrawalCap, 400 gwei);
+        assertEq(limits.dailyUserDepositCap, 300 gwei);
+        assertEq(limits.depositCap, 150 gwei);
     }
 
     function testPoolLimitsTooLarge() public {
