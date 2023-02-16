@@ -4,6 +4,10 @@ pragma solidity 0.8.15;
 
 import "@base58-solidity/Base58.sol";
 
+/**
+ * @title ZkAddress
+ * Library for parsing zkBob addresses.
+ */
 library ZkAddress {
     uint256 internal constant R = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
 
@@ -16,38 +20,81 @@ library ZkAddress {
         bytes32 pk;
     }
 
-    function parseZkAddress(bytes memory _rawZkAddress, uint24 _poolId) external pure returns (ZkAddress memory res) {
-        uint256 len = _len(_rawZkAddress);
-        if (len > 64 || (len < 46 && len != 42)) {
+    /**
+     * @notice Parses zkBob address from the zkBob UI representation.
+     * Note that on-chain base58 decoding is quite gas intensive (610k gas),
+     * consider to use other gas efficient formats from the below.
+     * @param _rawZkAddress zk address base58 string representation in the zkBob UI format.
+     * @param _poolId id of the pool to verify checksum for.
+     */
+    function parseZkAddress(
+        string calldata _rawZkAddress,
+        uint24 _poolId
+    )
+        external
+        pure
+        returns (ZkAddress memory res)
+    {
+        bytes memory _rawZkAddressBytes = bytes(_rawZkAddress);
+        uint256 len = _len(_rawZkAddressBytes);
+
+        if (len > 63 || len < 47) {
             revert InvalidZkAddressLength();
         }
 
-        if (len == 42) {
-            // _zkAddress == abi.encodePacked(bytes10(diversifier), bytes32(pk))
-            res = ZkAddress(bytes10(_load(_rawZkAddress, 0)), _load(_rawZkAddress, 10));
-        } else if (len == 64) {
-            // _zkAddress == abi.encode(bytes10(diversifier), bytes32(pk))
-            res = abi.decode(_rawZkAddress, (ZkAddress));
-        } else if (len == 46) {
-            // _zkAddress == abi.encodePacked(bytes10(diversifier), bytes32(pk), bytes4(checksum))
-            _verifyChecksum(_poolId, _rawZkAddress);
-            res = ZkAddress(bytes10(_load(_rawZkAddress, 0)), _load(_rawZkAddress, 10));
-        } else {
-            // _zkAddress == Base58.encode(abi.encodePacked(bytes10(diversifier), bytes32(pk), bytes4(checksum)))
-            bytes memory dec = Base58.decode(_rawZkAddress);
-            if (_len(dec) != 46) {
-                revert InvalidZkAddressLength();
-            }
-            _verifyChecksum(_poolId, dec);
-            res = ZkAddress(bytes10(_load(dec, 0)), _load(dec, 10));
+        // _zkAddress == Base58.encode(abi.encodePacked(bytes10(diversifier_le), bytes32(pk_le), bytes4(checksum)))
+        bytes memory dec = Base58.decode(_rawZkAddressBytes);
+        if (_len(dec) != 46) {
+            revert InvalidZkAddressLength();
         }
-        if (_toLE(uint256(res.pk)) >= R) {
+        res = _parseZkAddressLE46(dec, _poolId);
+        if (uint256(res.pk) >= R) {
             revert InvalidZkAddress();
         }
     }
 
+    /**
+     * @notice Parses zkBob address from the gas-efficient hex formats.
+     * Note difference in endianness among checksummed and non-checksummed formats.
+     * @param _rawZkAddress zk address hex representation in one of 3 formats.
+     * @param _poolId id of the pool to verify checksum for.
+     */
+    function parseZkAddress(bytes memory _rawZkAddress, uint24 _poolId) external pure returns (ZkAddress memory res) {
+        uint256 len = _len(_rawZkAddress);
+
+        if (len == 42) {
+            // _zkAddress == abi.encodePacked(bytes10(diversifier_be), bytes32(pk_be))
+            res = ZkAddress(bytes10(_load(_rawZkAddress, 32)), _load(_rawZkAddress, 42));
+        } else if (len == 64) {
+            // _zkAddress == abi.encode(bytes10(diversifier_be), bytes32(pk_be)) == abi.encode(ZkAddress(zkAddress))
+            res = abi.decode(_rawZkAddress, (ZkAddress));
+        } else if (len == 46) {
+            // _zkAddress == abi.encodePacked(bytes10(diversifier_le), bytes32(pk_le), bytes4(checksum))
+            res = _parseZkAddressLE46(_rawZkAddress, _poolId);
+        } else if (len < 64 && len > 46) {
+            // _zkAddress == Base58.encode(abi.encodePacked(bytes10(diversifier_le), bytes32(pk_le), bytes4(checksum)))
+            bytes memory dec = Base58.decode(_rawZkAddress);
+            if (_len(dec) != 46) {
+                revert InvalidZkAddressLength();
+            }
+            res = _parseZkAddressLE46(dec, _poolId);
+        } else {
+            revert InvalidZkAddressLength();
+        }
+        if (uint256(res.pk) >= R) {
+            revert InvalidZkAddress();
+        }
+    }
+
+    function _parseZkAddressLE46(bytes memory _rawZkAddress, uint24 _poolId) internal pure returns (ZkAddress memory) {
+        _verifyChecksum(_poolId, _rawZkAddress);
+        bytes32 diversifier = _toLE(_load(_rawZkAddress, 32)) << 176;
+        bytes32 pk = _toLE(_load(_rawZkAddress, 42));
+        return ZkAddress(bytes10(diversifier), pk);
+    }
+
     function _verifyChecksum(uint24 _poolId, bytes memory _rawZkAddress) internal pure {
-        bytes4 checksum = bytes4(_load(_rawZkAddress, 42));
+        bytes4 checksum = bytes4(_load(_rawZkAddress, 74));
         bytes32 zkAddressHash;
         assembly {
             zkAddressHash := keccak256(add(_rawZkAddress, 32), 42)
@@ -67,11 +114,11 @@ library ZkAddress {
 
     function _load(bytes memory _b, uint256 _offset) internal pure returns (bytes32 word) {
         assembly {
-            word := mload(add(_b, add(32, _offset)))
+            word := mload(add(_b, _offset))
         }
     }
 
-    function _toLE(uint256 _value) internal pure returns (uint256 res) {
+    function _toLE(bytes32 _value) internal pure returns (bytes32 res) {
         assembly {
             res := byte(0, _value)
             res := add(res, shl(8, byte(1, _value)))

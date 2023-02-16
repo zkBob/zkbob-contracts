@@ -387,11 +387,11 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         uint256 outCommitment = _randFR();
         bytes memory data = abi.encodePacked(
             outCommitment,
-            bytes10(0xda9ee1b1b651c87a76c2), // first deposit receiver zk address (42 bytes)
-            bytes32(0xefe3e4b9b0a0e53e5b66ed19ad100afe5289ea732bfd5ac002969523f26e6f2f),
+            bytes10(0xc2767ac851b6b1e19eda), // first deposit receiver zk address (42 bytes)
+            bytes32(0x2f6f6ef223959602c05afd2b73ea8952fe0a10ad19ed665b3ee5a0b0b9e4e3ef),
             uint64(9.9 gwei), // first deposit amount
-            bytes10(0xda9ee1b1b651c87a76c2), // second deposit receiver zk address (42 bytes)
-            bytes32(0xefe3e4b9b0a0e53e5b66ed19ad100afe5289ea732bfd5ac002969523f26e6f2f),
+            bytes10(0xc2767ac851b6b1e19eda), // second deposit receiver zk address (42 bytes)
+            bytes32(0x2f6f6ef223959602c05afd2b73ea8952fe0a10ad19ed665b3ee5a0b0b9e4e3ef),
             uint64(4.9 gwei), // second deposit amount
             new bytes(14 * 50)
         );
@@ -408,12 +408,12 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         bytes memory message = abi.encodePacked(
             bytes4(0x02000001), // uint16(2) in little endian ++ MESSAGE_PREFIX_DIRECT_DEPOSIT_V1
             uint64(0), // first deposit nonce
-            bytes10(0xda9ee1b1b651c87a76c2), // first deposit receiver zk address (42 bytes)
-            bytes32(0xefe3e4b9b0a0e53e5b66ed19ad100afe5289ea732bfd5ac002969523f26e6f2f),
+            bytes10(0xc2767ac851b6b1e19eda), // first deposit receiver zk address (42 bytes)
+            bytes32(0x2f6f6ef223959602c05afd2b73ea8952fe0a10ad19ed665b3ee5a0b0b9e4e3ef),
             uint64(9.9 gwei), // first deposit amount
             uint64(1), // second deposit nonce
-            bytes10(0xda9ee1b1b651c87a76c2), // second deposit receiver zk address (42 bytes)
-            bytes32(0xefe3e4b9b0a0e53e5b66ed19ad100afe5289ea732bfd5ac002969523f26e6f2f),
+            bytes10(0xc2767ac851b6b1e19eda), // second deposit receiver zk address (42 bytes)
+            bytes32(0x2f6f6ef223959602c05afd2b73ea8952fe0a10ad19ed665b3ee5a0b0b9e4e3ef),
             uint64(4.9 gwei) // second deposit amount
         );
         emit Message(128, bytes32(0), message);
