@@ -72,5 +72,25 @@ contract ZkAddressTest is Test {
         );
         vm.expectRevert(ZkAddress.InvalidZkAddressChecksum.selector);
         actual = ZkAddress.parseZkAddress("QsnTijXekjRm9hKcq5kLNPsa6P4HtMRrc3RxVx3jsLHeo2AiysYxVJP86mz6t7k", 1);
+
+        // value outside of prime field
+        vm.expectRevert(ZkAddress.InvalidZkAddress.selector);
+        ZkAddress.parseZkAddress("2zJzzWpuBV9Ag8NQ6kwF8sygXSu4afDn1YfFifb3AxFjdYWsSgE4rkWKYVtTHCg", 0);
+        vm.expectRevert(ZkAddress.InvalidZkAddress.selector);
+        ZkAddress.parseZkAddress(
+            hex"12345678901234567890010000F093F5E1439170B97948E833285D588181B64550B829A031E1724E6430e0ad3a65", 0
+        );
+        vm.expectRevert(ZkAddress.InvalidZkAddress.selector);
+        ZkAddress.parseZkAddress(
+            hex"12345678901234567890010000F093F5E1439170B97948E833285D588181B64550B829A031E1724E6430", 0
+        );
+        vm.expectRevert(ZkAddress.InvalidZkAddress.selector);
+        ZkAddress.parseZkAddress(
+            abi.encode(
+                bytes10(0x12345678901234567890),
+                bytes32(0x010000F093F5E1439170B97948E833285D588181B64550B829A031E1724E6430)
+            ),
+            0
+        );
     }
 }
