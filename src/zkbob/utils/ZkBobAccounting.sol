@@ -346,12 +346,11 @@ contract ZkBobAccounting is Ownable {
         UserStats memory us = userStats[_user];
         uint8 tier = us.tier;
         if (tier == 0) {
-            if (address(kycProvidersManager) != address(0) &&
-                kycProvidersManager.passesKYC(_user)) {
-                    uint8 tmp_tier = kycProvidersManager.getAssociatedLimitsTier(_user, false);
-                    if (tiers[tmp_tier].limits.tvlCap > 0) {
-                        tier = tmp_tier;
-                    }
+            if (address(kycProvidersManager) != address(0) && kycProvidersManager.passesKYC(_user)) {
+                uint8 tmp_tier = kycProvidersManager.getAssociatedLimitsTier(_user, false);
+                if (tiers[tmp_tier].limits.tvlCap > 0) {
+                    tier = tmp_tier;
+                }
             }
         }
         return tier;
