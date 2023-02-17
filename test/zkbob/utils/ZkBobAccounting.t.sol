@@ -596,6 +596,22 @@ contract ZkBobAccountingTest is Test {
         assertEq(limits.depositCap, 150 gwei);
     }
 
+    function testKYCProviderManageSetButNoTier() public {
+        ZkBobAccounting.Limits memory limits;
+
+        SimpleKYCProviderManager manager = _setKYCPorviderManager();
+        ERC721PresetMinterPauserAutoId nft = ERC721PresetMinterPauserAutoId(address(manager.NFT()));
+
+        uint256 unused_tokenId = _mintNFT(nft, user3);
+
+        limits = pool.getLimitsFor(user3);
+        assertEq(limits.tvlCap, 1000 gwei);
+        assertEq(limits.dailyDepositCap, 1000 gwei);
+        assertEq(limits.dailyWithdrawalCap, 1000 gwei);
+        assertEq(limits.dailyUserDepositCap, 1000 gwei);
+        assertEq(limits.depositCap, 1000 gwei);
+    }
+
     function testPoolLimitsTiersWithKYCProvider() public {
         ZkBobAccounting.Limits memory limits;
 

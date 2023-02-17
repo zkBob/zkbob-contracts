@@ -3,6 +3,7 @@
 pragma solidity 0.8.15;
 
 import "forge-std/Test.sol";
+import "@openzeppelin/contracts/token/ERC721/presets/ERC721PresetMinterPauserAutoId.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
 import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import "../shared/Env.t.sol";
@@ -17,6 +18,7 @@ import "../../src/BobToken.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
 import "../../src/utils/UniswapV3Seller.sol";
 import "../shared/ForkTests.t.sol";
+import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
 
 contract ZkBobPoolTest is AbstractMainnetForkTest {
     uint256 private constant initialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
@@ -476,6 +478,38 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         vm.expectRevert("ZkBobDirectDepositQueue: direct deposit not pending");
         queue.refundDirectDeposit(1);
         assertEq(bob.balanceOf(user2), 15 ether + 2);
+    }
+
+    function testDepositForUserWithKYCPassed() public {
+        uint8 tier = 254;
+        ERC721PresetMinterPauserAutoId nft = new ERC721PresetMinterPauserAutoId("Test NFT", "tNFT", "http://nft.url/");
+
+        SimpleKYCProviderManager manager = new SimpleKYCProviderManager(nft, tier);
+        pool.setKycProvidersManager(manager);
+
+        pool.setLimits(tier, 50 ether, 10 ether, 2 ether, 6 ether, 5 ether, 0, 0);
+        address[] memory users = new address[](1);
+        users[0] = user1;
+        pool.setUsersTier(tier, users);
+
+        nft.mint(user1);
+
+        bob.mint(address(user1), 10 ether);
+
+        bytes memory data = _encodePermitDeposit(4 ether, 0.01 ether);
+        _transact(data);
+
+        bytes memory data2 = _encodeWithdrawal(user1, 1 ether, 0 ether);
+        _transact(data2);
+
+        bytes memory data3 = _encodePermitDeposit(3 ether, 0.01 ether);
+        _transactReverted(data3, "ZkBobAccounting: daily user deposit cap exceeded");
+
+        bytes memory data4 = _encodeWithdrawal(user1, 2 ether, 0 ether);
+        _transactReverted(data4, "ZkBobAccounting: daily withdrawal cap exceeded");
+
+        assertEq(pool.getLimitsFor(user1).dailyUserDepositCapUsage, 4 gwei);
+        assertEq(pool.getLimitsFor(user1).dailyWithdrawalCapUsage, 1.01 gwei); // 1 requested + 0.01 fees
     }
 
     function _encodePermitDeposit(int256 _amount, uint256 _fee) internal returns (bytes memory) {
