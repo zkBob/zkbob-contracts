@@ -32,8 +32,8 @@ contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccoun
     uint256 internal constant MAX_POOL_ID = 0xffffff;
     uint256 internal constant TOKEN_DENOMINATOR = 1_000_000_000;
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
-//    bytes4 internal constant MESSAGE_PREFIX_DIRECT_DEPOSIT_V1 = 0x00000001;
-//    uint256 internal constant MAX_NUMBER_OF_DIRECT_DEPOSITS = 16;
+    //    bytes4 internal constant MESSAGE_PREFIX_DIRECT_DEPOSIT_V1 = 0x00000001;
+    //    uint256 internal constant MAX_NUMBER_OF_DIRECT_DEPOSITS = 16;
 
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;
@@ -305,7 +305,7 @@ contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccoun
     }
 
     function recordDirectDeposit(address _sender, uint256 _amount) external {
-        require(msg.sender == address(direct_deposit_queue),"ZkBobPool: not authorized");
+        require(msg.sender == address(direct_deposit_queue), "ZkBobPool: not authorized");
         _checkDirectDepositLimits(_sender, _amount);
     }
 
