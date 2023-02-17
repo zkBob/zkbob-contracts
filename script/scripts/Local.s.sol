@@ -9,6 +9,7 @@ import "../../src/BobToken.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
+import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
 
 contract DeployLocal is Script {
     function run() external {
@@ -39,34 +40,58 @@ contract DeployLocal is Script {
             batchDepositVerifier := create(0, add(code3, 0x20), mload(code3))
         }
 
+        EIP1967Proxy poolProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
+        EIP1967Proxy queueProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
+
         ZkBobPool poolImpl = new ZkBobPool(
             zkBobPoolId,
             address(bob),
             transferVerifier,
             treeVerifier,
-            batchDepositVerifier
+            batchDepositVerifier,
+            address(queueProxy)
         );
-        EIP1967Proxy poolProxy = new EIP1967Proxy(tx.origin, address(poolImpl), abi.encodeWithSelector(
-                ZkBobPool.initialize.selector, zkBobInitialRoot,
-                zkBobPoolCap, zkBobDailyDepositCap, zkBobDailyWithdrawalCap, zkBobDailyUserDepositCap, zkBobDepositCap,
-                zkBobDailyUserDirectDepositCap, zkBobDirectDepositCap
-            ));
+        {
+            bytes memory initData = abi.encodeWithSelector(
+                ZkBobPool.initialize.selector,
+                zkBobInitialRoot,
+                zkBobPoolCap,
+                zkBobDailyDepositCap,
+                zkBobDailyWithdrawalCap,
+                zkBobDailyUserDepositCap,
+                zkBobDepositCap,
+                zkBobDailyUserDirectDepositCap,
+                zkBobDirectDepositCap
+            );
+            poolProxy.upgradeToAndCall(address(poolImpl), initData);
+        }
         ZkBobPool pool = ZkBobPool(address(poolProxy));
 
-        IOperatorManager operatorManager =
-            new MutableOperatorManager(zkBobRelayer, zkBobRelayerFeeReceiver, zkBobRelayerURL);
-        pool.setOperatorManager(operatorManager);
-        pool.setDirectDepositFee(uint64(zkBobDirectDepositFee));
-        pool.setDirectDepositTimeout(uint40(zkBobDirectDepositTimeout));
+        ZkBobDirectDepositQueue queueImpl = new ZkBobDirectDepositQueue(address(pool), address(bob));
+        queueProxy.upgradeTo(address(queueImpl));
+        ZkBobDirectDepositQueue queue = ZkBobDirectDepositQueue(address(queueProxy));
 
-        if (owner != address(0)) {
-            bob.transferOwnership(owner);
-            pool.transferOwnership(owner);
+        {
+            IOperatorManager operatorManager =
+                new MutableOperatorManager(zkBobRelayer, zkBobRelayerFeeReceiver, zkBobRelayerURL);
+            pool.setOperatorManager(operatorManager);
+            queue.setOperatorManager(operatorManager);
+            queue.setDirectDepositFee(uint64(zkBobDirectDepositFee));
+            queue.setDirectDepositTimeout(uint40(zkBobDirectDepositTimeout));
         }
 
-        if (admin != tx.origin) {
-            bobProxy.setAdmin(admin);
-            poolProxy.setAdmin(admin);
+        {
+            if (owner != address(0)) {
+                bob.transferOwnership(owner);
+                pool.transferOwnership(owner);
+                queue.transferOwnership(owner);
+            }
+
+            if (admin != tx.origin) {
+                bobProxy.setAdmin(admin);
+                poolProxy.setAdmin(admin);
+                queueProxy.setAdmin(admin);
+            }
         }
 
         vm.stopBroadcast();
@@ -85,5 +110,7 @@ contract DeployLocal is Script {
         console2.log("BobToken implementation:", address(bobImpl));
         console2.log("ZkBobPool:", address(pool));
         console2.log("ZkBobPool implementation:", address(poolImpl));
+        console2.log("ZkBobDirectDepositQueue:", address(queue));
+        console2.log("ZkBobDirectDepositQueue implementation:", address(queueImpl));
     }
 }
