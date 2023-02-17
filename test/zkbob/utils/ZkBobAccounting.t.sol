@@ -585,9 +585,8 @@ contract ZkBobAccountingTest is Test {
         assertEq(limits.depositCap, 100 gwei);
 
         // Test 3: Limits for the user passed KYC initially and revoked later
-        vm.startPrank(user3);
+        vm.prank(user3);
         nft.burn(tokenId);
-        vm.stopPrank();
 
         limits = pool.getLimitsFor(user3);
         assertEq(limits.tvlCap, 1000 gwei);
@@ -595,6 +594,121 @@ contract ZkBobAccountingTest is Test {
         assertEq(limits.dailyWithdrawalCap, 400 gwei);
         assertEq(limits.dailyUserDepositCap, 300 gwei);
         assertEq(limits.depositCap, 150 gwei);
+    }
+
+    function testPoolLimitsTiersWithKYCProvider() public {
+        ZkBobAccounting.Limits memory limits;
+
+        SimpleKYCProviderManager manager = _setKYCPorviderManager();
+        ERC721PresetMinterPauserAutoId nft = ERC721PresetMinterPauserAutoId(address(manager.NFT()));
+
+        //                           dailyDepositCap                depositCap
+        //                           |         dailyWithdrawalCap   |         dailyUserDirectDepositCap
+        //                tvlCap     |         |          dailyUserDepositCap |  directDepositCap
+        pool.setLimits(0, 160 ether, 70 ether, 100 ether, 15 ether, 10 ether, 0, 0);
+
+        //                           dailyDepositCap                depositCap
+        //                           |         dailyWithdrawalCap   |         dailyUserDirectDepositCap
+        //                tvlCap     |         |          dailyUserDepositCap |  directDepositCap
+        pool.setLimits(1, 160 ether, 60 ether, 100 ether, 60 ether, 40 ether, 0, 0);
+
+        //                                      dailyDepositCap                depositCap
+        //                                      |         dailyWithdrawalCap   |         dailyUserDirectDepositCap
+        //                           tvlCap     |         |          dailyUserDepositCap |  directDepositCap
+        pool.setLimits(TIER_FOR_KYC, 145 ether, 85 ether, 100 ether, 50 ether, 25 ether, 0, 0);
+
+        // TVL == 0, Tier 0: 0/70, Tier 1: 0/60, Tier 254: 0/85
+        // Test 1 (combined with Test 2): Limits changes if KYC token is issued for the user
+        vm.startPrank(user3);
+        pool.transact(1 ether); // user caps: 1/15
+        vm.expectRevert("ZkBobAccounting: single deposit cap exceeded");
+        pool.transact(11 ether);
+        pool.transact(10 ether); // user caps: 11/15
+        vm.expectRevert("ZkBobAccounting: daily user deposit cap exceeded");
+        pool.transact(5 ether);
+        vm.stopPrank();
+
+        uint256 unused_tokenId = _mintNFT(nft, user3); // user caps extended - 11/50
+
+        // TVL == 11, Tier 0: 11/70, Tier 1: 0/60, Tier 254: 0/85
+        // Test 2: The user with passed KYC (but without a dedicated tier) is able to transact within
+        //         limits specified in the KYC-contolled tier
+        vm.startPrank(user3);
+        pool.transact(11 ether); // user caps: 22/50
+
+        // TVL == 22, Tier 0: 11/70, Tier 1: 0/60, Tier 254: 11/85
+        // Test 3: The user with passed KYC (but without a dedicated tier) is not able to transact above
+        //         single deposit limit specified in the KYC-contolled tier
+        vm.expectRevert("ZkBobAccounting: single deposit cap exceeded");
+        pool.transact(26 ether);
+
+        // TVL == 22, Tier 0: 11/70, Tier 1: 0/60, Tier 254: 11/85
+        // Test 4: The user with passed KYC (but without a dedicated tier) is not able to transact above
+        //         the daily limit of all single user deposits specified in the KYC-contolled tier
+        pool.transact(25 ether); // user caps: 47/50
+        vm.expectRevert("ZkBobAccounting: daily user deposit cap exceeded");
+        pool.transact(4 ether);
+        pool.transact(3 ether); // user caps: 50/50
+        vm.stopPrank();
+
+        // TVL == 50, Tier 0: 11/70, Tier 1: 0/60, Tier 254: 39/85
+        // Test 4: The user with passed KYC (but without a dedicated tier) is not able to transact above
+        //         the daily limit of all deposits within specified in the KYC-contolled tier
+        uint256 tokenId = _mintNFT(nft, user4);
+
+        vm.startPrank(user4);
+        pool.transact(25 ether); // user caps: 25/50
+        pool.transact(1 ether); // user caps: 26/50
+        vm.expectRevert("ZkBobAccounting: daily deposit cap exceeded");
+        pool.transact(22 ether);
+        vm.stopPrank();
+
+        // TVL == 76, Tier 0: 11/70, Tier 1: 0/60, Tier 254: 65/85
+        // Test 5: The user with passed KYC an with a dedicated tier is not able to transact above
+        //         the limits specified in the KYC-contolled tier
+        pool.setUserTier(1, user2);
+        unused_tokenId = _mintNFT(nft, user2); // user caps are not affected
+
+        vm.startPrank(user2);
+        pool.transact(40 ether); // user caps: 40/60
+        pool.transact(20 ether); // user caps: 60/60
+        vm.stopPrank();
+
+        // TVL == 136, Tier 0: 11/70, Tier 1: 60/60, Tier 254: 65/85
+        // Test 6: The user with passed KYC (but without a dedicated tier) is not able to transact above
+        //         the TVL locked limit specified in the KYC-contolled tier
+        vm.startPrank(user4);
+        vm.expectRevert("ZkBobAccounting: tvl cap exceeded");
+        pool.transact(10 ether);
+
+        // TVL == 136, Tier 0: 11/70, Tier 1: 60/60, Tier 254: 65/85
+        // Test 7: Limits for the user with passed KYC initially and revoked later, will be replaced by
+        //         the default tier's limits. As soon as KYC confirmed again, the limits are recovered.
+        pool.transact(1 ether); // user caps: 27/50
+        nft.burn(tokenId); // caps are reset to default tier - 27/15
+        vm.expectRevert("ZkBobAccounting: daily user deposit cap exceeded");
+        pool.transact(1 ether);
+        vm.stopPrank();
+        tokenId = _mintNFT(nft, user4); // user caps extended - 27/50
+        vm.prank(user4);
+        pool.transact(1 ether); // user caps: 28/50
+
+        // TVL == 138, Tier 0: 11/70, Tier 1: 60/60, Tier 254: 67/85
+        // Test 7: Limits for the user with passed KYC initially and revoked later, will be replaced by
+        //         the default tier's limits. Counters will be restarted at the next day. And as soon
+        //         as KYC confirmed again, the limits for the KYC-contolled tier are applied.
+        vm.prank(user2);
+        pool.transact(-20 ether); // unwind TVL a bit
+
+        vm.startPrank(user4);
+        nft.burn(tokenId); // caps are reset to default tier - 27/15
+        vm.warp(block.timestamp + 1 days); // Counters restart:
+            // TVL == 118, Tier 0: 0/70, Tier 1: 0/60, Tier 254: 0/85
+        pool.transact(10 ether); // user caps: 10/15
+        vm.stopPrank();
+        tokenId = _mintNFT(nft, user4); // user caps extended - 10/50
+        vm.prank(user4);
+        pool.transact(10 ether); // user caps: 20/50
     }
 
     function testPoolLimitsTooLarge() public {
