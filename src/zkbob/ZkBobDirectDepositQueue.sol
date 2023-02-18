@@ -98,10 +98,12 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
         emit UpdateDirectDepositTimeout(_timeout);
     }
 
+    /// @inheritdoc IZkBobDirectDeposits
     function getDirectDeposit(uint256 _index) external view returns (IZkBobDirectDeposits.DirectDeposit memory) {
         return directDeposits[_index];
     }
 
+    /// @inheritdoc IZkBobDirectDepositQueue
     function collect(
         uint256[] calldata _indices,
         uint256 _out_commit
@@ -159,6 +161,7 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
         emit CompleteDirectDepositBatch(_indices);
     }
 
+    /// @inheritdoc IZkBobDirectDeposits
     function directDeposit(
         address _fallbackUser,
         uint256 _amount,
@@ -170,6 +173,7 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
         return directDeposit(_fallbackUser, _amount, bytes(_zkAddress));
     }
 
+    /// @inheritdoc IZkBobDirectDeposits
     function directDeposit(
         address _fallbackUser,
         uint256 _amount,
@@ -182,6 +186,7 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
         return _recordDirectDeposit(msg.sender, _fallbackUser, _amount, _rawZkAddress);
     }
 
+    /// @inheritdoc IZkBobDirectDeposits
     function onTokenTransfer(address _from, uint256 _value, bytes calldata _data) external returns (bool) {
         require(msg.sender == token, "ZkBobDirectDepositQueue: not a token caller");
 
@@ -192,6 +197,7 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
         return true;
     }
 
+    /// @inheritdoc IZkBobDirectDeposits
     function refundDirectDeposit(uint256 _index) external {
         bool isOperator = operatorManager.isOperator(msg.sender);
         DirectDeposit storage dd = directDeposits[_index];
@@ -203,6 +209,7 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
         _refundDirectDeposit(_index, dd);
     }
 
+    /// @inheritdoc IZkBobDirectDeposits
     function refundDirectDeposit(uint256[] calldata _indices) external {
         bool isOperator = operatorManager.isOperator(msg.sender);
 
