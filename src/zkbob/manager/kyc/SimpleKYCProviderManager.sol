@@ -20,13 +20,13 @@ contract SimpleKYCProviderManager is IKycProvidersManager {
         NFT = _token;
         tierForPassedKYC = _tier;
     }
- 
+
     function passesKYC(address _user) external view override returns (bool) {
         return _checkIfKycPassed(_user);
     }
 
     function getIfKYCpassedAndTier(address _user) external view override returns (bool, uint8) {
-        bool kycPassed = _checkIfKycPassed( _user);
+        bool kycPassed = _checkIfKycPassed(_user);
         uint8 tier = 0;
         if (kycPassed) {
             tier = tierForPassedKYC;
