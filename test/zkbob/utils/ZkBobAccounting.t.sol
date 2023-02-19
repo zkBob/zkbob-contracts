@@ -548,20 +548,38 @@ contract ZkBobAccountingTest is Test {
         SimpleKYCProviderManager manager = _setKYCPorviderManager();
         ERC721PresetMinterPauserAutoId nft = ERC721PresetMinterPauserAutoId(address(manager.NFT()));
 
-        //                            dailyDepositCap                  depositCap
-        //                            |          dailyWithdrawalCap    |          dailyUserDirectDepositCap
-        //                tvlCap      |          |          dailyUserDepositCap   |  directDepositCap
-        pool.setLimits(0, 1000 ether, 500 ether, 400 ether, 300 ether, 150 ether, 0, 0);
+        pool.setLimits({
+            _tier: 0,
+            _tvlCap: 1000 ether,
+            _dailyDepositCap: 500 ether,
+            _dailyWithdrawalCap: 400 ether,
+            _dailyUserDepositCap: 300 ether,
+            _depositCap: 150 ether,
+            _dailyUserDirectDepositCap: 0,
+            _directDepositCap: 0
+        });
 
-        //                           dailyDepositCap                  depositCap
-        //                           |          dailyWithdrawalCap    |          dailyUserDirectDepositCap
-        //                tvlCap     |          |          dailyUserDepositCap   |  directDepositCap
-        pool.setLimits(1, 900 ether, 400 ether, 300 ether, 200 ether, 100 ether, 0, 0);
+        pool.setLimits({
+            _tier: 1,
+            _tvlCap: 900 ether,
+            _dailyDepositCap: 400 ether,
+            _dailyWithdrawalCap: 300 ether,
+            _dailyUserDepositCap: 200 ether,
+            _depositCap: 100 ether,
+            _dailyUserDirectDepositCap: 0,
+            _directDepositCap: 0
+        });
 
-        //                                      dailyDepositCap                  depositCap
-        //                                      |          dailyWithdrawalCap    |         dailyUserDirectDepositCap
-        //                           tvlCap     |          |          dailyUserDepositCap  |  directDepositCap
-        pool.setLimits(TIER_FOR_KYC, 500 ether, 250 ether, 200 ether, 150 ether, 75 ether, 0, 0);
+        pool.setLimits({
+            _tier: TIER_FOR_KYC,
+            _tvlCap: 500 ether,
+            _dailyDepositCap: 250 ether,
+            _dailyWithdrawalCap: 200 ether,
+            _dailyUserDepositCap: 150 ether,
+            _depositCap: 75 ether,
+            _dailyUserDirectDepositCap: 0,
+            _directDepositCap: 0
+        });
 
         // Test 1: Limits for the user passed KYC but without a dedicated tier
         uint256 tokenId = _mintNFT(nft, user3);
@@ -618,20 +636,38 @@ contract ZkBobAccountingTest is Test {
         SimpleKYCProviderManager manager = _setKYCPorviderManager();
         ERC721PresetMinterPauserAutoId nft = ERC721PresetMinterPauserAutoId(address(manager.NFT()));
 
-        //                           dailyDepositCap                depositCap
-        //                           |         dailyWithdrawalCap   |         dailyUserDirectDepositCap
-        //                tvlCap     |         |          dailyUserDepositCap |  directDepositCap
-        pool.setLimits(0, 160 ether, 70 ether, 100 ether, 15 ether, 10 ether, 0, 0);
+        pool.setLimits({
+            _tier: 0,
+            _tvlCap: 160 ether,
+            _dailyDepositCap: 70 ether,
+            _dailyWithdrawalCap: 100 ether,
+            _dailyUserDepositCap: 15 ether,
+            _depositCap: 10 ether,
+            _dailyUserDirectDepositCap: 0,
+            _directDepositCap: 0
+        });
 
-        //                           dailyDepositCap                depositCap
-        //                           |         dailyWithdrawalCap   |         dailyUserDirectDepositCap
-        //                tvlCap     |         |          dailyUserDepositCap |  directDepositCap
-        pool.setLimits(1, 160 ether, 60 ether, 100 ether, 60 ether, 40 ether, 0, 0);
+        pool.setLimits({
+            _tier: 1,
+            _tvlCap: 160 ether,
+            _dailyDepositCap: 60 ether,
+            _dailyWithdrawalCap: 100 ether,
+            _dailyUserDepositCap: 60 ether,
+            _depositCap: 40 ether,
+            _dailyUserDirectDepositCap: 0,
+            _directDepositCap: 0
+        });
 
-        //                                      dailyDepositCap                depositCap
-        //                                      |         dailyWithdrawalCap   |         dailyUserDirectDepositCap
-        //                           tvlCap     |         |          dailyUserDepositCap |  directDepositCap
-        pool.setLimits(TIER_FOR_KYC, 145 ether, 85 ether, 100 ether, 50 ether, 25 ether, 0, 0);
+        pool.setLimits({
+            _tier: TIER_FOR_KYC,
+            _tvlCap: 145 ether,
+            _dailyDepositCap: 85 ether,
+            _dailyWithdrawalCap: 100 ether,
+            _dailyUserDepositCap: 50 ether,
+            _depositCap: 25 ether,
+            _dailyUserDirectDepositCap: 0,
+            _directDepositCap: 0
+        });
 
         // TVL == 0, Tier 0: 0/70, Tier 1: 0/60, Tier 254: 0/85
         // Test 1 (combined with Test 2): Limits changes if KYC token is issued for the user
