@@ -129,7 +129,7 @@ contract ZkBobAccounting is Ownable {
     function getLimitsFor(address _user) external view returns (Limits memory) {
         Slot1 memory s1 = slot1;
         UserStats memory us = userStats[_user];
-        uint8 tier = _getTierForUser(_user);
+        uint8 tier = _adjustConfiguredTierForUser(_user, us.tier);
         Tier storage t = tiers[tier];
         TierLimits memory tl = t.limits;
         TierStats memory ts = t.stats;
@@ -217,7 +217,7 @@ contract ZkBobAccounting is Ownable {
         }
 
         UserStats memory us = userStats[_user];
-        Tier storage t = tiers[_getTierForUser(_user)];
+        Tier storage t = tiers[_adjustConfiguredTierForUser(_user, us.tier)];
         TierLimits memory tl = t.limits;
         TierStats memory ts = t.stats;
 
@@ -278,7 +278,7 @@ contract ZkBobAccounting is Ownable {
         uint16 curDay = uint16(block.timestamp / SLOT_DURATION / DAY_SLOTS);
 
         UserStats memory us = userStats[_user];
-        TierLimits memory tl = tiers[_getTierForUser(_user)].limits;
+        TierLimits memory tl = tiers[_adjustConfiguredTierForUser(_user, us.tier)].limits;
 
         // check all sorts of limits when processing a deposit
         require(
@@ -345,15 +345,14 @@ contract ZkBobAccounting is Ownable {
         emit UpdateLimits(_tier, tl);
     }
 
-    // Tier is set as per the KYC Providers recomendation only in the case if no specific tier
-    // assigned to the user
-    function _getTierForUser(address _user) internal view returns (uint8) {
-        UserStats memory us = userStats[_user];
-        uint8 tier = us.tier;
+    // Tier is set as per the KYC Providers Manager recomendation only in the case if no
+    // specific tier assigned to the user
+    function _adjustConfiguredTierForUser(address _user, uint8 _configuredTier) internal view returns (uint8) {
+        uint8 tier = _configuredTier;
         if (tier == 0) {
-            if (address(kycProvidersManager) != address(0) && kycProvidersManager.passesKYC(_user)) {
-                uint8 tmp_tier = kycProvidersManager.getAssociatedLimitsTier(_user, false);
-                if (tiers[tmp_tier].limits.tvlCap > 0) {
+            if (address(kycProvidersManager) != address(0)) {
+                (bool kycPassed, uint8 tmp_tier) = kycProvidersManager.getIfKYCpassedAndTier(_user);
+                if (kycPassed && tiers[tmp_tier].limits.tvlCap > 0) {
                     tier = tmp_tier;
                 }
             }

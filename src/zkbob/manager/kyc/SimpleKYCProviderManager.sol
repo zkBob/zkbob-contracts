@@ -20,19 +20,18 @@ contract SimpleKYCProviderManager is IKycProvidersManager {
         NFT = _token;
         tierForPassedKYC = _tier;
     }
-
+ 
     function passesKYC(address _user) external view override returns (bool) {
         return _checkIfKycPassed(_user);
     }
 
-    // In simple manager it is assumed that one tier is used for all users passed KYC.
-    // Also the assumption is that the method either always used after passesKYC or with
-    // _checkKYC set to true.
-    function getAssociatedLimitsTier(address _user, bool _checkKYC) external view override returns (uint8) {
-        if (_checkKYC) {
-            require(_checkIfKycPassed(_user), "KYCProviderManager: non-existing pool limits tier");
+    function getIfKYCpassedAndTier(address _user) external view override returns (bool, uint8) {
+        bool kycPassed = _checkIfKycPassed( _user);
+        uint8 tier = 0;
+        if (kycPassed) {
+            tier = tierForPassedKYC;
         }
-        return tierForPassedKYC;
+        return (kycPassed, tier);
     }
 
     function _checkIfKycPassed(address _user) internal view returns (bool) {

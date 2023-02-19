@@ -26,12 +26,13 @@ contract SimpleKYCProviderManagerTest is Test {
         assertEq(manager.passesKYC(user2), false);
     }
 
-    function testGetAssociatedLimitsTier() public {
-        assertEq(manager.getAssociatedLimitsTier(user1, false), TIER);
-        assertEq(manager.getAssociatedLimitsTier(user1, true), TIER);
+    function testGetIfKYCpassedAndTier() public {
+        (bool passed, uint8 tier) = manager.getIfKYCpassedAndTier(user1);
+        assertEq(passed, true);
+        assertEq(tier, TIER);
 
-        assertEq(manager.getAssociatedLimitsTier(user2, false), TIER);
-        vm.expectRevert("KYCProviderManager: non-existing pool limits tier");
-        manager.getAssociatedLimitsTier(user2, true);
+        (passed, tier) = manager.getIfKYCpassedAndTier(user2);
+        assertEq(passed, false);
+        assertEq(tier, 0);
     }
 }
