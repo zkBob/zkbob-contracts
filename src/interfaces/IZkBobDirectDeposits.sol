@@ -71,6 +71,12 @@ interface IZkBobDirectDeposits {
     function onTokenTransfer(address from, uint256 amount, bytes memory data) external returns (bool ok);
 
     /**
+     * @notice Tells the direct deposit fee, in zkBOB units (9 decimals).
+     * @return fee direct deposit submission fee.
+     */
+    function directDepositFee() external view returns (uint64 fee);
+
+    /**
      * @notice Tells the timeout after which unprocessed direct deposits can be refunded.
      * @return timeout duration in seconds.
      */
