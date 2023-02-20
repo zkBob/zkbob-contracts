@@ -1,0 +1,93 @@
+name: contract_diff
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag or commit SHA1 to fetch contract from'
+        type: string
+        default: master
+      chain:
+        description: 'Chain name, where target contract is located'
+        type: choice
+        options:
+          - mainnet
+          - polygon
+          - optimism
+          - bsc
+          - arbitrum
+          - gnosis-chain
+        default: polygon
+      target_contract_address:
+        description: 'Contract address to fetch diff with'
+        type: string
+        required: true
+      source:
+        description: 'Type of source to fetch diff with'
+        type: choice
+        options:
+          - contract
+          - source_code
+        default: contract
+      source_contract_address:
+        description: 'Contract address to fetch diff with'
+        type: string
+        required: false
+      etherscan_api_key:
+        description: 'Etherscan API key'
+        type: string
+        required: false
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  diff:
+    name: Contract Diff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        if: inputs.source == 'source_code'
+        with:
+          submodules: recursive
+          ref: ${{ inputs.ref }}
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+        id: init
+
+      - name: Fetch target contract source code from Etherscan
+        run: |
+          mkdir -p tmp/
+          cast etherscan-source -c ${{ inputs.chain }} ${{ inputs.target_contract_address }} --etherscan-api-key ${{ inputs.etherscan_api_key }} -d tmp/target
+
+      - name: Fetch source contract from local sources
+        if: inputs.source == 'source_code'
+        run: |
+          mkdir -p tmp/source/Local
+          find . -path "./tmp" -prune -o -name "*.sol" -type f -exec cp --parents {} tmp/source/Local \;
+
+      - name: Fetch source contract source code from Etherscan
+        if: inputs.source == 'contract'
+        run: |
+          mkdir -p tmp/
+          cast etherscan-source -c ${{ inputs.chain }} ${{ inputs.source_contract_address }} --etherscan-api-key ${{ inputs.etherscan_api_key }} -d tmp/source
+
+      - name: Run diff
+        run: |
+          tree ./tmp
+          git diff --no-index --diff-filter=ACM -- tmp/source/* tmp/target/* > diff.txt || true
+          cat diff.txt
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: contract.diff
+          path: diff.txt
+
+      - name: Publish diff
+        run: |
+          DIFF=$(jq --null-input --arg diff "$(cat diff.txt)" '{"diff": $diff}')
+          RESPONSE=$(curl -X PUT https://diffy.org/api/diff/ -H "content-type: application/json" -d "$DIFF")
+          ID=$(echo $RESPONSE | grep -o '"id":"[^,}]*"' | sed 's/.*://' | sed 's/"//g')
+          echo "https://diffy.org/diff/$ID"
