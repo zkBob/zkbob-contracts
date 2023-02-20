@@ -27,6 +27,10 @@ uint256 constant zkBobDailyDepositCap = 100_000 ether;
 uint256 constant zkBobDailyWithdrawalCap = 100_000 ether;
 uint256 constant zkBobDailyUserDepositCap = 10_000 ether;
 uint256 constant zkBobDepositCap = 10_000 ether;
+uint256 constant zkBobDailyUserDirectDepositCap = 0;
+uint256 constant zkBobDirectDepositCap = 0;
+uint256 constant zkBobDirectDepositFee = 0.1 gwei;
+uint256 constant zkBobDirectDepositTimeout = 1 days;
 
 // new zkbob impl
 address constant zkBobPool = 0x72e6B59D4a90ab232e55D4BB7ed2dD17494D62fB;

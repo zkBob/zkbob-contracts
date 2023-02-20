@@ -1,2 +1,3 @@
 @openzeppelin/contracts/=lib/@openzeppelin/contracts/contracts/
 @gnosis/auction/=lib/@gnosis/auction/contracts/
+@base58-solidity/=lib/base58-solidity/contracts/
