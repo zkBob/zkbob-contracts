@@ -26,12 +26,10 @@ contract SimpleKYCProviderManager is IKycProvidersManager {
     }
 
     function getIfKYCpassedAndTier(address _user) external view override returns (bool, uint8) {
-        bool kycPassed = _checkIfKycPassed(_user);
-        uint8 tier = 0;
-        if (kycPassed) {
-            tier = tierForPassedKYC;
+        if (_checkIfKycPassed(_user)) {
+            return (true, tierForPassedKYC);
         }
-        return (kycPassed, tier);
+        return (false, 0);
     }
 
     function _checkIfKycPassed(address _user) internal view returns (bool) {
