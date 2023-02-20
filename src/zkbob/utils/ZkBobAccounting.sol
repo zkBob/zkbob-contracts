@@ -348,16 +348,13 @@ contract ZkBobAccounting is Ownable {
     // Tier is set as per the KYC Providers Manager recomendation only in the case if no
     // specific tier assigned to the user
     function _adjustConfiguredTierForUser(address _user, uint8 _configuredTier) internal view returns (uint8) {
-        uint8 tier = _configuredTier;
-        if (tier == 0) {
-            if (address(kycProvidersManager) != address(0)) {
-                (bool kycPassed, uint8 tmp_tier) = kycProvidersManager.getIfKYCpassedAndTier(_user);
-                if (kycPassed && tiers[tmp_tier].limits.tvlCap > 0) {
-                    tier = tmp_tier;
-                }
+        if (_configuredTier == 0 && address(kycProvidersManager) != address(0)) {
+            (bool kycPassed, uint8 tier) = kycProvidersManager.getIfKYCpassedAndTier(_user);
+            if (kycPassed && tiers[tier].limits.tvlCap > 0) {
+                return tier;
             }
         }
-        return tier;
+        return _configuredTier;
     }
 
     function _setUsersTier(uint8 _tier, address[] memory _users) internal {
