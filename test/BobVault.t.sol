@@ -53,7 +53,12 @@ contract BobVaultTest is AbstractBobVaultTest {
         vm.startPrank(user1);
 
         vm.expectRevert("Ownable: caller is not the owner");
-        vault.addCollateral(address(tokenA), BobVault.Collateral(0, 0, 0, address(0), 1000000, 0.01 ether, 0.01 ether));
+        vault.addCollateral(
+            address(tokenA),
+            BobVault.Collateral(
+                0, 0, 0, address(0), 1000000, 0.01 ether, 0.01 ether, type(uint128).max, type(uint128).max
+            )
+        );
         vm.expectRevert("Ownable: caller is not the owner");
         vault.setInvestAdmin(user2);
         vm.expectRevert("Ownable: caller is not the owner");
@@ -61,11 +66,13 @@ contract BobVaultTest is AbstractBobVaultTest {
         vm.expectRevert("Ownable: caller is not the owner");
         vault.setCollateralFees(address(tokenA), 0.01 ether, 0.01 ether);
         vm.expectRevert("Ownable: caller is not the owner");
-        vault.enableCollateralYield(address(tokenA), address(0), 1_000_000 * 1e6, 1e6);
+        vault.enableCollateralYield(address(tokenA), address(0), 1_000_000 * 1e6, 1e6, type(uint128).max);
         vm.expectRevert("Ownable: caller is not the owner");
         vault.disableCollateralYield(address(tokenA));
         vm.expectRevert("Ownable: caller is not the owner");
-        vault.updateCollateralYield(address(tokenA), 1_000_000 * 1e6, 1e6);
+        vault.updateCollateralYield(address(tokenA), 1_000_000 * 1e6, 1e6, type(uint128).max);
+        vm.expectRevert("Ownable: caller is not the owner");
+        vault.setMaxBalance(address(tokenA), type(uint128).max);
         vm.expectRevert("Ownable: caller is not the owner");
         vault.reclaim(user1, 1e6);
         vm.expectRevert("Ownable: caller is not the owner");
@@ -145,9 +152,24 @@ abstract contract AbstractBobVault3poolTest is AbstractBobVaultTest, AbstractFor
         assertEq(vault.isCollateral(address(usdc)), false);
         assertEq(vault.isCollateral(address(usdt)), false);
         assertEq(vault.isCollateral(address(dai)), false);
-        vault.addCollateral(address(usdc), BobVault.Collateral(0, 0, 0, address(0), 1e6, 0.001 ether, 0.002 ether));
-        vault.addCollateral(address(usdt), BobVault.Collateral(0, 0, 0, address(0), 1e6, 0.003 ether, 0.004 ether));
-        vault.addCollateral(address(dai), BobVault.Collateral(0, 0, 0, address(0), 1 ether, 0.005 ether, 0.006 ether));
+        vault.addCollateral(
+            address(usdc),
+            BobVault.Collateral(
+                0, 0, 0, address(0), 1e6, 0.001 ether, 0.002 ether, type(uint128).max, type(uint128).max
+            )
+        );
+        vault.addCollateral(
+            address(usdt),
+            BobVault.Collateral(
+                0, 0, 0, address(0), 1e6, 0.003 ether, 0.004 ether, type(uint128).max, type(uint128).max
+            )
+        );
+        vault.addCollateral(
+            address(dai),
+            BobVault.Collateral(
+                0, 0, 0, address(0), 1 ether, 0.005 ether, 0.006 ether, type(uint128).max, type(uint128).max
+            )
+        );
         assertEq(vault.isCollateral(address(usdc)), true);
         assertEq(vault.isCollateral(address(usdt)), true);
         assertEq(vault.isCollateral(address(dai)), true);
@@ -351,6 +373,46 @@ abstract contract AbstractBobVault3poolTest is AbstractBobVaultTest, AbstractFor
         assertGt(bob.balanceOf(user1), 700 ether);
         vm.stopPrank();
     }
+
+    function testMaxBalance() public {
+        _setup3pool(100 ether);
+
+        vm.expectRevert("BobVault: unsupported collateral");
+        vault.setMaxBalance(address(this), 50 * 1e6);
+
+        vault.setMaxBalance(address(usdc), 50 * 1e6);
+
+        vault.buy(address(usdc), 30 * 1e6);
+        vault.buy(address(usdt), 30 * 1e6);
+
+        vm.expectRevert("BobVault: exceeds max balance");
+        vault.getAmountOut(address(usdc), address(bob), 25 * 1e6);
+        vm.expectRevert("BobVault: exceeds max balance");
+        vault.getAmountIn(address(usdc), address(bob), 25 ether);
+        vm.expectRevert("BobVault: exceeds max balance");
+        vault.buy(address(usdc), 25 * 1e6);
+
+        vm.expectRevert("BobVault: exceeds max balance");
+        vault.getAmountOut(address(usdc), address(usdt), 25 * 1e6);
+        vm.expectRevert("BobVault: exceeds max balance");
+        vault.getAmountIn(address(usdc), address(usdt), 25 * 1e6);
+        vm.expectRevert("BobVault: exceeds max balance");
+        vault.swap(address(usdc), address(usdt), 25 * 1e6);
+
+        assertEq(vault.getAmountOut(address(usdc), address(bob), 20 * 1e6), 19.98 ether);
+        assertEq(vault.getAmountIn(address(usdc), address(bob), 19.98 ether), 20 * 1e6);
+        vault.buy(address(usdc), 20 * 1e6);
+        vm.expectRevert("BobVault: exceeds max balance");
+        vault.swap(address(usdc), address(usdt), 20 * 1e6);
+
+        vault.sell(address(usdc), 20 ether);
+        assertEq(vault.getAmountOut(address(usdc), address(usdt), 20 * 1e6), 20 * 1e6 * 0.999 * 0.996);
+        assertEq(vault.getAmountIn(address(usdc), address(usdt), 20 * 1e6 * 0.999 * 0.996), 20 * 1e6);
+        vault.swap(address(usdc), address(usdt), 20 * 1e6);
+
+        BobVault.Stat memory stat = vault.stat(address(usdc));
+        assertEq(stat.required, 50 * 1e6 - 70 * 1e6 * 0.001);
+    }
 }
 
 abstract contract AbstractBobVaultAAVETest is AbstractBobVaultTest, AbstractForkTest {
@@ -391,7 +453,18 @@ abstract contract AbstractBobVaultAAVETest is AbstractBobVaultTest, AbstractFork
 
         AAVEYieldImplementation aImpl = new AAVEYieldImplementation(lendingPool);
         vault.addCollateral(
-            address(usdc), BobVault.Collateral(0, 1_000_000 * 1e6, 1e6, address(aImpl), 1e6, 0.001 ether, 0.002 ether)
+            address(usdc),
+            BobVault.Collateral(
+                0,
+                1_000_000 * 1e6,
+                1e6,
+                address(aImpl),
+                1e6,
+                0.001 ether,
+                0.002 ether,
+                type(uint128).max,
+                type(uint128).max
+            )
         );
 
         bob.mint(address(vault), 100_000_000 ether);
@@ -413,14 +486,46 @@ abstract contract AbstractBobVaultAAVETest is AbstractBobVaultTest, AbstractFork
 
         AAVEYieldImplementation aImpl = new AAVEYieldImplementation(lendingPool);
         vault.addCollateral(
-            address(usdc), BobVault.Collateral(0, 1_000_000 * 1e6, 1e6, address(aImpl), 1e6, 0.001 ether, 0.002 ether)
+            address(usdc),
+            BobVault.Collateral(
+                0,
+                1_000_000 * 1e6,
+                1e6,
+                address(aImpl),
+                1e6,
+                0.001 ether,
+                0.002 ether,
+                type(uint128).max,
+                type(uint128).max
+            )
         );
         vault.addCollateral(
-            address(usdt), BobVault.Collateral(0, 1_000_000 * 1e6, 1e6, address(aImpl), 1e6, 0.003 ether, 0.004 ether)
+            address(usdt),
+            BobVault.Collateral(
+                0,
+                1_000_000 * 1e6,
+                1e6,
+                address(aImpl),
+                1e6,
+                0.003 ether,
+                0.004 ether,
+                type(uint128).max,
+                type(uint128).max
+            )
         );
         vault.addCollateral(
             address(dai),
-            BobVault.Collateral(0, 1_000_000 ether, 1 ether, address(aImpl), 1 ether, 0.005 ether, 0.006 ether)
+            BobVault.Collateral(
+                0,
+                1_000_000 ether,
+                1 ether,
+                address(aImpl),
+                1 ether,
+                0.005 ether,
+                0.006 ether,
+                type(uint128).max,
+                type(uint128).max
+            )
         );
 
         bob.mint(address(vault), 100_000_000 ether);
@@ -485,7 +590,7 @@ abstract contract AbstractBobVaultAAVETest is AbstractBobVaultTest, AbstractFork
         uint256 investedAmount1 = _getAToken(address(usdc)).balanceOf(address(vault));
         assertGt(investedAmount1, 0);
 
-        vault.updateCollateralYield(address(usdc), 100_000 * 1e6, 10 * 1e6);
+        vault.updateCollateralYield(address(usdc), 100_000 * 1e6, 10 * 1e6, type(uint128).max);
 
         uint256 investedAmount2 = _getAToken(address(usdc)).balanceOf(address(vault));
         assertGt(investedAmount2, investedAmount1);
@@ -536,7 +641,7 @@ abstract contract AbstractBobVaultAAVETest is AbstractBobVaultTest, AbstractFork
         assertEq(_getAToken(address(usdc)).balanceOf(address(vault)), 0);
 
         address aImpl = address(new AAVEYieldImplementation(lendingPool));
-        vault.enableCollateralYield(address(usdc), aImpl, 100_000 * 1e6, 10 * 1e6);
+        vault.enableCollateralYield(address(usdc), aImpl, 100_000 * 1e6, 10 * 1e6, type(uint128).max);
 
         stat = vault.stat(address(usdc));
         assertGt(stat.total, 10_000_002 * 1e6);
@@ -576,6 +681,22 @@ abstract contract AbstractBobVaultAAVETest is AbstractBobVaultTest, AbstractFork
         assertLt(usdc.balanceOf(address(vault)), 900_000 * 1e6);
 
         assertEq(_getAToken(address(usdc)).balanceOf(address(vault)), 0);
+    }
+
+    function testAAVEMaxInvested() public {
+        _setupAAVEYieldForUSDC();
+
+        vault.updateCollateralYield(address(usdc), 1_000_000 * 1e6, 1e6, 2_000_000 * 1e6);
+        assertGt(_getAToken(address(usdc)).balanceOf(address(vault)), 9_000_000 * 1e6);
+
+        vm.prank(user1);
+        vault.sell(address(usdc), 9_000_000 ether);
+        vm.prank(user1);
+        vault.buy(address(usdc), 4_000_000 * 1e6);
+
+        vault.invest(address(usdc));
+
+        assertApproxEqAbs(_getAToken(address(usdc)).balanceOf(address(vault)), 2_000_000 * 1e6, 1000);
     }
 
     function _getAToken(address _token) internal returns (IERC20) {
