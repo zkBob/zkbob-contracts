@@ -21,11 +21,6 @@ contract SimpleKYCProviderManagerTest is Test {
         manager = new SimpleKYCProviderManager(nft, TIER);
     }
 
-    function testPassesKYC() public {
-        assertEq(manager.passesKYC(user1), true);
-        assertEq(manager.passesKYC(user2), false);
-    }
-
     function testGetIfKYCpassedAndTier() public {
         (bool passed, uint8 tier) = manager.getIfKYCpassedAndTier(user1);
         assertEq(passed, true);
