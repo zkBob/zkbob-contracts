@@ -83,6 +83,7 @@ contract DeployZkBobPool is Script {
         require(queue.owner() == owner, "Owner is not configured");
         require(pool.transfer_verifier() == transferVerifier, "Transfer verifier is not configured");
         require(pool.tree_verifier() == treeVerifier, "Tree verifier is not configured");
+        require(pool.batch_deposit_verifier() == batchDepositVerifier, "Batch deposit verifier is not configured");
 
         console2.log("ZkBobPool:", address(pool));
         console2.log("ZkBobPool implementation:", address(poolImpl));
@@ -90,5 +91,6 @@ contract DeployZkBobPool is Script {
         console2.log("ZkBobDirectDepositQueue implementation:", address(queueImpl));
         console2.log("TransferVerifier:", address(transferVerifier));
         console2.log("TreeUpdateVerifier:", address(treeVerifier));
+        console2.log("BatchDepositVierifier:", address(batchDepositVerifier));
     }
 }
