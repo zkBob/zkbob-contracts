@@ -45,6 +45,22 @@ interface IZkBobDirectDeposits {
         returns (uint256 depositId);
 
     /**
+     * @notice Performs a direct deposit to the specified zk address.
+     * In case the deposit cannot be processed, it can be refunded later to the fallbackReceiver address.
+     * @param fallbackReceiver receiver of deposit refund.
+     * @param amount direct deposit amount.
+     * @param zkAddress receiver zk address.
+     * @return depositId id of the submitted deposit to query status for.
+     */
+    function directDeposit(
+        address fallbackReceiver,
+        uint256 amount,
+        string memory zkAddress
+    )
+        external
+        returns (uint256 depositId);
+
+    /**
      * @notice ERC677 callback for performing a direct deposit.
      * Do not call this function directly, it's only intended to be called by the token contract.
      * @param from original tokens sender.
@@ -55,10 +71,22 @@ interface IZkBobDirectDeposits {
     function onTokenTransfer(address from, uint256 amount, bytes memory data) external returns (bool ok);
 
     /**
+     * @notice Tells the direct deposit fee, in zkBOB units (9 decimals).
+     * @return fee direct deposit submission fee.
+     */
+    function directDepositFee() external view returns (uint64 fee);
+
+    /**
      * @notice Tells the timeout after which unprocessed direct deposits can be refunded.
      * @return timeout duration in seconds.
      */
     function directDepositTimeout() external view returns (uint40 timeout);
+
+    /**
+     * @notice Tells the nonce of next direct deposit.
+     * @return nonce direct deposit nonce.
+     */
+    function directDepositNonce() external view returns (uint32 nonce);
 
     /**
      * @notice Refunds specified direct deposit.

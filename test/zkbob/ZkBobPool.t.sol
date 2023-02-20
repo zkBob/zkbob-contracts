@@ -356,29 +356,25 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         vm.expectRevert("ZkBobAccounting: single direct deposit cap exceeded");
         bob.transferAndCall(address(queue), 10 ether, abi.encode(user2, zkAddress));
 
-        vm.prank(user1);
+        vm.startPrank(user1);
         vm.expectRevert("ZkBobDirectDepositQueue: direct deposit amount is too low");
         bob.transferAndCall(address(queue), 0.01 ether, abi.encode(user2, zkAddress));
 
-        vm.prank(user1);
         vm.expectRevert(ZkAddress.InvalidZkAddressLength.selector);
         bob.transferAndCall(address(queue), 10 ether, abi.encode(user2, "invalid"));
 
-        vm.prank(user1);
         vm.expectRevert("ZkBobAccounting: single direct deposit cap exceeded");
         bob.transferAndCall(address(queue), 15 ether, abi.encode(user2, zkAddress));
 
         vm.expectEmit(true, true, false, true);
         emit SubmitDirectDeposit(user1, 0, user2, ZkAddress.parseZkAddress(zkAddress, 0), 9.9 gwei);
-        vm.prank(user1);
         bob.transferAndCall(address(queue), 10 ether, abi.encode(user2, zkAddress));
 
+        bob.approve(address(queue), 10 ether);
         vm.expectEmit(true, true, false, true);
         emit SubmitDirectDeposit(user1, 1, user2, ZkAddress.parseZkAddress(zkAddress, 0), 9.9 gwei);
-        vm.prank(user1);
-        bob.transferAndCall(address(queue), 10 ether, abi.encode(user2, zkAddress));
+        queue.directDeposit(user2, 10 ether, zkAddress);
 
-        vm.prank(user1);
         vm.expectRevert("ZkBobAccounting: daily user direct deposit cap exceeded");
         bob.transferAndCall(address(queue), 10 ether, abi.encode(user2, zkAddress));
 
@@ -390,6 +386,7 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
             assertEq(deposit.fee, 0.1 gwei);
             assertEq(uint8(deposit.status), uint8(IZkBobDirectDeposits.DirectDepositStatus.Pending));
         }
+        vm.stopPrank();
     }
 
     function testAppendDirectDeposits() public {

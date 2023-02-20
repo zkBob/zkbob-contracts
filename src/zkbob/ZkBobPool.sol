@@ -267,6 +267,15 @@ contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccoun
         }
     }
 
+    /**
+     * @dev Appends a batch of direct deposits into a zkBob merkle tree.
+     * Callable only by the current operator.
+     * @param _root_after new merkle tree root after append.
+     * @param _indices list of indices for queued pending deposits.
+     * @param _out_commit out commitment for output notes serialized from direct deposits.
+     * @param _batch_deposit_proof snark proof for batch deposit verifier.
+     * @param _tree_proof snark proof for tree update verifier.
+     */
     function appendDirectDeposits(
         uint256 _root_after,
         uint256[] calldata _indices,
@@ -304,6 +313,12 @@ contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccoun
         emit Message(_pool_index, _all_messages_hash, message);
     }
 
+    /**
+     * @dev Records submitted direct deposit into the users limits.
+     * Callable only by the direct deposit queue.
+     * @param _sender direct deposit sender.
+     * @param _amount direct deposit amount in zkBOB units.
+     */
     function recordDirectDeposit(address _sender, uint256 _amount) external {
         require(msg.sender == address(direct_deposit_queue), "ZkBobPool: not authorized");
         _checkDirectDepositLimits(_sender, _amount);
