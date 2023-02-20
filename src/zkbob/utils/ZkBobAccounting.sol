@@ -2,6 +2,9 @@
 
 pragma solidity 0.8.15;
 
+import "../../interfaces/IKycProvidersManager.sol";
+import "../../utils/Ownable.sol";
+
 /**
  * @title ZkBobAccounting
  * @dev On chain accounting for zkBob operations, limits and stats.
@@ -9,7 +12,7 @@ pragma solidity 0.8.15;
  * Limitations: Contract will only work correctly as long as pool tvl does not exceed 4.7e12 BOB (4.7 trillion)
  * and overall transaction count does not exceed 4.3e9 (4.3 billion). Pool usage limits cannot exceed 4.3e9 BOB (4.3 billion) per day.
  */
-contract ZkBobAccounting {
+contract ZkBobAccounting is Ownable {
     uint256 internal constant PRECISION = 1_000_000_000;
     uint256 internal constant SLOT_DURATION = 1 hours;
     uint256 internal constant DAY_SLOTS = 1 days / SLOT_DURATION;
@@ -112,8 +115,11 @@ contract ZkBobAccounting {
     mapping(uint256 => Snapshot) private snapshots; // single linked list of hourly snapshots
     mapping(address => UserStats) private userStats;
 
+    IKycProvidersManager public kycProvidersManager;
+
     event UpdateLimits(uint8 indexed tier, TierLimits limits);
     event UpdateTier(address user, uint8 tier);
+    event UpdateKYCProvidersManager(address manager);
 
     /**
      * @dev Returns currently configured limits and remaining quotas for the given user as of the current block.
@@ -123,7 +129,8 @@ contract ZkBobAccounting {
     function getLimitsFor(address _user) external view returns (Limits memory) {
         Slot1 memory s1 = slot1;
         UserStats memory us = userStats[_user];
-        Tier storage t = tiers[uint256(us.tier)];
+        uint8 tier = _adjustConfiguredTierForUser(_user, us.tier);
+        Tier storage t = tiers[tier];
         TierLimits memory tl = t.limits;
         TierStats memory ts = t.stats;
         uint24 curSlot = uint24(block.timestamp / SLOT_DURATION);
@@ -138,11 +145,22 @@ contract ZkBobAccounting {
             dailyUserDepositCap: tl.dailyUserDepositCap * PRECISION,
             dailyUserDepositCapUsage: (us.day == today) ? us.dailyDeposit : 0,
             depositCap: tl.depositCap * PRECISION,
-            tier: us.tier,
+            tier: tier,
             dailyUserDirectDepositCap: tl.dailyUserDirectDepositCap * PRECISION,
             dailyUserDirectDepositCapUsage: (us.day == today) ? us.dailyDirectDeposit : 0,
             directDepositCap: tl.directDepositCap * PRECISION
         });
+    }
+
+    /**
+     * @dev Updates kyc providers manager contract.
+     * Callable only by the contract owner / proxy admin.
+     * @param _kycProvidersManager new operator manager implementation.
+     */
+    function setKycProvidersManager(IKycProvidersManager _kycProvidersManager) external onlyOwner {
+        require(address(_kycProvidersManager) != address(0), "ZkBobPool: manager is zero address");
+        kycProvidersManager = _kycProvidersManager;
+        emit UpdateKYCProvidersManager(address(_kycProvidersManager));
     }
 
     function _recordOperation(
@@ -199,7 +217,7 @@ contract ZkBobAccounting {
         }
 
         UserStats memory us = userStats[_user];
-        Tier storage t = tiers[us.tier];
+        Tier storage t = tiers[_adjustConfiguredTierForUser(_user, us.tier)];
         TierLimits memory tl = t.limits;
         TierStats memory ts = t.stats;
 
@@ -213,6 +231,7 @@ contract ZkBobAccounting {
 
             if (curDay > us.day) {
                 // user snapshot is outdated, day number and daily sum could be reset
+                // original user's tier (0) is preserved
                 userStats[_user] =
                     UserStats({day: curDay, dailyDeposit: uint72(depositAmount), tier: us.tier, dailyDirectDeposit: 0});
             } else {
@@ -259,7 +278,7 @@ contract ZkBobAccounting {
         uint16 curDay = uint16(block.timestamp / SLOT_DURATION / DAY_SLOTS);
 
         UserStats memory us = userStats[_user];
-        TierLimits memory tl = tiers[us.tier].limits;
+        TierLimits memory tl = tiers[_adjustConfiguredTierForUser(_user, us.tier)].limits;
 
         // check all sorts of limits when processing a deposit
         require(
@@ -268,6 +287,7 @@ contract ZkBobAccounting {
 
         if (curDay > us.day) {
             // user snapshot is outdated, day number and daily sum could be reset
+            // original user's tier (0) is preserved
             us = UserStats({day: curDay, dailyDeposit: 0, tier: us.tier, dailyDirectDeposit: uint72(_amount)});
         } else {
             us.dailyDirectDeposit += uint72(_amount);
@@ -323,6 +343,18 @@ contract ZkBobAccounting {
         });
         tiers[_tier].limits = tl;
         emit UpdateLimits(_tier, tl);
+    }
+
+    // Tier is set as per the KYC Providers Manager recomendation only in the case if no
+    // specific tier assigned to the user
+    function _adjustConfiguredTierForUser(address _user, uint8 _configuredTier) internal view returns (uint8) {
+        if (_configuredTier == 0 && address(kycProvidersManager) != address(0)) {
+            (bool kycPassed, uint8 tier) = kycProvidersManager.getIfKYCpassedAndTier(_user);
+            if (kycPassed && tiers[tier].limits.tvlCap > 0) {
+                return tier;
+            }
+        }
+        return _configuredTier;
     }
 
     function _setUsersTier(uint8 _tier, address[] memory _users) internal {
