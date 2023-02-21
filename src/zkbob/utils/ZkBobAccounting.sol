@@ -3,7 +3,7 @@
 pragma solidity 0.8.15;
 
 import "../../interfaces/IKycProvidersManager.sol";
-import "../../utils/Ownable.sol";
+import "./KycProvidersManagerStorage.sol";
 
 /**
  * @title ZkBobAccounting
@@ -12,7 +12,7 @@ import "../../utils/Ownable.sol";
  * Limitations: Contract will only work correctly as long as pool tvl does not exceed 4.7e12 BOB (4.7 trillion)
  * and overall transaction count does not exceed 4.3e9 (4.3 billion). Pool usage limits cannot exceed 4.3e9 BOB (4.3 billion) per day.
  */
-contract ZkBobAccounting is Ownable {
+contract ZkBobAccounting is KycProvidersManagerStorage {
     uint256 internal constant PRECISION = 1_000_000_000;
     uint256 internal constant SLOT_DURATION = 1 hours;
     uint256 internal constant DAY_SLOTS = 1 days / SLOT_DURATION;
@@ -115,11 +115,8 @@ contract ZkBobAccounting is Ownable {
     mapping(uint256 => Snapshot) private snapshots; // single linked list of hourly snapshots
     mapping(address => UserStats) private userStats;
 
-    IKycProvidersManager public kycProvidersManager;
-
     event UpdateLimits(uint8 indexed tier, TierLimits limits);
     event UpdateTier(address user, uint8 tier);
-    event UpdateKYCProvidersManager(address manager);
 
     /**
      * @dev Returns currently configured limits and remaining quotas for the given user as of the current block.
@@ -150,17 +147,6 @@ contract ZkBobAccounting is Ownable {
             dailyUserDirectDepositCapUsage: (us.day == today) ? us.dailyDirectDeposit : 0,
             directDepositCap: tl.directDepositCap * PRECISION
         });
-    }
-
-    /**
-     * @dev Updates kyc providers manager contract.
-     * Callable only by the contract owner / proxy admin.
-     * @param _kycProvidersManager new operator manager implementation.
-     */
-    function setKycProvidersManager(IKycProvidersManager _kycProvidersManager) external onlyOwner {
-        require(address(_kycProvidersManager) != address(0), "ZkBobPool: manager is zero address");
-        kycProvidersManager = _kycProvidersManager;
-        emit UpdateKYCProvidersManager(address(_kycProvidersManager));
     }
 
     function _recordOperation(
@@ -348,8 +334,9 @@ contract ZkBobAccounting is Ownable {
     // Tier is set as per the KYC Providers Manager recomendation only in the case if no
     // specific tier assigned to the user
     function _adjustConfiguredTierForUser(address _user, uint8 _configuredTier) internal view returns (uint8) {
-        if (_configuredTier == 0 && address(kycProvidersManager) != address(0)) {
-            (bool kycPassed, uint8 tier) = kycProvidersManager.getIfKYCpassedAndTier(_user);
+        IKycProvidersManager kycProvidersMgr = kycProvidersManager();
+        if (_configuredTier == 0 && address(kycProvidersMgr) != address(0)) {
+            (bool kycPassed, uint8 tier) = kycProvidersMgr.getIfKYCpassedAndTier(_user);
             if (kycPassed && tiers[tier].limits.tvlCap > 0) {
                 return tier;
             }

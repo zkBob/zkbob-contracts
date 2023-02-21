@@ -538,7 +538,7 @@ contract ZkBobAccountingTest is Test {
         address manager = address(_setKYCPorviderManager());
         assertEq(address(pool.kycProvidersManager()), manager);
 
-        vm.expectRevert("ZkBobPool: manager is zero address");
+        vm.expectRevert("KycProvidersManagerStorage: not a contract");
         pool.setKycProvidersManager(SimpleKYCProviderManager(address(0)));
     }
 
