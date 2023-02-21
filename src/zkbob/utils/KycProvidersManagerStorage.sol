@@ -12,7 +12,8 @@ contract KycProvidersManagerStorage is Ownable {
     // a free slot explicitly. Similar approach is used in EIP1967.
     //
     // bytes32(uint256(keccak256('zkBob.ZkBobAccounting.kycProvidersManager')) - 1)
-    uint256 internal constant KYC_PROVIDER_MANAGER_STORAGE = 0x06c991646992b7f0f3fd0c832eac3f519e26682bcb82fbbcfd1ff8013d876f64;
+    uint256 internal constant KYC_PROVIDER_MANAGER_STORAGE =
+        0x06c991646992b7f0f3fd0c832eac3f519e26682bcb82fbbcfd1ff8013d876f64;
 
     event UpdateKYCProvidersManager(address manager);
 
