@@ -32,7 +32,9 @@ contract ZkBobAccountingMock is ZkBobAccounting {
         uint256 _dailyDepositCap,
         uint256 _dailyWithdrawalCap,
         uint256 _dailyUserDepositCap,
-        uint256 _depositCap
+        uint256 _depositCap,
+        uint256 _dailyUserDirectDepositCap,
+        uint256 _directDepositCap
     )
         external
     {
@@ -42,7 +44,9 @@ contract ZkBobAccountingMock is ZkBobAccounting {
             _dailyDepositCap / 1 gwei,
             _dailyWithdrawalCap / 1 gwei,
             _dailyUserDepositCap / 1 gwei,
-            _depositCap / 1 gwei
+            _depositCap / 1 gwei,
+            _dailyUserDirectDepositCap / 1 gwei,
+            _directDepositCap / 1 gwei
         );
     }
 }
