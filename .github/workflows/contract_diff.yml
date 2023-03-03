@@ -8,7 +8,7 @@ on:
         type: string
         default: master
       chain:
-        description: 'Chain name, where target contract is located'
+        description: 'Chain name, where contracts are located'
         type: choice
         options:
           - mainnet
@@ -19,18 +19,18 @@ on:
           - gnosis-chain
         default: polygon
       target_contract_address:
-        description: 'Contract address to fetch diff with'
+        description: 'Target contract address'
         type: string
         required: true
       source:
-        description: 'Type of source to fetch diff with'
+        description: 'Type of source contract'
         type: choice
         options:
-          - contract
+          - deployed_contract
           - source_code
-        default: contract
+        default: deployed_contract
       source_contract_address:
-        description: 'Contract address to fetch diff with'
+        description: 'Source contract address'
         type: string
         required: false
       etherscan_api_key:
@@ -69,12 +69,20 @@ jobs:
           find . -path "./tmp" -prune -o -name "*.sol" -type f -exec cp --parents {} tmp/source/Local \;
 
       - name: Fetch source contract source code from Etherscan
-        if: inputs.source == 'contract'
+        if: inputs.source == 'deployed_contract'
         run: |
           mkdir -p tmp/
           cast etherscan-source -c ${{ inputs.chain }} ${{ inputs.source_contract_address }} --etherscan-api-key ${{ inputs.etherscan_api_key }} -d tmp/source
 
-      - name: Run diff
+      - name: Eval diff between two deployed verified contracts
+        if: inputs.source == 'deployed_contract'
+        run: |
+          tree ./tmp
+          git diff --no-index -- tmp/source/* tmp/target/* > diff.txt || true
+          cat diff.txt
+
+      - name: Eval diff between local source code and deployed verified contract
+        if: inputs.source == 'source_code'
         run: |
           tree ./tmp
           git diff --no-index --diff-filter=ACM -- tmp/source/* tmp/target/* > diff.txt || true
