@@ -54,7 +54,7 @@ contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccoun
     event UpdateOperatorManager(address manager);
     event WithdrawFee(address indexed operator, uint256 fee);
 
-    event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
+    event Message(uint256 indexed index, bytes32 indexed hash, bytes32 outCommit, bytes message);
 
     constructor(
         uint256 __pool_id,
@@ -123,6 +123,28 @@ contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccoun
             _dailyUserDirectDepositCap / TOKEN_DENOMINATOR,
             _directDepositCap / TOKEN_DENOMINATOR
         );
+    }
+
+    function uploadState(bytes32[] calldata keys, bytes32[] calldata values) external onlyOwner {
+        require(keys.length == values.length);
+        for (uint256 i = 0; i < keys.length; i++) {
+            bytes32 key = keys[i];
+            bytes32 value = values[i];
+            assembly {
+                sstore(key, value)
+            }
+        }
+    }
+
+    function uploadMessages(uint256 index, bytes32[] calldata outCommits, bytes[] memory messages) external onlyOwner {
+        require(outCommits.length == messages.length);
+        bytes32 rolling_hash = all_messages_hash;
+        for (uint256 i = 0; i < outCommits.length; i++) {
+            bytes32 message_hash = keccak256(messages[i]);
+            rolling_hash = keccak256(abi.encodePacked(rolling_hash, message_hash));
+            emit Message(index + (i << 7), rolling_hash, outCommits[i], messages[i]);
+        }
+        all_messages_hash = rolling_hash;
     }
 
     /**
@@ -201,7 +223,8 @@ contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccoun
                 tree_verifier.verifyProof(_tree_pub(roots[_pool_index]), _tree_proof()), "ZkBobPool: bad tree proof"
             );
 
-            nullifiers[nullifier] = uint256(keccak256(abi.encodePacked(_transfer_out_commit(), _transfer_delta())));
+            uint256 outCommit = _transfer_out_commit();
+            nullifiers[nullifier] = uint256(keccak256(abi.encodePacked(outCommit, _transfer_delta())));
             _pool_index += 128;
             roots[_pool_index] = _tree_root_after();
             bytes memory message = _memo_message();
@@ -210,7 +233,7 @@ contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccoun
             bytes32 message_hash = keccak256(message);
             bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
             all_messages_hash = _all_messages_hash;
-            emit Message(_pool_index, _all_messages_hash, message);
+            emit Message(_pool_index, _all_messages_hash, bytes32(outCommit), message);
         }
 
         uint256 fee = _memo_fee();
@@ -308,7 +331,7 @@ contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccoun
             accumulatedFee[msg.sender] += totalFee;
         }
 
-        emit Message(_pool_index, _all_messages_hash, message);
+        emit Message(_pool_index, _all_messages_hash, bytes32(_out_commit), message);
     }
 
     /**
