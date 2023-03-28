@@ -5,6 +5,7 @@ pragma solidity 0.8.15;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../utils/Ownable.sol";
 import "../interfaces/IMintableERC20.sol";
+import "../interfaces/IBurnableERC20.sol";
 import "../interfaces/IERC677Receiver.sol";
 
 /**
@@ -51,6 +52,7 @@ contract SurplusMinter is IERC677Receiver, Ownable {
 
     /**
      * @dev ERC677 callback. Converts previously recorded unrealized surplus into the realized one.
+     * If converted amount exceeds unrealized surplus, remainder is burnt to account for unrealized interest withdrawn in advance.
      * Callable by anyone.
      * @param _from tokens sender.
      * @param _amount amount of tokens corresponding to realized interest.
@@ -65,12 +67,14 @@ contract SurplusMinter is IERC677Receiver, Ownable {
             require(unrealized <= _amount, "SurplusMinter: invalid value");
         }
 
-        if (surplus > unrealized) {
+        uint256 currentSurplus = surplus;
+        if (currentSurplus >= unrealized) {
             unchecked {
-                surplus -= unrealized;
+                surplus = currentSurplus - unrealized;
             }
         } else {
-            unrealized = surplus;
+            IBurnableERC20(token).burn(unrealized - currentSurplus);
+            unrealized = currentSurplus;
             surplus = 0;
         }
         emit WithdrawSurplus(address(this), 0, unrealized);

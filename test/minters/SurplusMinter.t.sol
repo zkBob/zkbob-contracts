@@ -64,17 +64,19 @@ contract SurplusMinterTest is Test {
         assertEq(minter.surplus(), 60 ether);
         assertEq(bob.balanceOf(address(minter)), 50 ether);
 
+        // convert 60 BOB unrealized surplus, burn 10 BOB
         bob.transferAndCall(address(minter), 70 ether, "");
         assertEq(minter.surplus(), 0 ether);
-        assertEq(bob.balanceOf(address(minter)), 120 ether);
+        assertEq(bob.balanceOf(address(minter)), 110 ether);
 
         minter.add(10 ether);
         assertEq(minter.surplus(), 10 ether);
-        assertEq(bob.balanceOf(address(minter)), 120 ether);
+        assertEq(bob.balanceOf(address(minter)), 110 ether);
 
-        bob.transferAndCall(address(minter), 30 ether, abi.encode(20 ether));
+        // convert 10 BOB of unrealized surplus, burn 15 BOB, record remaining 5 BOB of realized surplus
+        bob.transferAndCall(address(minter), 30 ether, abi.encode(25 ether));
         assertEq(minter.surplus(), 0 ether);
-        assertEq(bob.balanceOf(address(minter)), 150 ether);
+        assertEq(bob.balanceOf(address(minter)), 125 ether);
     }
 
     function testSurplusBurn() public {
@@ -132,5 +134,33 @@ contract SurplusMinterTest is Test {
 
         vm.expectRevert("SurplusMinter: exceeds surplus");
         minter.withdraw(user1, 1 ether);
+    }
+
+    function testWithdrawConvertUnrealized() public {
+        // 0 withdrawn, 50 realized, 50 unrealized
+        minter.add(50 ether);
+        bob.mint(address(minter), 50 ether);
+
+        // 80 withdrawn, 0 realized, 20 unrealized
+        minter.withdraw(user1, 80 ether);
+        assertEq(minter.surplus(), 20 ether);
+        assertEq(bob.balanceOf(user1), 80 ether);
+        assertEq(bob.balanceOf(address(minter)), 0 ether);
+
+        bob.mint(address(this), 1000 ether);
+
+        // convert 20 unrealized into realized surplus, burn 30 previously withdrawn unrealized surplus
+        bob.transferAndCall(address(minter), 50 ether, "");
+        // 80 withdrawn, 20 realized, 0 unrealized
+        assertEq(minter.surplus(), 0 ether);
+        assertEq(bob.balanceOf(user1), 80 ether);
+        assertEq(bob.balanceOf(address(minter)), 20 ether);
+
+        // add 50 realized surplus
+        bob.transferAndCall(address(minter), 50 ether, abi.encode(0));
+        // 80 withdrawn, 70 realized, 0 unrealized
+        assertEq(minter.surplus(), 0 ether);
+        assertEq(bob.balanceOf(user1), 80 ether);
+        assertEq(bob.balanceOf(address(minter)), 70 ether);
     }
 }
