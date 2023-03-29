@@ -5,6 +5,7 @@ pragma solidity 0.8.15;
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol";
 import "../libraries/ZkAddress.sol";
 import "../interfaces/IOperatorManager.sol";
 import "../interfaces/IZkBobDirectDeposits.sol";
@@ -182,8 +183,27 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
         public
         returns (uint256)
     {
-        IERC20(token).safeTransferFrom(msg.sender, address(this), _amount);
+        IERC20(token).transferFrom(msg.sender, address(this), _amount);
         return _recordDirectDeposit(msg.sender, _fallbackUser, _amount, _rawZkAddress);
+    }
+
+    /// @inheritdoc IZkBobDirectDeposits
+    function directNativeDeposit(
+        address _fallbackUser,
+        string calldata _zkAddress
+    )
+        external
+        payable
+        returns (uint256)
+    {
+        return directNativeDeposit(_fallbackUser, bytes(_zkAddress));
+    }
+
+    /// @inheritdoc IZkBobDirectDeposits
+    function directNativeDeposit(address _fallbackUser, bytes memory _rawZkAddress) public payable returns (uint256) {
+        uint256 amount = msg.value;
+        IWETH9(token).deposit{value: amount}();
+        return _recordDirectDeposit(msg.sender, _fallbackUser, amount, _rawZkAddress);
     }
 
     /// @inheritdoc IZkBobDirectDeposits

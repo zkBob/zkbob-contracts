@@ -61,6 +61,36 @@ interface IZkBobDirectDeposits {
         returns (uint256 depositId);
 
     /**
+     * @notice Performs a direct deposit to the specified zk address in native token.
+     * In case the deposit cannot be processed, it can be refunded later to the fallbackReceiver address.
+     * @param fallbackReceiver receiver of deposit refund.
+     * @param zkAddress receiver zk address.
+     * @return depositId id of the submitted deposit to query status for.
+     */
+    function directNativeDeposit(
+        address fallbackReceiver,
+        bytes memory zkAddress
+    )
+        external
+        payable
+        returns (uint256 depositId);
+
+    /**
+     * @notice Performs a direct deposit to the specified zk address in native token.
+     * In case the deposit cannot be processed, it can be refunded later to the fallbackReceiver address.
+     * @param fallbackReceiver receiver of deposit refund.
+     * @param zkAddress receiver zk address.
+     * @return depositId id of the submitted deposit to query status for.
+     */
+    function directNativeDeposit(
+        address fallbackReceiver,
+        string memory zkAddress
+    )
+        external
+        payable
+        returns (uint256 depositId);
+
+    /**
      * @notice ERC677 callback for performing a direct deposit.
      * Do not call this function directly, it's only intended to be called by the token contract.
      * @param from original tokens sender.
