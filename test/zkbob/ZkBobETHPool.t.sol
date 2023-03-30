@@ -19,7 +19,6 @@ import "../../src/zkbob/manager/MutableOperatorManager.sol";
 import "../shared/ForkTests.t.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol";
 import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
-import "../../src/utils/WETHSeller.sol";
 
 contract ZkBobETHPoolTest is AbstractMainnetForkTest {
     uint256 private constant initialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
@@ -80,7 +79,7 @@ contract ZkBobETHPoolTest is AbstractMainnetForkTest {
             0
         );
         poolProxy.upgradeToAndCall(address(impl), initData);
-        pool = ZkBobETHPool(address(poolProxy));
+        pool = ZkBobETHPool(payable(address(poolProxy)));
 
         ZkBobDirectDepositQueue queueImpl = new ZkBobDirectDepositQueue(address(pool), address(token));
         queueProxy.upgradeTo(address(queueImpl));
@@ -89,8 +88,6 @@ contract ZkBobETHPoolTest is AbstractMainnetForkTest {
         operatorManager = new MutableOperatorManager(user2, user3, "https://example.com");
         pool.setOperatorManager(operatorManager);
 
-        WETHSeller wethSeller = new WETHSeller(weth);
-        pool.setTokenSeller(address(wethSeller));
         queue.setOperatorManager(operatorManager);
         queue.setDirectDepositFee(0.1 gwei);
         queue.setDirectDepositTimeout(1 days);
@@ -146,8 +143,6 @@ contract ZkBobETHPoolTest is AbstractMainnetForkTest {
         pool.initialize(0, 0, 0, 0, 0, 0, 0, 0);
         vm.expectRevert("Ownable: caller is not the owner");
         pool.setOperatorManager(IOperatorManager(address(0)));
-        vm.expectRevert("Ownable: caller is not the owner");
-        pool.setTokenSeller(address(0));
         vm.expectRevert("Ownable: caller is not the owner");
         pool.setLimits(0, 0, 0, 0, 0, 0, 0, 0);
         vm.expectRevert("Ownable: caller is not the owner");

@@ -15,7 +15,6 @@ import "../interfaces/IMintableERC20.sol";
 import "../interfaces/IOperatorManager.sol";
 import "../interfaces/IERC20Permit.sol";
 import "../interfaces/IPermit2.sol";
-import "../interfaces/ITokenSeller.sol";
 import "../interfaces/IZkBobDirectDepositQueue.sol";
 import "../interfaces/IZkBobPool.sol";
 import "./utils/Parameters.sol";
@@ -51,9 +50,6 @@ contract ZkBobETHPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAcc
 
     mapping(address => uint256) public accumulatedFee;
 
-    ITokenSeller public tokenSeller;
-
-    event UpdateTokenSeller(address seller);
     event UpdateOperatorManager(address manager);
     event WithdrawFee(address indexed operator, uint256 fee);
 
@@ -129,16 +125,6 @@ contract ZkBobETHPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAcc
             _dailyUserDirectDepositCap / TOKEN_DENOMINATOR,
             _directDepositCap / TOKEN_DENOMINATOR
         );
-    }
-
-    /**
-     * @dev Updates token seller contract used for native coin withdrawals.
-     * Callable only by the contract owner / proxy admin.
-     * @param _seller new token seller contract implementation. address(0) will deactivate native withdrawals.
-     */
-    function setTokenSeller(address _seller) external onlyOwner {
-        tokenSeller = ITokenSeller(_seller);
-        emit UpdateTokenSeller(_seller);
     }
 
     /**
@@ -226,7 +212,7 @@ contract ZkBobETHPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAcc
         if (txType == 0) {
             // Deposit
             require(transfer_token_delta > 0 && energy_amount == 0, "ZkBobPool: incorrect deposit amounts");
-            token.transferFrom(user, address(this), uint256(token_amount) * TOKEN_DENOMINATOR);
+            IERC20(token).safeTransferFrom(user, address(this), uint256(token_amount) * TOKEN_DENOMINATOR);
         } else if (txType == 1) {
             // Transfer
             require(token_amount == 0 && energy_amount == 0, "ZkBobPool: incorrect transfer amounts");
@@ -238,16 +224,15 @@ contract ZkBobETHPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAcc
             uint256 withdraw_amount = uint256(-token_amount) * TOKEN_DENOMINATOR;
 
             if (native_amount > 0) {
-                ITokenSeller seller = tokenSeller;
-                if (address(seller) != address(0)) {
-                    token.transfer(address(seller), native_amount);
-                    seller.sellForETH(user, native_amount);
-                    withdraw_amount = withdraw_amount - native_amount;
+                token.withdraw(native_amount);
+                if (!payable(user).send(native_amount)) {
+                    new Sacrifice{value: native_amount}(user);
                 }
+                withdraw_amount = withdraw_amount - native_amount;
             }
 
             if (withdraw_amount > 0) {
-                token.transfer(user, withdraw_amount);
+                IERC20(token).safeTransfer(user, withdraw_amount);
             }
 
             // energy withdrawals are not yet implemented, any transaction with non-zero energy_amount will revert
@@ -363,7 +348,7 @@ contract ZkBobETHPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAcc
         );
         uint256 fee = accumulatedFee[_operator] * TOKEN_DENOMINATOR;
         require(fee > 0, "ZkBobPool: no fee to withdraw");
-        token.transfer(_to, fee);
+        IERC20(token).safeTransfer(_to, fee);
         accumulatedFee[_operator] = 0;
         emit WithdrawFee(_operator, fee);
     }
@@ -434,5 +419,9 @@ contract ZkBobETHPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAcc
      */
     function _isOwner() internal view override returns (bool) {
         return super._isOwner() || _admin() == _msgSender();
+    }
+
+    receive() external payable {
+        require(msg.sender == address(token), "Not a WETH withdrawal");
     }
 }
