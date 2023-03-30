@@ -183,7 +183,7 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
         public
         returns (uint256)
     {
-        IERC20(token).transferFrom(msg.sender, address(this), _amount);
+        IERC20(token).safeTransferFrom(msg.sender, address(this), _amount);
         return _recordDirectDeposit(msg.sender, _fallbackUser, _amount, _rawZkAddress);
     }
 
