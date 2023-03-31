@@ -13,7 +13,7 @@ contract DeployNewZkBobPoolETHImpl is Script {
     function run() external {
         vm.startBroadcast();
 
-        ZkBobPoolETH pool = ZkBobPoolETH(zkBobPool);
+        ZkBobPoolETH pool = ZkBobPoolETH(payable(zkBobPool));
 
         ZkBobPoolETH impl = new ZkBobPoolETH(
             pool.pool_id(),
@@ -22,7 +22,7 @@ contract DeployNewZkBobPoolETHImpl is Script {
             pool.tree_verifier(),
             pool.batch_deposit_verifier(),
             address(pool.direct_deposit_queue()),
-            address(pool.permit2)
+            address(pool.permit2())
         );
 
         vm.stopBroadcast();

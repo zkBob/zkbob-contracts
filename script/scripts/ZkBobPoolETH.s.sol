@@ -54,7 +54,7 @@ contract DeployZkBobPoolETH is Script {
             zkBobDirectDepositCap
         );
         poolProxy.upgradeToAndCall(address(poolImpl), initData);
-        ZkBobPoolETH pool = ZkBobPoolETH(address(poolProxy));
+        ZkBobPoolETH pool = ZkBobPoolETH(payable(address(poolProxy)));
 
         ZkBobDirectDepositQueueETH queueImpl = new ZkBobDirectDepositQueueETH(address(pool), weth);
         queueProxy.upgradeTo(address(queueImpl));
