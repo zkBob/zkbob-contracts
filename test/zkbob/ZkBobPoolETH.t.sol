@@ -12,15 +12,16 @@ import "../mocks/TreeUpdateVerifierMock.sol";
 import "../mocks/BatchDepositVerifierMock.sol";
 import "../mocks/DummyImpl.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
-import "../../src/zkbob/ZkBobETHPool.sol";
+import "../../src/zkbob/ZkBobPoolETH.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
 import "../../src/BobToken.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
 import "../shared/ForkTests.t.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol";
 import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
+import "../../src/zkbob/ZkBobDirectDepositQueueETH.sol";
 
-contract ZkBobETHPoolTest is AbstractMainnetForkTest {
+contract ZkBobPoolETHTest is AbstractMainnetForkTest {
     uint256 private constant initialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
 
     address constant uniV3Router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
@@ -37,8 +38,8 @@ contract ZkBobETHPoolTest is AbstractMainnetForkTest {
         "PermitTransferFrom(TokenPermissions permitted,address spender,uint256 nonce,uint256 deadline)TokenPermissions(address token,uint256 amount)"
     );
 
-    ZkBobETHPool pool;
-    ZkBobDirectDepositQueue queue;
+    ZkBobPoolETH pool;
+    ZkBobDirectDepositQueueETH queue;
     IWETH9 token;
     IOperatorManager operatorManager;
     IPermit2 permit2;
@@ -64,11 +65,11 @@ contract ZkBobETHPoolTest is AbstractMainnetForkTest {
         EIP1967Proxy queueProxy = new EIP1967Proxy(address(this), address(0xdead), "");
 
         console2.log(weth, address(token));
-        ZkBobETHPool impl =
-        new ZkBobETHPool(0, address(token), new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(), address(queueProxy), permit2Address);
+        ZkBobPoolETH impl =
+        new ZkBobPoolETH(0, address(token), new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(), address(queueProxy), permit2Address);
 
         bytes memory initData = abi.encodeWithSelector(
-            ZkBobETHPool.initialize.selector,
+            ZkBobPool.initialize.selector,
             initialRoot,
             1_000_000 ether,
             100_000 ether,
@@ -79,11 +80,11 @@ contract ZkBobETHPoolTest is AbstractMainnetForkTest {
             0
         );
         poolProxy.upgradeToAndCall(address(impl), initData);
-        pool = ZkBobETHPool(payable(address(poolProxy)));
+        pool = ZkBobPoolETH(payable(address(poolProxy)));
 
-        ZkBobDirectDepositQueue queueImpl = new ZkBobDirectDepositQueue(address(pool), address(token));
+        ZkBobDirectDepositQueueETH queueImpl = new ZkBobDirectDepositQueueETH(address(pool), address(token));
         queueProxy.upgradeTo(address(queueImpl));
-        queue = ZkBobDirectDepositQueue(address(queueProxy));
+        queue = ZkBobDirectDepositQueueETH(address(queueProxy));
 
         operatorManager = new MutableOperatorManager(user2, user3, "https://example.com");
         pool.setOperatorManager(operatorManager);
@@ -451,7 +452,7 @@ contract ZkBobETHPoolTest is AbstractMainnetForkTest {
         (uint8 v, bytes32 r, bytes32 s) =
             _signSaltedPermit(pk1, user1, address(pool), uint256(_amount + int256(_fee)), expiry, nullifier);
         bytes memory data = abi.encodePacked(
-            ZkBobETHPool.transact.selector, nullifier, _randFR(), uint48(0), uint112(0), int64(_amount / 1 gwei)
+            ZkBobPool.transact.selector, nullifier, _randFR(), uint48(0), uint112(0), int64(_amount / 1 gwei)
         );
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());
@@ -466,7 +467,7 @@ contract ZkBobETHPoolTest is AbstractMainnetForkTest {
         bytes32 nullifier = bytes32(_randFR());
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
         bytes memory data = abi.encodePacked(
-            ZkBobETHPool.transact.selector, nullifier, _randFR(), uint48(0), uint112(0), int64(_amount / 1 gwei)
+            ZkBobPool.transact.selector, nullifier, _randFR(), uint48(0), uint112(0), int64(_amount / 1 gwei)
         );
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());
@@ -477,7 +478,7 @@ contract ZkBobETHPoolTest is AbstractMainnetForkTest {
 
     function _encodeWithdrawal(address _to, uint256 _amount, uint256 _nativeAmount) internal returns (bytes memory) {
         bytes memory data = abi.encodePacked(
-            ZkBobETHPool.transact.selector,
+            ZkBobPool.transact.selector,
             _randFR(),
             _randFR(),
             uint48(0),
@@ -501,7 +502,7 @@ contract ZkBobETHPoolTest is AbstractMainnetForkTest {
 
     function _encodeTransfer() internal returns (bytes memory) {
         bytes memory data = abi.encodePacked(
-            ZkBobETHPool.transact.selector, _randFR(), _randFR(), uint48(0), uint112(0), int64(-0.01 ether / 1 gwei)
+            ZkBobPool.transact.selector, _randFR(), _randFR(), uint48(0), uint112(0), int64(-0.01 ether / 1 gwei)
         );
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());

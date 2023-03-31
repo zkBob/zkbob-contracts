@@ -13,6 +13,7 @@ import "../mocks/BatchDepositVerifierMock.sol";
 import "../mocks/DummyImpl.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPool.sol";
+import "../../src/zkbob/ZkBobPoolERC20.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
 import "../../src/BobToken.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
@@ -20,7 +21,7 @@ import "../../src/utils/UniswapV3Seller.sol";
 import "../shared/ForkTests.t.sol";
 import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
 
-contract ZkBobPoolTest is AbstractMainnetForkTest {
+contract ZkBobPoolERC20Test is AbstractMainnetForkTest {
     uint256 private constant initialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
 
     address constant uniV3Router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
@@ -30,7 +31,7 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
 
     bytes constant zkAddress = "QsnTijXekjRm9hKcq5kLNPsa6P4HtMRrc3RxVx3jsLHeo2AiysYxVJP86mriHfN";
 
-    ZkBobPool pool;
+    ZkBobPoolERC20 pool;
     ZkBobDirectDepositQueue queue;
     BobToken bob;
     IOperatorManager operatorManager;
@@ -57,8 +58,8 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
         EIP1967Proxy poolProxy = new EIP1967Proxy(address(this), address(0xdead), "");
         EIP1967Proxy queueProxy = new EIP1967Proxy(address(this), address(0xdead), "");
 
-        ZkBobPool impl =
-        new ZkBobPool(0, address(bob), new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(), address(queueProxy));
+        ZkBobPoolERC20 impl =
+        new ZkBobPoolERC20(0, address(bob), new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(), address(queueProxy));
 
         bytes memory initData = abi.encodeWithSelector(
             ZkBobPool.initialize.selector,
@@ -72,7 +73,7 @@ contract ZkBobPoolTest is AbstractMainnetForkTest {
             0
         );
         poolProxy.upgradeToAndCall(address(impl), initData);
-        pool = ZkBobPool(address(poolProxy));
+        pool = ZkBobPoolERC20(address(poolProxy));
 
         ZkBobDirectDepositQueue queueImpl = new ZkBobDirectDepositQueue(address(pool), address(bob));
         queueProxy.upgradeTo(address(queueImpl));

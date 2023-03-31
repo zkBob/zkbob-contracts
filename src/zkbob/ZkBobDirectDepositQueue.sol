@@ -188,25 +188,6 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
     }
 
     /// @inheritdoc IZkBobDirectDeposits
-    function directNativeDeposit(
-        address _fallbackUser,
-        string calldata _zkAddress
-    )
-        external
-        payable
-        returns (uint256)
-    {
-        return directNativeDeposit(_fallbackUser, bytes(_zkAddress));
-    }
-
-    /// @inheritdoc IZkBobDirectDeposits
-    function directNativeDeposit(address _fallbackUser, bytes memory _rawZkAddress) public payable returns (uint256) {
-        uint256 amount = msg.value;
-        IWETH9(token).deposit{value: amount}();
-        return _recordDirectDeposit(msg.sender, _fallbackUser, amount, _rawZkAddress);
-    }
-
-    /// @inheritdoc IZkBobDirectDeposits
     function onTokenTransfer(address _from, uint256 _value, bytes calldata _data) external returns (bool) {
         require(msg.sender == token, "ZkBobDirectDepositQueue: not a token caller");
 

@@ -7,24 +7,26 @@ import "./Env.s.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
+import "../../src/zkbob/ZkBobPoolETH.sol";
 
-contract DeployNewZkBobPoolImpl is Script {
+contract DeployNewZkBobPoolETHImpl is Script {
     function run() external {
         vm.startBroadcast();
 
-        ZkBobPool pool = ZkBobPool(zkBobPool);
+        ZkBobPoolETH pool = ZkBobPoolETH(zkBobPool);
 
-        ZkBobPool impl = new ZkBobPool(
+        ZkBobPoolETH impl = new ZkBobPoolETH(
             pool.pool_id(),
             pool.token(),
             pool.transfer_verifier(),
             pool.tree_verifier(),
             pool.batch_deposit_verifier(),
-            address(pool.direct_deposit_queue())
+            address(pool.direct_deposit_queue()),
+            address(pool.permit2)
         );
 
         vm.stopBroadcast();
 
-        console2.log("ZkBobPool implementation:", address(impl));
+        console2.log("ZkBobPoolETH implementation:", address(impl));
     }
 }
