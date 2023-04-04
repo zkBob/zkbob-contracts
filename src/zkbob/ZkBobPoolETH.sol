@@ -52,7 +52,8 @@ contract ZkBobPoolETH is ZkBobPool {
     function _withdrawNative(address user, uint256 tokenAmount) internal override returns (uint256 spentAmount) {
         IWETH9(token).withdraw(tokenAmount);
         if (!payable(user).send(tokenAmount)) {
-            new Sacrifice{value: tokenAmount}(user);
+            IWETH9(token).deposit{value: tokenAmount}();
+            IWETH9(token).transfer(user, tokenAmount);
         }
         return tokenAmount;
     }

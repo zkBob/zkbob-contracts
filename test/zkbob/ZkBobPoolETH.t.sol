@@ -35,7 +35,6 @@ contract ZkBobPoolETHTest is AbstractZkBobPoolTest {
         EIP1967Proxy poolProxy = new EIP1967Proxy(address(this), address(0xdead), "");
         EIP1967Proxy queueProxy = new EIP1967Proxy(address(this), address(0xdead), "");
 
-        console2.log(weth, address(token));
         ZkBobPoolETH impl =
         new ZkBobPoolETH(0, address(token), new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(), address(queueProxy), permit2Address);
 
@@ -132,13 +131,12 @@ contract ZkBobPoolETHTest is AbstractZkBobPoolTest {
         vm.prank(user3);
         pool.withdrawFee(user2, user3);
         assertEq(IERC20(token).balanceOf(user1), 0.1 ether);
-        assertEq(IERC20(token).balanceOf(dummy), 0.1 ether);
+        assertEq(IERC20(token).balanceOf(dummy), 0.1 ether + quote3);
         assertEq(IERC20(token).balanceOf(address(pool)), 0.17 ether);
         assertEq(IERC20(token).balanceOf(user3), 0.03 ether);
         assertGt(user1.balance, 1 gwei);
         assertEq(user1.balance, quote2);
-        assertGt(dummy.balance, 1 gwei);
-        assertEq(dummy.balance, quote3);
+        assertEq(dummy.balance, 0);
     }
 
     function _transferAndCall(uint256 amount, address fallbackUser, bytes memory _zkAddress) internal override {
