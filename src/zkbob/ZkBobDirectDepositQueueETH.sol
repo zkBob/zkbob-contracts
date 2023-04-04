@@ -16,8 +16,8 @@ import "../proxy/EIP1967Admin.sol";
 import "./ZkBobDirectDepositQueue.sol";
 
 /**
- * @title ZkBobDirectDepositQueue
- * Queue for zkBob direct deposits.
+ * @title ZkBobDirectDepositQueueETH
+ * Queue for zkBob ETH direct deposits.
  */
 contract ZkBobDirectDepositQueueETH is IZkBobDirectDepositsETH, ZkBobDirectDepositQueue {
     constructor(address _pool, address _token) ZkBobDirectDepositQueue(_pool, _token) {}

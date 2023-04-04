@@ -174,7 +174,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
      * @param nullifier Nullifier
      * @param tokenAmount Amount of token to deposit
      */
-    function _finalizePermitDeposit(address user, uint256 nullifier, int256 tokenAmount) internal virtual;
+    function _transferFromByPermit(address user, uint256 nullifier, int256 tokenAmount) internal virtual;
 
     /**
      * @dev Perform a zkBob pool transaction.
@@ -238,12 +238,6 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
 
             if (native_amount > 0) {
                 withdraw_amount -= _withdrawNative(user, native_amount);
-                //                ITokenSeller seller = tokenSeller;
-                //                if (address(seller) != address(0)) {
-                //                    IERC20(token).safeTransfer(address(seller), native_amount);
-                //                    (, uint256 refunded) = seller.sellForETH(user, native_amount);
-                //                    withdraw_amount = withdraw_amount - native_amount + refunded;
-                //                }
             }
 
             if (withdraw_amount > 0) {
@@ -258,11 +252,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         } else if (txType == 3) {
             // Permittable token deposit
             require(transfer_token_delta > 0 && energy_amount == 0, "ZkBobPool: incorrect deposit amounts");
-            _finalizePermitDeposit(user, nullifier, token_amount);
-            //            (uint8 v, bytes32 r, bytes32 s) = _permittable_deposit_signature();
-            //            IERC20Permit(token).receiveWithSaltedPermit(
-            //                user, uint256(token_amount) * TOKEN_DENOMINATOR, _memo_permit_deadline(), bytes32(nullifier), v, r, s
-            //            );
+            _transferFromByPermit(user, nullifier, token_amount);
         } else {
             revert("ZkBobPool: Incorrect transaction type");
         }

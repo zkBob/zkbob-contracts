@@ -5,7 +5,6 @@ pragma solidity 0.8.15;
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol";
 import "../libraries/ZkAddress.sol";
 import "../interfaces/IOperatorManager.sol";
 import "../interfaces/IZkBobDirectDeposits.sol";

@@ -66,7 +66,7 @@ contract ZkBobPoolERC20 is ZkBobPool {
     }
 
     // @inheritdoc ZkBobPool
-    function _finalizePermitDeposit(address user, uint256 nullifier, int256 tokenAmount) internal override {
+    function _transferFromByPermit(address user, uint256 nullifier, int256 tokenAmount) internal override {
         (uint8 v, bytes32 r, bytes32 s) = _permittable_deposit_signature();
         IERC20Permit(token).receiveWithSaltedPermit(
             user, uint256(tokenAmount) * TOKEN_DENOMINATOR, _memo_permit_deadline(), bytes32(nullifier), v, r, s
