@@ -81,6 +81,21 @@ contract ZkBobPoolETHTest is AbstractZkBobPoolTest {
         vm.stopPrank();
     }
 
+    function testSimpleTransactionPermit2() public {
+        bytes memory data2 = _encodePermitDeposit(0.3 ether, 0.003 ether);
+        bytes memory data1 = _encodePermitDeposit(0.2 ether, 0.007 ether);
+
+        _transact(data1);
+        _transact(data2);
+
+        bytes memory data3 = _encodeTransfer();
+        _transact(data3);
+
+        vm.prank(user3);
+        pool.withdrawFee(user2, user3);
+        assertEq(IERC20(token).balanceOf(user3), 0.02 ether);
+    }
+
     function testAuthRights() public {
         vm.startPrank(user1);
 
