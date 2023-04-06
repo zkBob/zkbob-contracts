@@ -159,22 +159,20 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
     }
 
     /**
-     * @dev Withdraws native token
-     * Callable only by transact method
-     * @param user Address of receiver
-     * @param tokenAmount Amount of token to withdraw
-     * @return spentAmount Actual spent amount
+     * @dev Converts given amount of tokens into native coins sent to the provided address.
+     * @param _user native coins receiver address.
+     * @param _tokenAmount amount to tokens to convert.
+     * @return actual converted amount, might be less than requested amount.
      */
-    function _withdrawNative(address user, uint256 tokenAmount) internal virtual returns (uint256 spentAmount);
+    function _withdrawNative(address _user, uint256 _tokenAmount) internal virtual returns (uint256);
 
     /**
-     * @dev Finalizes permit deposit
-     * Callable only by transact method
-     * @param user Address of depositor
-     * @param nullifier Nullifier
-     * @param tokenAmount Amount of token to deposit
+     * @dev Performs token transfer using a signed permit signature.
+     * @param _user token depositor address, should correspond to the signature author.
+     * @param _nullifier nullifier and permit signature salt to avoid transaction data manipulation.
+     * @param _tokenAmount amount to tokens to deposit.
      */
-    function _transferFromByPermit(address user, uint256 nullifier, int256 tokenAmount) internal virtual;
+    function _transferFromByPermit(address _user, uint256 _nullifier, int256 _tokenAmount) internal virtual;
 
     /**
      * @dev Perform a zkBob pool transaction.
