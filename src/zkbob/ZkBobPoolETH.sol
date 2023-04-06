@@ -49,17 +49,17 @@ contract ZkBobPoolETH is ZkBobPool {
     }
 
     // @inheritdoc ZkBobPool
-    function _withdrawNative(address user, uint256 tokenAmount) internal override returns (uint256 spentAmount) {
-        IWETH9(token).withdraw(tokenAmount);
-        if (!payable(user).send(tokenAmount)) {
-            IWETH9(token).deposit{value: tokenAmount}();
-            IWETH9(token).transfer(user, tokenAmount);
+    function _withdrawNative(address _user, uint256 _tokenAmount) internal override returns (uint256 spentAmount) {
+        IWETH9(token).withdraw(_tokenAmount);
+        if (!payable(_user).send(_tokenAmount)) {
+            IWETH9(token).deposit{value: _tokenAmount}();
+            IWETH9(token).transfer(_user, _tokenAmount);
         }
-        return tokenAmount;
+        return _tokenAmount;
     }
 
     // @inheritdoc ZkBobPool
-    function _transferFromByPermit(address user, uint256 nullifier, int256 tokenAmount) internal override {
+    function _transferFromByPermit(address _user, uint256 _nullifier, int256 _tokenAmount) internal override {
         (uint8 v, bytes32 r, bytes32 s) = _permittable_deposit_signature();
 
         bytes memory depositSignature = new bytes(65);
@@ -72,15 +72,15 @@ contract ZkBobPoolETH is ZkBobPool {
 
         permit2.permitTransferFrom(
             IPermit2.PermitTransferFrom({
-                permitted: IPermit2.TokenPermissions({token: token, amount: uint256(tokenAmount) * TOKEN_DENOMINATOR}),
-                nonce: nullifier,
+                permitted: IPermit2.TokenPermissions({token: token, amount: uint256(_tokenAmount) * TOKEN_DENOMINATOR}),
+                nonce: _nullifier,
                 deadline: uint256(_memo_permit_deadline())
             }),
             IPermit2.SignatureTransferDetails({
                 to: address(this),
-                requestedAmount: uint256(tokenAmount) * TOKEN_DENOMINATOR
+                requestedAmount: uint256(_tokenAmount) * TOKEN_DENOMINATOR
             }),
-            user,
+            _user,
             depositSignature
         );
     }

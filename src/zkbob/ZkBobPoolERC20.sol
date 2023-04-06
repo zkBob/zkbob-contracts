@@ -56,20 +56,20 @@ contract ZkBobPoolERC20 is ZkBobPool {
     }
 
     // @inheritdoc ZkBobPool
-    function _withdrawNative(address user, uint256 tokenAmount) internal override returns (uint256 spentAmount) {
+    function _withdrawNative(address _user, uint256 _tokenAmount) internal override returns (uint256 spentAmount) {
         ITokenSeller seller = tokenSeller;
         if (address(seller) != address(0)) {
-            IERC20(token).safeTransfer(address(seller), tokenAmount);
-            (, uint256 refunded) = seller.sellForETH(user, tokenAmount);
-            return tokenAmount - refunded;
+            IERC20(token).safeTransfer(address(seller), _tokenAmount);
+            (, uint256 refunded) = seller.sellForETH(_user, _tokenAmount);
+            return _tokenAmount - refunded;
         }
     }
 
     // @inheritdoc ZkBobPool
-    function _transferFromByPermit(address user, uint256 nullifier, int256 tokenAmount) internal override {
+    function _transferFromByPermit(address _user, uint256 _nullifier, int256 _tokenAmount) internal override {
         (uint8 v, bytes32 r, bytes32 s) = _permittable_deposit_signature();
         IERC20Permit(token).receiveWithSaltedPermit(
-            user, uint256(tokenAmount) * TOKEN_DENOMINATOR, _memo_permit_deadline(), bytes32(nullifier), v, r, s
+            _user, uint256(_tokenAmount) * TOKEN_DENOMINATOR, _memo_permit_deadline(), bytes32(_nullifier), v, r, s
         );
     }
 }
