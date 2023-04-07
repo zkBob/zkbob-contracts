@@ -52,3 +52,7 @@ address constant uniV3Quoter = 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6;
 uint24 constant fee0 = 500;
 address constant usdc = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
 uint24 constant fee1 = 500;
+
+// zkbobpool eth
+address constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+address constant permit2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;

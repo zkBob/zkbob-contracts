@@ -6,10 +6,11 @@ import "forge-std/Script.sol";
 import "./Env.s.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPool.sol";
-import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
+import "../../src/zkbob/ZkBobDirectDepositQueueETH.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
+import "../../src/zkbob/ZkBobPoolETH.sol";
 
-contract DeployZkBobPool is Script {
+contract DeployZkBobPoolETH is Script {
     function run() external {
         vm.startBroadcast();
 
@@ -32,13 +33,14 @@ contract DeployZkBobPool is Script {
         EIP1967Proxy poolProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
         EIP1967Proxy queueProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
 
-        ZkBobPool poolImpl = new ZkBobPool(
+        ZkBobPoolETH poolImpl = new ZkBobPoolETH(
             zkBobPoolId,
-            bobVanityAddr,
+            weth,
             transferVerifier,
             treeVerifier,
             batchDepositVerifier,
-            address(queueProxy)
+            address(queueProxy),
+            permit2
         );
         bytes memory initData = abi.encodeWithSelector(
             ZkBobPool.initialize.selector,
@@ -52,11 +54,11 @@ contract DeployZkBobPool is Script {
             zkBobDirectDepositCap
         );
         poolProxy.upgradeToAndCall(address(poolImpl), initData);
-        ZkBobPool pool = ZkBobPool(address(poolProxy));
+        ZkBobPoolETH pool = ZkBobPoolETH(payable(address(poolProxy)));
 
-        ZkBobDirectDepositQueue queueImpl = new ZkBobDirectDepositQueue(address(pool), bobVanityAddr);
+        ZkBobDirectDepositQueueETH queueImpl = new ZkBobDirectDepositQueueETH(address(pool), weth);
         queueProxy.upgradeTo(address(queueImpl));
-        ZkBobDirectDepositQueue queue = ZkBobDirectDepositQueue(address(queueProxy));
+        ZkBobDirectDepositQueueETH queue = ZkBobDirectDepositQueueETH(address(queueProxy));
 
         IOperatorManager operatorManager =
             new MutableOperatorManager(zkBobRelayer, zkBobRelayerFeeReceiver, zkBobRelayerURL);
