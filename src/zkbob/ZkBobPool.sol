@@ -26,7 +26,7 @@ import "../proxy/EIP1967Admin.sol";
  * @title ZkBobPool
  * Shielded transactions pool for BOB tokens.
  */
-contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
+abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     using SafeERC20 for IERC20;
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
@@ -48,9 +48,6 @@ contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccoun
 
     mapping(address => uint256) public accumulatedFee;
 
-    ITokenSeller public tokenSeller;
-
-    event UpdateTokenSeller(address seller);
     event UpdateOperatorManager(address manager);
     event WithdrawFee(address indexed operator, uint256 fee);
 
@@ -126,16 +123,6 @@ contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccoun
     }
 
     /**
-     * @dev Updates token seller contract used for native coin withdrawals.
-     * Callable only by the contract owner / proxy admin.
-     * @param _seller new token seller contract implementation. address(0) will deactivate native withdrawals.
-     */
-    function setTokenSeller(address _seller) external onlyOwner {
-        tokenSeller = ITokenSeller(_seller);
-        emit UpdateTokenSeller(_seller);
-    }
-
-    /**
      * @dev Updates used operator manager contract.
      * Callable only by the contract owner / proxy admin.
      * @param _operatorManager new operator manager implementation.
@@ -170,6 +157,22 @@ contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccoun
     function _pool_id() internal view override returns (uint256) {
         return pool_id;
     }
+
+    /**
+     * @dev Converts given amount of tokens into native coins sent to the provided address.
+     * @param _user native coins receiver address.
+     * @param _tokenAmount amount to tokens to convert.
+     * @return actual converted amount, might be less than requested amount.
+     */
+    function _withdrawNative(address _user, uint256 _tokenAmount) internal virtual returns (uint256);
+
+    /**
+     * @dev Performs token transfer using a signed permit signature.
+     * @param _user token depositor address, should correspond to the signature author.
+     * @param _nullifier nullifier and permit signature salt to avoid transaction data manipulation.
+     * @param _tokenAmount amount to tokens to deposit.
+     */
+    function _transferFromByPermit(address _user, uint256 _nullifier, int256 _tokenAmount) internal virtual;
 
     /**
      * @dev Perform a zkBob pool transaction.
@@ -232,12 +235,7 @@ contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccoun
             uint256 withdraw_amount = uint256(-token_amount) * TOKEN_DENOMINATOR;
 
             if (native_amount > 0) {
-                ITokenSeller seller = tokenSeller;
-                if (address(seller) != address(0)) {
-                    IERC20(token).safeTransfer(address(seller), native_amount);
-                    (, uint256 refunded) = seller.sellForETH(user, native_amount);
-                    withdraw_amount = withdraw_amount - native_amount + refunded;
-                }
+                withdraw_amount -= _withdrawNative(user, native_amount);
             }
 
             if (withdraw_amount > 0) {
@@ -252,10 +250,7 @@ contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccoun
         } else if (txType == 3) {
             // Permittable token deposit
             require(transfer_token_delta > 0 && energy_amount == 0, "ZkBobPool: incorrect deposit amounts");
-            (uint8 v, bytes32 r, bytes32 s) = _permittable_deposit_signature();
-            IERC20Permit(token).receiveWithSaltedPermit(
-                user, uint256(token_amount) * TOKEN_DENOMINATOR, _memo_permit_deadline(), bytes32(nullifier), v, r, s
-            );
+            _transferFromByPermit(user, nullifier, token_amount);
         } else {
             revert("ZkBobPool: Incorrect transaction type");
         }

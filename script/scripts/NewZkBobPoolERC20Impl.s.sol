@@ -7,14 +7,15 @@ import "./Env.s.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
+import "../../src/zkbob/ZkBobPoolERC20.sol";
 
-contract DeployNewZkBobPoolImpl is Script {
+contract DeployNewZkBobPoolERC20Impl is Script {
     function run() external {
         vm.startBroadcast();
 
-        ZkBobPool pool = ZkBobPool(zkBobPool);
+        ZkBobPoolERC20 pool = ZkBobPoolERC20(zkBobPool);
 
-        ZkBobPool impl = new ZkBobPool(
+        ZkBobPoolERC20 impl = new ZkBobPoolERC20(
             pool.pool_id(),
             pool.token(),
             pool.transfer_verifier(),
@@ -25,6 +26,6 @@ contract DeployNewZkBobPoolImpl is Script {
 
         vm.stopBroadcast();
 
-        console2.log("ZkBobPool implementation:", address(impl));
+        console2.log("ZkBobPoolERC20 implementation:", address(impl));
     }
 }
