@@ -45,8 +45,10 @@ contract BobVaultTest is AbstractBobVaultTest {
     function setUp() public {
         _setUpBobVault();
 
-        tokenA = IERC20(new ERC20Mock("Mock Token A", "MA", address(this), 1_000_000 ether));
-        tokenB = IERC20(new ERC20Mock("Mock Token B", "MB", address(this), 1_000_000 ether));
+        tokenA = IERC20(new ERC20Mock());
+        ERC20Mock(address(tokenA)).mint(address(this), 1_000_000 ether);
+        tokenB = IERC20(new ERC20Mock());
+        ERC20Mock(address(tokenB)).mint(address(this), 1_000_000 ether);
     }
 
     function testAuthRights() public {
