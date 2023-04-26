@@ -4,21 +4,20 @@ pragma solidity 0.8.15;
 
 import "./ZkBobPool.sol";
 import "./ZkBobTokenSellerMixin.sol";
-import "./ZkBobPermit2Mixin.sol";
+import "./ZkBobPolygonPermitMixin.sol";
 
 /**
- * @title ZkBobPoolERC20
- * Shielded transactions pool for ERC20 tokens
+ * @title ZkBobPoolPolygonUSDC
+ * Shielded transactions pool for Polygon USDC tokens
  */
-contract ZkBobPoolERC20 is ZkBobPool, ZkBobTokenSellerMixin, ZkBobPermit2Mixin {
+contract ZkBobPoolPolygonUSDC is ZkBobPool, ZkBobTokenSellerMixin, ZkBobPolygonPermitMixin {
     constructor(
         uint256 __pool_id,
         address _token,
         ITransferVerifier _transfer_verifier,
         ITreeVerifier _tree_verifier,
         IBatchDepositVerifier _batch_deposit_verifier,
-        address _direct_deposit_queue,
-        address _permit2
+        address _direct_deposit_queue
     )
         ZkBobPool(
             __pool_id,
@@ -27,9 +26,8 @@ contract ZkBobPoolERC20 is ZkBobPool, ZkBobTokenSellerMixin, ZkBobPermit2Mixin {
             _tree_verifier,
             _batch_deposit_verifier,
             _direct_deposit_queue,
-            1_000_000_000,
-            1_000_000_000
+            1,
+            1_000_000
         )
-        ZkBobPermit2Mixin(_permit2)
     {}
 }

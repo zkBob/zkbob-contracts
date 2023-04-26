@@ -5,12 +5,11 @@ pragma solidity 0.8.15;
 import "forge-std/Script.sol";
 import "./Env.s.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
-import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
-import "../../src/zkbob/ZkBobPoolERC20.sol";
+import "../../src/zkbob/ZkBobPoolBOB.sol";
 
-contract DeployZkBobPoolERC20 is Script {
+contract DeployZkBobPoolBOB is Script {
     function run() external {
         vm.startBroadcast();
 
@@ -33,7 +32,7 @@ contract DeployZkBobPoolERC20 is Script {
         EIP1967Proxy poolProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
         EIP1967Proxy queueProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
 
-        ZkBobPoolERC20 poolImpl = new ZkBobPoolERC20(
+        ZkBobPoolBOB poolImpl = new ZkBobPoolBOB(
             zkBobPoolId,
             bobVanityAddr,
             transferVerifier,
@@ -53,9 +52,9 @@ contract DeployZkBobPoolERC20 is Script {
             zkBobDirectDepositCap
         );
         poolProxy.upgradeToAndCall(address(poolImpl), initData);
-        ZkBobPoolERC20 pool = ZkBobPoolERC20(address(poolProxy));
+        ZkBobPoolBOB pool = ZkBobPoolBOB(address(poolProxy));
 
-        ZkBobDirectDepositQueue queueImpl = new ZkBobDirectDepositQueue(address(pool), bobVanityAddr);
+        ZkBobDirectDepositQueue queueImpl = new ZkBobDirectDepositQueue(address(pool), bobVanityAddr, 1_000_000_000);
         queueProxy.upgradeTo(address(queueImpl));
         ZkBobDirectDepositQueue queue = ZkBobDirectDepositQueue(address(queueProxy));
 

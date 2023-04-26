@@ -5,7 +5,6 @@ pragma solidity 0.8.15;
 import "forge-std/Script.sol";
 import "./Env.s.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
-import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueueETH.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
 import "../../src/zkbob/ZkBobPoolETH.sol";
@@ -56,7 +55,7 @@ contract DeployZkBobPoolETH is Script {
         poolProxy.upgradeToAndCall(address(poolImpl), initData);
         ZkBobPoolETH pool = ZkBobPoolETH(payable(address(poolProxy)));
 
-        ZkBobDirectDepositQueueETH queueImpl = new ZkBobDirectDepositQueueETH(address(pool), weth);
+        ZkBobDirectDepositQueueETH queueImpl = new ZkBobDirectDepositQueueETH(address(pool), weth, 1_000_000_000);
         queueProxy.upgradeTo(address(queueImpl));
         ZkBobDirectDepositQueueETH queue = ZkBobDirectDepositQueueETH(address(queueProxy));
 
