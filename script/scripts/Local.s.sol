@@ -7,8 +7,7 @@ import "./Env.s.sol";
 import "../../test/shared/EIP2470.t.sol";
 import "../../src/BobToken.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
-import "../../src/zkbob/ZkBobPool.sol";
-import "../../src/zkbob/ZkBobPoolERC20.sol";
+import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
 
@@ -44,7 +43,7 @@ contract DeployLocal is Script {
         EIP1967Proxy poolProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
         EIP1967Proxy queueProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
 
-        ZkBobPoolERC20 poolImpl = new ZkBobPoolERC20(
+        ZkBobPoolBOB poolImpl = new ZkBobPoolBOB(
             zkBobPoolId,
             address(bob),
             transferVerifier,
@@ -66,7 +65,7 @@ contract DeployLocal is Script {
             );
             poolProxy.upgradeToAndCall(address(poolImpl), initData);
         }
-        ZkBobPoolERC20 pool = ZkBobPoolERC20(address(poolProxy));
+        ZkBobPoolBOB pool = ZkBobPoolBOB(address(poolProxy));
 
         ZkBobDirectDepositQueue queueImpl = new ZkBobDirectDepositQueue(address(pool), address(bob));
         queueProxy.upgradeTo(address(queueImpl));

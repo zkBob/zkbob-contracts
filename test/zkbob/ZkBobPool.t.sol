@@ -3,25 +3,24 @@
 pragma solidity 0.8.15;
 
 import "forge-std/Test.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/presets/ERC721PresetMinterPauserAutoId.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
 import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import "../shared/Env.t.sol";
+import "../shared/ForkTests.t.sol";
 import "../mocks/TransferVerifierMock.sol";
 import "../mocks/TreeUpdateVerifierMock.sol";
 import "../mocks/BatchDepositVerifierMock.sol";
 import "../mocks/DummyImpl.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
-import "../../src/zkbob/ZkBobPoolETH.sol";
+import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
 import "../../src/BobToken.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
-import "../shared/ForkTests.t.sol";
 import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
-import "../../src/zkbob/ZkBobDirectDepositQueueETH.sol";
 import "../interfaces/IZkBobDirectDepositsAdmin.sol";
 import "../interfaces/IZkBobPoolAdmin.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
     address constant uniV3Router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;

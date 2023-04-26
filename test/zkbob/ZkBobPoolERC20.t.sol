@@ -3,26 +3,11 @@
 pragma solidity 0.8.15;
 
 import "forge-std/Test.sol";
-import "@openzeppelin/contracts/token/ERC721/presets/ERC721PresetMinterPauserAutoId.sol";
-import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
-import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
-import "../shared/Env.t.sol";
-import "../mocks/TransferVerifierMock.sol";
-import "../mocks/TreeUpdateVerifierMock.sol";
-import "../mocks/BatchDepositVerifierMock.sol";
-import "../mocks/DummyImpl.sol";
-import "../../src/proxy/EIP1967Proxy.sol";
-import "../../src/zkbob/ZkBobPool.sol";
-import "../../src/zkbob/ZkBobPoolERC20.sol";
-import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
-import "../../src/BobToken.sol";
-import "../../src/zkbob/manager/MutableOperatorManager.sol";
 import "../../src/utils/UniswapV3Seller.sol";
-import "../shared/ForkTests.t.sol";
-import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
+import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "./ZkBobPool.t.sol";
 
-contract ZkBobPoolERC20Test is AbstractZkBobPoolTest {
+contract ZkBobPoolBOBTest is AbstractZkBobPoolTest {
     uint256 private constant initialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
     BobToken bob;
 
@@ -36,8 +21,8 @@ contract ZkBobPoolERC20Test is AbstractZkBobPoolTest {
         EIP1967Proxy poolProxy = new EIP1967Proxy(address(this), address(0xdead), "");
         EIP1967Proxy queueProxy = new EIP1967Proxy(address(this), address(0xdead), "");
 
-        ZkBobPoolERC20 impl =
-        new ZkBobPoolERC20(0, address(bob), new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(), address(queueProxy));
+        ZkBobPoolBOB impl =
+        new ZkBobPoolBOB(0, address(bob), new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(), address(queueProxy));
 
         bytes memory initData = abi.encodeWithSelector(
             ZkBobPool.initialize.selector,
@@ -132,7 +117,9 @@ contract ZkBobPoolERC20Test is AbstractZkBobPoolTest {
         );
 
         // enable token swaps for ETH
-        pool.setTokenSeller(address(new UniswapV3Seller(uniV3Router, uniV3Quoter, address(bob), 500, usdc, 500)));
+        address addr = address(new UniswapV3Seller(uniV3Router, uniV3Quoter, address(bob), 500, usdc, 500));
+        pool.setTokenSeller(addr);
+        assertEq(address(uint160(uint256(vm.load(address(pool), bytes32(uint256(11)))))), addr);
     }
 
     function testNativeWithdrawal() public {

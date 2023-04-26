@@ -3,22 +3,7 @@
 pragma solidity 0.8.15;
 
 import "forge-std/Test.sol";
-import "@openzeppelin/contracts/token/ERC721/presets/ERC721PresetMinterPauserAutoId.sol";
-import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
-import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
-import "../shared/Env.t.sol";
-import "../mocks/TransferVerifierMock.sol";
-import "../mocks/TreeUpdateVerifierMock.sol";
-import "../mocks/BatchDepositVerifierMock.sol";
-import "../mocks/DummyImpl.sol";
-import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPoolETH.sol";
-import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
-import "../../src/BobToken.sol";
-import "../../src/zkbob/manager/MutableOperatorManager.sol";
-import "../shared/ForkTests.t.sol";
-import "@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol";
-import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueueETH.sol";
 import "./ZkBobPool.t.sol";
 
