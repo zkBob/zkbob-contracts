@@ -90,17 +90,29 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
 
         ZkBobPool impl;
         if (poolType == PoolType.ETH) {
-            impl =
-            new ZkBobPoolETH(0, token, new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(), address(queueProxy), permit2);
+            impl = new ZkBobPoolETH(
+                0, token,
+                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                address(queueProxy), permit2
+            );
         } else if (poolType == PoolType.BOB) {
-            impl =
-            new ZkBobPoolBOB(0, token, new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(), address(queueProxy));
+            impl = new ZkBobPoolBOB(
+                0, token,
+                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                address(queueProxy)
+            );
         } else if (poolType == PoolType.PolygonERC20) {
-            impl =
-            new ZkBobPoolPolygonUSDC(0, token, new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(), address(queueProxy));
+            impl = new ZkBobPoolPolygonUSDC(
+                0, token,
+                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                address(queueProxy)
+            );
         } else if (poolType == PoolType.ERC20) {
-            impl =
-            new ZkBobPoolERC20(0, token, new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(), address(queueProxy), permit2);
+            impl = new ZkBobPoolERC20(
+                0, token,
+                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                address(queueProxy), permit2, 1_000_000_000, 1_000_000_000
+            );
         }
 
         bytes memory initData = abi.encodeWithSelector(
@@ -338,12 +350,12 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
 
         ZkAddress.ZkAddress memory parsedZkAddress = ZkAddress.parseZkAddress(zkAddress, 0);
         vm.expectEmit(true, true, false, true);
-        emit SubmitDirectDeposit(user1, 0, user2, parsedZkAddress, 9.9 gwei / D / denominator);
-        _transferAndCall(10 ether, user2, zkAddress);
+        emit SubmitDirectDeposit(user1, 0, user2, parsedZkAddress, uint64(9.9 ether / D / denominator));
+        _transferAndCall(10 ether / D, user2, zkAddress);
 
         vm.expectEmit(true, true, false, true);
-        emit SubmitDirectDeposit(user1, 1, user2, parsedZkAddress, 9.9 gwei / D / denominator);
-        queue.directDeposit(user2, 10 ether, zkAddress);
+        emit SubmitDirectDeposit(user1, 1, user2, parsedZkAddress, uint64(9.9 ether / D / denominator));
+        queue.directDeposit(user2, 10 ether / D, zkAddress);
 
         vm.expectRevert("ZkBobAccounting: daily user direct deposit cap exceeded");
         _transferAndCall(10 ether / D, user2, zkAddress);

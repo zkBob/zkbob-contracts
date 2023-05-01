@@ -18,7 +18,9 @@ contract ZkBobPoolERC20 is ZkBobPool, ZkBobTokenSellerMixin, ZkBobPermit2Mixin {
         ITreeVerifier _tree_verifier,
         IBatchDepositVerifier _batch_deposit_verifier,
         address _direct_deposit_queue,
-        address _permit2
+        address _permit2,
+        uint256 _denominator,
+        uint256 _precision
     )
         ZkBobPool(
             __pool_id,
@@ -27,8 +29,8 @@ contract ZkBobPoolERC20 is ZkBobPool, ZkBobTokenSellerMixin, ZkBobPermit2Mixin {
             _tree_verifier,
             _batch_deposit_verifier,
             _direct_deposit_queue,
-            1_000_000_000,
-            1_000_000_000
+            _denominator,
+            _precision
         )
         ZkBobPermit2Mixin(_permit2)
     {}
