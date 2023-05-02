@@ -66,6 +66,20 @@ contract BalancedMinterTest is Test {
         assertEq(minter.burnQuota(), 105 ether);
     }
 
+    function testOverflowQuotas() public {
+        minter.setMinter(address(this), true);
+
+        vm.expectRevert("BalancedMinter: exceeds minting quota");
+        minter.mint(user1, 2 ** 127);
+        vm.expectRevert("BalancedMinter: exceeds minting quota");
+        minter.mint(user1, 2 ** 200);
+
+        vm.expectRevert("BalancedMinter: exceeds burning quota");
+        minter.burn(2 ** 127);
+        vm.expectRevert("BalancedMinter: exceeds burning quota");
+        minter.burn(2 ** 200);
+    }
+
     function testExceedingQuotas() public {
         bob.mint(address(this), 200 ether);
         minter.setMinter(address(this), true);

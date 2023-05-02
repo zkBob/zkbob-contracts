@@ -45,10 +45,8 @@ contract BobVaultTest is AbstractBobVaultTest {
     function setUp() public {
         _setUpBobVault();
 
-        tokenA = IERC20(new ERC20Mock());
-        ERC20Mock(address(tokenA)).mint(address(this), 1_000_000 ether);
-        tokenB = IERC20(new ERC20Mock());
-        ERC20Mock(address(tokenB)).mint(address(this), 1_000_000 ether);
+        tokenA = IERC20(new ERC20Mock("Mock Token A", "MA", address(this), 1_000_000 ether));
+        tokenB = IERC20(new ERC20Mock("Mock Token B", "MB", address(this), 1_000_000 ether));
     }
 
     function testAuthRights() public {
@@ -373,7 +371,6 @@ abstract contract AbstractBobVault3poolTest is AbstractBobVaultTest, AbstractFor
         vault.reclaim(user1, 1000 ether);
         assertEq(bob.balanceOf(address(vault)), 0);
         assertGt(bob.balanceOf(user1), 700 ether);
-        vm.stopPrank();
     }
 
     function testMaxBalance() public {
@@ -611,7 +608,6 @@ abstract contract AbstractBobVaultAAVETest is AbstractBobVaultTest, AbstractFork
         assertEq(stat.required, 9_990_000 * 1e6);
         assertGt(stat.farmed, 10_001 * 1e6);
 
-        vm.stopPrank();
         vm.startPrank(user2);
 
         deal(address(usdc), user2, 0);

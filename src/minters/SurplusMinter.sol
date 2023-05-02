@@ -19,6 +19,7 @@ contract SurplusMinter is IERC677Receiver, Ownable {
 
     uint256 public surplus; // unrealized surplus
 
+    event UpdateMinter(address indexed minter, bool enabled);
     event WithdrawSurplus(address indexed to, uint256 realized, uint256 unrealized);
     event AddSurplus(address indexed from, uint256 unrealized);
 
@@ -34,6 +35,8 @@ contract SurplusMinter is IERC677Receiver, Ownable {
      */
     function setMinter(address _account, bool _enabled) external onlyOwner {
         isMinter[_account] = _enabled;
+
+        emit UpdateMinter(_account, _enabled);
     }
 
     /**
