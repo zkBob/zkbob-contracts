@@ -127,7 +127,7 @@ abstract contract ERC20Recovery is Ownable, BaseERC20 {
         uint256[] memory values = new uint256[](_values.length);
 
         uint256 total = 0;
-        for (uint256 i = 0; i < _values.length; i++) {
+        for (uint256 i = 0; i < _values.length; ++i) {
             uint256 balance = balanceOf(_accounts[i]);
             uint256 value = balance < _values[i] ? balance : _values[i];
             values[i] = value;
@@ -190,7 +190,7 @@ abstract contract ERC20Recovery is Ownable, BaseERC20 {
         uint256 total = 0;
         address receiver = recoveredFundsReceiver;
 
-        for (uint256 i = 0; i < _accounts.length; i++) {
+        for (uint256 i = 0; i < _accounts.length; ++i) {
             uint256 balance = balanceOf(_accounts[i]);
             uint256 value = balance < _values[i] ? balance : _values[i];
             total += value;

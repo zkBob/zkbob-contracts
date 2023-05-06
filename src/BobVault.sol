@@ -86,9 +86,10 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
 
         res.total = IERC20(_token).balanceOf(address(this));
         res.required = token.balance;
-        if (token.yield != address(0)) {
-            res.total += _delegateInvestedAmount(token.yield, _token);
-            res.required += token.dust;
+        (uint96 dust, address yield) = (token.dust, token.yield);
+        if (yield != address(0)) {
+            res.total += _delegateInvestedAmount(yield, _token);
+            res.required += dust;
         }
         res.farmed = res.total - res.required;
     }
@@ -578,9 +579,10 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         uint256 currentBalance = IERC20(_token).balanceOf(address(this));
         uint256 requiredBalance = token.balance;
 
-        if (token.yield != address(0)) {
-            currentBalance += _delegateInvestedAmount(token.yield, _token);
-            requiredBalance += token.dust;
+        (uint96 dust, address yield) = (token.dust, token.yield);
+        if (yield != address(0)) {
+            currentBalance += _delegateInvestedAmount(yield, _token);
+            requiredBalance += dust;
         }
 
         if (requiredBalance >= currentBalance) {
@@ -589,7 +591,7 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
 
         uint256 value = currentBalance - requiredBalance;
         _transferOut(_token, msg.sender, value);
-        emit Farm(_token, token.yield, value);
+        emit Farm(_token, yield, value);
 
         return value;
     }
@@ -606,9 +608,11 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
         Collateral memory token = collateral[_token];
         require(token.price > 0, "BobVault: unsupported collateral");
 
-        returnData = _delegateFarmExtra(token.yield, _token, msg.sender, _data);
+        address yield = token.yield;
+        require(yield != address(0), "BobVault: yield not enabled");
+        returnData = _delegateFarmExtra(yield, _token, msg.sender, _data);
 
-        emit FarmExtra(_token, token.yield);
+        emit FarmExtra(_token, yield);
     }
 
     /**
@@ -668,7 +672,7 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
             if (invested < withdrawValue) {
                 withdrawValue = invested;
             }
-            _delegateWithdraw(token.yield, _token, withdrawValue);
+            _delegateWithdraw(yield, _token, withdrawValue);
             emit Withdraw(_token, yield, withdrawValue);
         }
 

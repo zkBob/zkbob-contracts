@@ -24,21 +24,25 @@ contract FlashMinter is IERC3156FlashLender, ReentrancyGuard, Ownable {
     uint64 public fee; // fee percentage * 1 ether
     uint96 public maxFee; // max fee in absolute values
 
+    event UpdateConfig(uint96 limit, address treasury, uint64 fee, uint96 maxFee);
     event FlashMint(address indexed _receiver, uint256 _amount, uint256 _fee);
 
     constructor(address _token, uint96 _limit, address _treasury, uint64 _fee, uint96 _maxFee) {
-        require(_treasury != address(0) || _fee == 0, "FlashMinter: invalid fee config");
         token = _token;
-        limit = _limit;
-        treasury = _treasury;
-        _setFees(_fee, _maxFee);
+        _updateConfig(_limit, _treasury, _fee, _maxFee);
     }
 
     function updateConfig(uint96 _limit, address _treasury, uint64 _fee, uint96 _maxFee) external onlyOwner {
+        _updateConfig(_limit, _treasury, _fee, _maxFee);
+    }
+
+    function _updateConfig(uint96 _limit, address _treasury, uint64 _fee, uint96 _maxFee) internal {
         require(_treasury != address(0) || _fee == 0, "FlashMinter: invalid fee config");
         limit = _limit;
         treasury = _treasury;
         _setFees(_fee, _maxFee);
+
+        emit UpdateConfig(_limit, _treasury, _fee, _maxFee);
     }
 
     function _setFees(uint64 _fee, uint96 _maxFee) internal {
@@ -104,18 +108,18 @@ contract FlashMinter is IERC3156FlashLender, ReentrancyGuard, Ownable {
     {
         require(token == _token, "FlashMinter: wrong token");
         require(_amount <= limit, "FlashMinter: amount exceeds maxFlashLoan");
-        uint256 fee = _flashFee(_amount);
+        uint256 flashFee = _flashFee(_amount);
         IMintableERC20(_token).mint(address(_receiver), _amount);
         require(
-            _receiver.onFlashLoan(msg.sender, _token, _amount, fee, _data) == _RETURN_VALUE,
+            _receiver.onFlashLoan(msg.sender, _token, _amount, flashFee, _data) == _RETURN_VALUE,
             "FlashMinter: invalid return value"
         );
         IBurnableERC20(_token).burnFrom(address(_receiver), _amount);
-        if (fee > 0) {
-            IERC20(_token).transferFrom(address(_receiver), treasury, fee);
+        if (flashFee > 0) {
+            IERC20(_token).transferFrom(address(_receiver), treasury, flashFee);
         }
 
-        emit FlashMint(address(_receiver), _amount, fee);
+        emit FlashMint(address(_receiver), _amount, flashFee);
 
         return true;
     }
