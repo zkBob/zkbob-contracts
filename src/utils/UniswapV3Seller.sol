@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.15;
 
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/IPeripheryImmutableState.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/IQuoter.sol";
@@ -14,6 +15,8 @@ import "./Sacrifice.sol";
  * Helper for selling some token for ETH through a 2-hop UniswapV3 exchange.
  */
 contract UniswapV3Seller is ITokenSeller {
+    using SafeERC20 for IERC20;
+
     ISwapRouter immutable swapRouter;
     IQuoter immutable quoter;
     IWETH9 immutable WETH;
@@ -67,7 +70,7 @@ contract UniswapV3Seller is ITokenSeller {
         uint256 remainingBalance = IERC20(token0).balanceOf(address(this));
         if (remainingBalance + _amount > balance) {
             uint256 refund = remainingBalance + _amount - balance;
-            IERC20(token0).transfer(msg.sender, refund);
+            IERC20(token0).safeTransfer(msg.sender, refund);
             return (amountOut, refund);
         }
         return (amountOut, 0);

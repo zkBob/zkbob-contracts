@@ -9,6 +9,8 @@ import "./BaseMinter.sol";
  * BOB minting/burning middleware with simple usage quotas.
  */
 contract BalancedMinter is BaseMinter {
+    uint256 private constant MINT_BURN_VALUE_LIMIT = 1 << 127;
+
     int128 public mintQuota; // remaining minting quota
     int128 public burnQuota; // remaining burning quota
 
@@ -29,7 +31,7 @@ contract BalancedMinter is BaseMinter {
         (int128 newMintQuota, int128 newBurnQuota) = (mintQuota + _dMint, burnQuota + _dBurn);
         (mintQuota, burnQuota) = (newMintQuota, newBurnQuota);
 
-        emit UpdateQuotas(newBurnQuota, newBurnQuota);
+        emit UpdateQuotas(newMintQuota, newBurnQuota);
     }
 
     /**
@@ -39,7 +41,7 @@ contract BalancedMinter is BaseMinter {
     function _beforeMint(uint256 _amount) internal override {
         int128 amount = int128(uint128(_amount));
         unchecked {
-            require(mintQuota >= amount, "BalancedMinter: exceeds minting quota");
+            require(mintQuota >= amount && _amount < MINT_BURN_VALUE_LIMIT, "BalancedMinter: exceeds minting quota");
             (mintQuota, burnQuota) = (mintQuota - amount, burnQuota + amount);
         }
     }
@@ -51,7 +53,7 @@ contract BalancedMinter is BaseMinter {
     function _beforeBurn(uint256 _amount) internal override {
         int128 amount = int128(uint128(_amount));
         unchecked {
-            require(burnQuota >= amount, "BalancedMinter: exceeds burning quota");
+            require(burnQuota >= amount && _amount < MINT_BURN_VALUE_LIMIT, "BalancedMinter: exceeds burning quota");
             (mintQuota, burnQuota) = (mintQuota + amount, burnQuota - amount);
         }
     }

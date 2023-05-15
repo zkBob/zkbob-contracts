@@ -16,6 +16,7 @@ abstract contract BaseMinter is IMintableERC20, IBurnableERC20, IERC677Receiver,
 
     mapping(address => bool) public isMinter;
 
+    event UpdateMinter(address indexed minter, bool enabled);
     event Mint(address minter, address to, uint256 amount);
     event Burn(address burner, address from, uint256 amount);
 
@@ -31,6 +32,8 @@ abstract contract BaseMinter is IMintableERC20, IBurnableERC20, IERC677Receiver,
      */
     function setMinter(address _account, bool _enabled) external onlyOwner {
         isMinter[_account] = _enabled;
+
+        emit UpdateMinter(_account, _enabled);
     }
 
     /**

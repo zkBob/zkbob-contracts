@@ -189,7 +189,9 @@ contract ZkBobAccounting is KycProvidersManagerStorage {
         s0.cumTvl += s1.tvl / uint72(PRECISION);
         s0.txCount++;
 
-        _processTVLChange(s1, _user, _txAmount);
+        if (_txAmount != 0) {
+            _processTVLChange(s1, _user, _txAmount);
+        }
 
         slot0 = s0;
         return (s0.maxWeeklyAvgTvl, s0.maxWeeklyTxCount, txCount);
@@ -197,10 +199,6 @@ contract ZkBobAccounting is KycProvidersManagerStorage {
 
     function _processTVLChange(Slot1 memory s1, address _user, int256 _txAmount) internal {
         uint16 curDay = uint16(block.timestamp / SLOT_DURATION / DAY_SLOTS);
-
-        if (_txAmount == 0) {
-            return;
-        }
 
         UserStats memory us = userStats[_user];
         Tier storage t = tiers[_adjustConfiguredTierForUser(_user, us.tier)];
@@ -348,7 +346,7 @@ contract ZkBobAccounting is KycProvidersManagerStorage {
         require(
             _tier == 255 || tiers[uint256(_tier)].limits.tvlCap > 0, "ZkBobAccounting: non-existing pool limits tier"
         );
-        for (uint256 i = 0; i < _users.length; i++) {
+        for (uint256 i = 0; i < _users.length; ++i) {
             address user = _users[i];
             userStats[user].tier = _tier;
             emit UpdateTier(user, _tier);

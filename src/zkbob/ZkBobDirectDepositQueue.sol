@@ -21,7 +21,6 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
     using SafeERC20 for IERC20;
 
     uint256 internal constant R = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
-    uint256 internal constant MAX_POOL_ID = 0xffffff;
     uint256 internal constant TOKEN_DENOMINATOR = 1_000_000_000;
     uint256 internal constant MAX_NUMBER_OF_DIRECT_DEPOSITS = 16;
     bytes4 internal constant MESSAGE_PREFIX_DIRECT_DEPOSIT_V1 = 0x00000001;
@@ -59,15 +58,9 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
     }
 
     /**
-     * @dev Throws if called by any account other than the current relayer operator.
-     */
-    modifier onlyOperator() {
-        require(operatorManager.isOperator(_msgSender()), "ZkBobDirectDepositQueue: not an operator");
-        _;
-    }
-
-    /**
      * @dev Updates used operator manager contract.
+     * Operator manager in this contract is only responsible for fast-track processing of refunds.
+     * Usage of fully permissionless operator managers is not recommended, due to existence of front-running DoS attacks.
      * Callable only by the contract owner / proxy admin.
      * @param _operatorManager new operator manager implementation.
      */
@@ -125,7 +118,7 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
         }
         total = 0;
         totalFee = 0;
-        for (uint256 i = 0; i < count; i++) {
+        for (uint256 i = 0; i < count; ++i) {
             uint256 index = _indices[i];
             DirectDeposit storage dd = directDeposits[index];
             (bytes32 pk, bytes10 diversifier, uint64 deposit, uint64 fee, DirectDepositStatus status) =
@@ -213,12 +206,13 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
     function refundDirectDeposit(uint256[] calldata _indices) external {
         bool isOperator = operatorManager.isOperator(msg.sender);
 
-        for (uint256 i = 0; i < _indices.length; i++) {
+        uint256 timeout = directDepositTimeout;
+        for (uint256 i = 0; i < _indices.length; ++i) {
             DirectDeposit storage dd = directDeposits[_indices[i]];
 
             if (dd.status == DirectDepositStatus.Pending) {
                 require(
-                    isOperator || dd.timestamp + directDepositTimeout < block.timestamp,
+                    isOperator || dd.timestamp + timeout < block.timestamp,
                     "ZkBobDirectDepositQueue: direct deposit timeout not passed"
                 );
                 _refundDirectDeposit(_indices[i], dd);
