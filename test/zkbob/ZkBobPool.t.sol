@@ -205,13 +205,14 @@ abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
         vm.expectRevert("ZkBobAccounting: single direct deposit cap exceeded");
         _transferAndCall(15 ether, user2, zkAddress);
 
+        ZkAddress.ZkAddress memory parsedZkAddress = ZkAddress.parseZkAddress(zkAddress, 0);
         vm.expectEmit(true, true, false, true);
-        emit SubmitDirectDeposit(user1, 0, user2, ZkAddress.parseZkAddress(zkAddress, 0), 9.9 gwei);
+        emit SubmitDirectDeposit(user1, 0, user2, parsedZkAddress, 9.9 gwei);
         _transferAndCall(10 ether, user2, zkAddress);
 
         IERC20(token).approve(address(queue), 10 ether);
         vm.expectEmit(true, true, false, true);
-        emit SubmitDirectDeposit(user1, 1, user2, ZkAddress.parseZkAddress(zkAddress, 0), 9.9 gwei);
+        emit SubmitDirectDeposit(user1, 1, user2, parsedZkAddress, 9.9 gwei);
         queue.directDeposit(user2, 10 ether, zkAddress);
 
         vm.expectRevert("ZkBobAccounting: daily user direct deposit cap exceeded");
