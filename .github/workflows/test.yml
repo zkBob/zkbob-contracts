@@ -6,6 +6,9 @@ on:
 
 env:
   FOUNDRY_PROFILE: ci
+  FORK_RPC_URL_MAINNET: ${{ secrets.FORK_RPC_URL_MAINNET }}
+  FORK_RPC_URL_OPTIMISM: ${{ secrets.FORK_RPC_URL_OPTIMISM }}
+  FORK_RPC_URL_POLYGON: ${{ secrets.FORK_RPC_URL_POLYGON }}
 
 jobs:
   lint:
