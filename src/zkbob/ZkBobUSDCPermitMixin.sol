@@ -2,17 +2,17 @@
 
 pragma solidity 0.8.15;
 
-import "../interfaces/IPolygonPermit.sol";
+import "../interfaces/IUSDCPermit.sol";
 import "./ZkBobPool.sol";
 
 /**
- * @title ZkBobPolygonPermitMixin
+ * @title ZkBobUSDCPermitMixin
  */
-abstract contract ZkBobPolygonPermitMixin is ZkBobPool {
+abstract contract ZkBobUSDCPermitMixin is ZkBobPool {
     // @inheritdoc ZkBobPool
     function _transferFromByPermit(address _user, uint256 _nullifier, int256 _tokenAmount) internal override {
         (uint8 v, bytes32 r, bytes32 s) = _permittable_deposit_signature();
-        IPolygonPermit(token).transferWithAuthorization(
+        IUSDCPermit(token).transferWithAuthorization(
             _user,
             address(this),
             uint256(_tokenAmount) * TOKEN_DENOMINATOR,

@@ -21,7 +21,7 @@ import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
 import "../interfaces/IZkBobDirectDepositsAdmin.sol";
 import "../interfaces/IZkBobPoolAdmin.sol";
 import "../../src/interfaces/IERC677.sol";
-import "../../src/zkbob/ZkBobPoolPolygonUSDC.sol";
+import "../../src/zkbob/ZkBobPoolUSDC.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueueETH.sol";
 import "../../src/zkbob/ZkBobPoolERC20.sol";
 import "../../src/zkbob/ZkBobPoolBOB.sol";
@@ -38,13 +38,13 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
     enum PoolType {
         BOB,
         ETH,
-        PolygonERC20,
+        USDC,
         ERC20
     }
     enum PermitType {
-        BobPermit,
+        BOBPermit,
         Permit2,
-        PolygonPermit
+        USDCPermit
     }
 
     uint256 D;
@@ -101,8 +101,8 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
                 new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
                 address(queueProxy)
             );
-        } else if (poolType == PoolType.PolygonERC20) {
-            impl = new ZkBobPoolPolygonUSDC(
+        } else if (poolType == PoolType.USDC) {
+            impl = new ZkBobPoolUSDC(
                 0, token,
                 new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
                 address(queueProxy)
@@ -521,6 +521,13 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         bytes memory data2 = _encodeWithdrawal(user1, 0.4 ether / D, 0.3 ether / D);
         _transact(data2);
 
+        // user1 withdraws 0.2 BOB, trying to convert 0.3 BOB to ETH
+        bytes memory data4 = _encodeWithdrawal(user1, 0.2 ether / D, 0.3 ether / D);
+        vm.prank(user2);
+        (bool status, bytes memory returnData) = address(pool).call(data4);
+        assert(!status);
+        assertEq(returnData, stdError.arithmeticError);
+
         address dummy = address(new DummyImpl(0));
         uint256 quote3 = _quoteNativeSwap(0.3 ether / D);
         bytes memory data3 = _encodeWithdrawal(dummy, 0.4 ether / D, 0.3 ether / D);
@@ -636,12 +643,12 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         bytes32 nullifier = bytes32(_randFR());
 
         bytes32 digest;
-        if (permitType == PermitType.BobPermit) {
+        if (permitType == PermitType.BOBPermit) {
             digest = _digestSaltedPermit(user1, address(pool), uint256(_amount + int256(_fee)), expiry, nullifier);
         } else if (permitType == PermitType.Permit2) {
             digest = _digestPermit2(user1, address(pool), uint256(_amount + int256(_fee)), expiry, nullifier);
-        } else if (permitType == PermitType.PolygonPermit) {
-            digest = _digestPolygonPermit(user1, address(pool), uint256(_amount + int256(_fee)), expiry, nullifier);
+        } else if (permitType == PermitType.USDCPermit) {
+            digest = _digestUSDCPermit(user1, address(pool), uint256(_amount + int256(_fee)), expiry, nullifier);
         }
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, digest);
 
@@ -677,6 +684,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         bytes32 _salt
     )
         internal
+        view
         returns (bytes32)
     {
         uint256 nonce = IERC20Permit(token).nonces(_holder);
@@ -698,6 +706,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         bytes32 _salt
     )
         internal
+        view
         returns (bytes32)
     {
         return ECDSA.toTypedDataHash(
@@ -714,7 +723,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         );
     }
 
-    function _digestPolygonPermit(
+    function _digestUSDCPermit(
         address _holder,
         address _spender,
         uint256 _value,
@@ -722,6 +731,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         bytes32 _salt
     )
         internal
+        view
         returns (bytes32)
     {
         return ECDSA.toTypedDataHash(
@@ -748,7 +758,7 @@ contract ZkBobPoolBOBPolygonTest is AbstractZkBobPoolTest, AbstractPolygonForkTe
         weth = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
         tempToken = address(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
         poolType = PoolType.BOB;
-        permitType = PermitType.BobPermit;
+        permitType = PermitType.BOBPermit;
         denominator = 1_000_000_000;
         precision = 1_000_000_000;
     }
@@ -786,8 +796,8 @@ contract ZkBobPoolUSDCPolygonTest is AbstractZkBobPoolTest, AbstractPolygonForkT
         token = address(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
         weth = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
         tempToken = address(0);
-        poolType = PoolType.PolygonERC20;
-        permitType = PermitType.PolygonPermit;
+        poolType = PoolType.USDC;
+        permitType = PermitType.USDCPermit;
         denominator = 1;
         precision = 1_000_000;
     }

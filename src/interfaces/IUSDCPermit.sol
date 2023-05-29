@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.15;
 
-interface IPolygonPermit {
+interface IUSDCPermit {
     function transferWithAuthorization(
         address from,
         address to,
