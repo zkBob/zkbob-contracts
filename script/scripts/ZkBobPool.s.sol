@@ -5,11 +5,15 @@ pragma solidity 0.8.15;
 import "forge-std/Script.sol";
 import "./Env.s.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
+import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueueETH.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
+import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "../../src/zkbob/ZkBobPoolETH.sol";
+import "../../src/zkbob/ZkBobPoolUSDC.sol";
+import "../../src/zkbob/ZkBobPoolERC20.sol";
 
-contract DeployZkBobPoolETH is Script {
+contract DeployZkBobPool is Script {
     function run() external {
         vm.startBroadcast();
 
@@ -32,15 +36,39 @@ contract DeployZkBobPoolETH is Script {
         EIP1967Proxy poolProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
         EIP1967Proxy queueProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
 
-        ZkBobPoolETH poolImpl = new ZkBobPoolETH(
-            zkBobPoolId,
-            weth,
-            transferVerifier,
-            treeVerifier,
-            batchDepositVerifier,
-            address(queueProxy),
-            permit2
-        );
+        ZkBobPool poolImpl;
+        if (zkBobPoolType == PoolType.ETH) {
+            poolImpl = new ZkBobPoolETH(
+                zkBobPoolId, zkBobToken,
+                transferVerifier, treeVerifier, batchDepositVerifier,
+                address(queueProxy), permit2
+            );
+        } else if (zkBobPoolType == PoolType.BOB) {
+            poolImpl = new ZkBobPoolBOB(
+                zkBobPoolId, zkBobToken,
+                transferVerifier, treeVerifier, batchDepositVerifier,
+                address(queueProxy)
+            );
+        } else if (zkBobPoolType == PoolType.USDC) {
+            poolImpl = new ZkBobPoolUSDC(
+                zkBobPoolId, zkBobToken,
+                transferVerifier, treeVerifier, batchDepositVerifier,
+                address(queueProxy)
+            );
+        } else if (zkBobPoolType == PoolType.ERC20) {
+            uint8 decimals = IERC20Metadata(zkBobToken).decimals();
+            uint256 denominator = decimals > 9 ? 10 ** (decimals - 9) : 1;
+            uint256 precision = decimals > 9 ? 1_000_000_000 : 10 ** decimals;
+            poolImpl = new ZkBobPoolERC20(
+                zkBobPoolId, zkBobToken,
+                transferVerifier, treeVerifier, batchDepositVerifier,
+                address(queueProxy), permit2,
+                denominator, precision
+            );
+        } else {
+            revert("Unknown pool type");
+        }
+
         bytes memory initData = abi.encodeWithSelector(
             ZkBobPool.initialize.selector,
             zkBobInitialRoot,
@@ -53,11 +81,16 @@ contract DeployZkBobPoolETH is Script {
             zkBobDirectDepositCap
         );
         poolProxy.upgradeToAndCall(address(poolImpl), initData);
-        ZkBobPoolETH pool = ZkBobPoolETH(payable(address(poolProxy)));
+        ZkBobPool pool = ZkBobPool(address(poolProxy));
 
-        ZkBobDirectDepositQueueETH queueImpl = new ZkBobDirectDepositQueueETH(address(pool), weth, 1_000_000_000);
+        ZkBobDirectDepositQueue queueImpl;
+        if (zkBobPoolType == PoolType.ETH) {
+            queueImpl = new ZkBobDirectDepositQueueETH(address(pool), zkBobToken, pool.denominator());
+        } else {
+            queueImpl = new ZkBobDirectDepositQueue(address(pool), zkBobToken, pool.denominator());
+        }
         queueProxy.upgradeTo(address(queueImpl));
-        ZkBobDirectDepositQueueETH queue = ZkBobDirectDepositQueueETH(address(queueProxy));
+        ZkBobDirectDepositQueue queue = ZkBobDirectDepositQueue(address(queueProxy));
 
         IOperatorManager operatorManager =
             new MutableOperatorManager(zkBobRelayer, zkBobRelayerFeeReceiver, zkBobRelayerURL);

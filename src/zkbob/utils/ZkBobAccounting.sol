@@ -334,7 +334,7 @@ contract ZkBobAccounting is KycProvidersManagerStorage {
         emit UpdateLimits(_tier, tl);
     }
 
-    // Tier is set as per the KYC Providers Manager recomendation only in the case if no
+    // Tier is set as per the KYC Providers Manager recommendation only in the case if no
     // specific tier assigned to the user
     function _adjustConfiguredTierForUser(address _user, uint8 _configuredTier) internal view returns (uint8) {
         IKycProvidersManager kycProvidersMgr = kycProvidersManager();
