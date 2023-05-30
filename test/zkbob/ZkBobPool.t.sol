@@ -51,6 +51,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
     address token;
     address weth;
     address tempToken;
+    bool autoApproveQueue;
     PoolType poolType;
     PermitType permitType;
     uint256 denominator;
@@ -326,39 +327,47 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         pool.setUsersTier(1, users);
 
         queue.setDirectDepositFee(uint64(0.1 ether / D / pool.denominator()));
+
+        if (autoApproveQueue) {
+            vm.prank(user1);
+            IERC20(token).approve(address(queue), type(uint256).max);
+            vm.prank(user2);
+            IERC20(token).approve(address(queue), type(uint256).max);
+        }
     }
 
     function testDirectDepositSubmit() public {
         _setUpDD();
 
         vm.startPrank(user2);
-        IERC20(token).approve(address(queue), 100 ether / D);
         vm.expectRevert("ZkBobAccounting: single direct deposit cap exceeded");
-        _transferAndCall(10 ether / D, user2, zkAddress);
+        _directDeposit(10 ether / D, user2, zkAddress);
         vm.stopPrank();
 
         vm.startPrank(user1);
-        IERC20(token).approve(address(queue), 100 ether / D);
         vm.expectRevert("ZkBobDirectDepositQueue: direct deposit amount is too low");
-        _transferAndCall(0.01 ether / D, user2, zkAddress);
+        _directDeposit(0.01 ether / D, user2, zkAddress);
 
         vm.expectRevert(ZkAddress.InvalidZkAddressLength.selector);
-        _transferAndCall(10 ether / D, user2, "invalid");
+        _directDeposit(10 ether / D, user2, "invalid");
 
         vm.expectRevert("ZkBobAccounting: single direct deposit cap exceeded");
-        _transferAndCall(15 ether / D, user2, zkAddress);
+        _directDeposit(15 ether / D, user2, zkAddress);
 
         ZkAddress.ZkAddress memory parsedZkAddress = ZkAddress.parseZkAddress(zkAddress, 0);
         vm.expectEmit(true, true, false, true);
         emit SubmitDirectDeposit(user1, 0, user2, parsedZkAddress, uint64(9.9 ether / D / denominator));
-        _transferAndCall(10 ether / D, user2, zkAddress);
+        _directDeposit(10 ether / D, user2, zkAddress);
 
+        if (!autoApproveQueue) {
+            IERC20(token).approve(address(queue), 10 ether / D);
+        }
         vm.expectEmit(true, true, false, true);
         emit SubmitDirectDeposit(user1, 1, user2, parsedZkAddress, uint64(9.9 ether / D / denominator));
         queue.directDeposit(user2, 10 ether / D, zkAddress);
 
         vm.expectRevert("ZkBobAccounting: daily user direct deposit cap exceeded");
-        _transferAndCall(10 ether / D, user2, zkAddress);
+        _directDeposit(10 ether / D, user2, zkAddress);
 
         for (uint256 i = 0; i < 2; i++) {
             IZkBobDirectDeposits.DirectDeposit memory deposit = queue.getDirectDeposit(i);
@@ -375,9 +384,8 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         _setUpDD();
 
         vm.startPrank(user1);
-        IERC20(token).approve(address(queue), 100 ether / D);
-        _transferAndCall(10 ether / D, user2, zkAddress);
-        _transferAndCall(5 ether / D, user2, zkAddress);
+        _directDeposit(10 ether / D, user2, zkAddress);
+        _directDeposit(5 ether / D, user2, zkAddress);
         vm.stopPrank();
 
         uint256[] memory indices = new uint256[](2);
@@ -427,9 +435,8 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         _setUpDD();
 
         vm.startPrank(user1);
-        IERC20(token).approve(address(queue), 100 ether / D);
-        _transferAndCall(10 ether / D + 1, user2, zkAddress);
-        _transferAndCall(5 ether / D + 1, user2, zkAddress);
+        _directDeposit(10 ether / D + 1, user2, zkAddress);
+        _directDeposit(5 ether / D + 1, user2, zkAddress);
         vm.stopPrank();
 
         vm.expectRevert("ZkBobDirectDepositQueue: direct deposit timeout not passed");
@@ -740,7 +747,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         );
     }
 
-    function _transferAndCall(uint256 amount, address fallbackUser, bytes memory _zkAddress) internal {
+    function _directDeposit(uint256 amount, address fallbackUser, bytes memory _zkAddress) internal {
         if (poolType == PoolType.ETH) {
             ZkBobDirectDepositQueueETH(address(queue)).directNativeDeposit{value: amount}(fallbackUser, _zkAddress);
         } else if (poolType == PoolType.BOB) {
@@ -758,6 +765,7 @@ contract ZkBobPoolBOBPolygonTest is AbstractZkBobPoolTest, AbstractPolygonForkTe
         weth = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
         tempToken = address(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
         poolType = PoolType.BOB;
+        autoApproveQueue = false;
         permitType = PermitType.BOBPermit;
         denominator = 1_000_000_000;
         precision = 1_000_000_000;
@@ -771,6 +779,7 @@ contract ZkBobPoolETHMainnetTest is AbstractZkBobPoolTest, AbstractMainnetForkTe
         weth = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         tempToken = address(0);
         poolType = PoolType.ETH;
+        autoApproveQueue = false;
         permitType = PermitType.Permit2;
         denominator = 1_000_000_000;
         precision = 1_000_000_000;
@@ -784,6 +793,7 @@ contract ZkBobPoolDAIMainnetTest is AbstractZkBobPoolTest, AbstractMainnetForkTe
         weth = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         tempToken = address(0);
         poolType = PoolType.ERC20;
+        autoApproveQueue = true;
         permitType = PermitType.Permit2;
         denominator = 1_000_000_000;
         precision = 1_000_000_000;
@@ -797,6 +807,7 @@ contract ZkBobPoolUSDCPolygonTest is AbstractZkBobPoolTest, AbstractPolygonForkT
         weth = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
         tempToken = address(0);
         poolType = PoolType.USDC;
+        autoApproveQueue = true;
         permitType = PermitType.USDCPermit;
         denominator = 1;
         precision = 1_000_000;
