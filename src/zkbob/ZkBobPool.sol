@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/IPeripheryImmutableState.sol";
@@ -24,14 +25,15 @@ import "../proxy/EIP1967Admin.sol";
 
 /**
  * @title ZkBobPool
- * Shielded transactions pool for BOB tokens.
+ * Shielded transactions pool
  */
 abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     using SafeERC20 for IERC20;
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
-    uint256 internal constant TOKEN_DENOMINATOR = 1_000_000_000;
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
+
+    uint256 internal immutable TOKEN_DENOMINATOR;
 
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;
@@ -59,8 +61,12 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         ITransferVerifier _transfer_verifier,
         ITreeVerifier _tree_verifier,
         IBatchDepositVerifier _batch_deposit_verifier,
-        address _direct_deposit_queue
-    ) {
+        address _direct_deposit_queue,
+        uint256 _denominator,
+        uint256 _precision
+    )
+        ZkBobAccounting(_precision)
+    {
         require(__pool_id <= MAX_POOL_ID, "ZkBobPool: exceeds max pool id");
         require(Address.isContract(_token), "ZkBobPool: not a contract");
         require(Address.isContract(address(_transfer_verifier)), "ZkBobPool: not a contract");
@@ -73,6 +79,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         tree_verifier = _tree_verifier;
         batch_deposit_verifier = _batch_deposit_verifier;
         direct_deposit_queue = IZkBobDirectDepositQueue(_direct_deposit_queue);
+
+        TOKEN_DENOMINATOR = _denominator;
     }
 
     /**
@@ -138,7 +146,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
      * @dev Tells the denominator for converting BOB into zkBOB units.
      * 1e18 BOB units = 1e9 zkBOB units.
      */
-    function denominator() external pure returns (uint256) {
+    function denominator() external view returns (uint256) {
         return TOKEN_DENOMINATOR;
     }
 

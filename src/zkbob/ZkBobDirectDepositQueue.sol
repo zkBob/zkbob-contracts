@@ -21,9 +21,10 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
     using SafeERC20 for IERC20;
 
     uint256 internal constant R = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
-    uint256 internal constant TOKEN_DENOMINATOR = 1_000_000_000;
     uint256 internal constant MAX_NUMBER_OF_DIRECT_DEPOSITS = 16;
     bytes4 internal constant MESSAGE_PREFIX_DIRECT_DEPOSIT_V1 = 0x00000001;
+
+    uint256 internal immutable TOKEN_DENOMINATOR;
 
     address public immutable token;
     uint256 public immutable pool_id;
@@ -50,10 +51,11 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
     event RefundDirectDeposit(uint256 indexed nonce, address receiver, uint256 amount);
     event CompleteDirectDepositBatch(uint256[] indices);
 
-    constructor(address _pool, address _token) {
+    constructor(address _pool, address _token, uint256 _denominator) {
         require(Address.isContract(_token), "ZkBobDirectDepositQueue: not a contract");
         pool = _pool;
         token = _token;
+        TOKEN_DENOMINATOR = _denominator;
         pool_id = uint24(IZkBobPool(_pool).pool_id());
     }
 

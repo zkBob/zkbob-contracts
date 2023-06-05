@@ -4,18 +4,15 @@ pragma solidity 0.8.15;
 
 import "forge-std/Script.sol";
 import "./Env.s.sol";
-import "../../src/proxy/EIP1967Proxy.sol";
-import "../../src/zkbob/ZkBobPool.sol";
-import "../../src/zkbob/manager/MutableOperatorManager.sol";
-import "../../src/zkbob/ZkBobPoolERC20.sol";
+import "../../src/zkbob/ZkBobPoolBOB.sol";
 
-contract DeployNewZkBobPoolERC20Impl is Script {
+contract DeployNewZkBobPoolBOBImpl is Script {
     function run() external {
         vm.startBroadcast();
 
-        ZkBobPoolERC20 pool = ZkBobPoolERC20(zkBobPool);
+        ZkBobPoolBOB pool = ZkBobPoolBOB(zkBobPool);
 
-        ZkBobPoolERC20 impl = new ZkBobPoolERC20(
+        ZkBobPoolBOB impl = new ZkBobPoolBOB(
             pool.pool_id(),
             pool.token(),
             pool.transfer_verifier(),

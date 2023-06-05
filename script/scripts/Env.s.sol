@@ -4,6 +4,13 @@ pragma solidity 0.8.15;
 
 import "forge-std/Script.sol";
 
+enum PoolType {
+    BOB,
+    ETH,
+    USDC,
+    ERC20
+}
+
 // common
 address constant deployer = 0x39F0bD56c1439a22Ee90b4972c16b7868D161981;
 address constant admin = 0xd4a3D9Ca00fa1fD8833D560F9217458E61c446d8;
@@ -17,7 +24,9 @@ bytes32 constant bobSalt = bytes32(uint256(285834900769));
 
 // zkbob
 uint256 constant zkBobPoolId = 0; // 0 is reserved for Polygon MVP pool, do not use for other deployments
+PoolType constant zkBobPoolType = PoolType.BOB;
 string constant zkBobVerifiers = "prodV1";
+address constant zkBobToken = 0xB0B195aEFA3650A6908f15CdaC7D92F8a5791B0B;
 uint256 constant zkBobInitialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
 address constant zkBobRelayer = 0xc2c4AD59B78F4A0aFD0CDB8133E640Db08Fa5b90;
 address constant zkBobRelayerFeeReceiver = 0x758768EC473279c4B1Aa61FA5450745340D4B17d;
@@ -31,6 +40,7 @@ uint256 constant zkBobDailyUserDirectDepositCap = 0;
 uint256 constant zkBobDirectDepositCap = 0;
 uint256 constant zkBobDirectDepositFee = 0.1 gwei;
 uint256 constant zkBobDirectDepositTimeout = 1 days;
+address constant permit2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
 
 // new zkbob impl
 address constant zkBobPool = 0x72e6B59D4a90ab232e55D4BB7ed2dD17494D62fB;
@@ -52,7 +62,3 @@ address constant uniV3Quoter = 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6;
 uint24 constant fee0 = 500;
 address constant usdc = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
 uint24 constant fee1 = 500;
-
-// zkbobpool eth
-address constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-address constant permit2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;

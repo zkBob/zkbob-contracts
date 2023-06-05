@@ -242,7 +242,6 @@ abstract contract AbstractBobVault3poolTest is AbstractBobVaultTest, AbstractFor
         value = value - value * 0.002 ether / 1 ether;
         assertEq(dai.balanceOf(user1), 0);
         assertEq(usdc.balanceOf(user1), value);
-        vm.stopPrank();
     }
 
     function testAmountEstimation() public {
