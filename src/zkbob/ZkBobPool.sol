@@ -65,6 +65,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
 
+    event ForcedExit(uint256 indexed index, uint256 indexed nullifier, address to, uint256 amount);
+
     constructor(
         uint256 __pool_id,
         address _token,
@@ -328,6 +330,55 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         }
 
         emit Message(poolIndex, _all_messages_hash, message);
+    }
+
+    /**
+     * @dev Performs a forced withdrawal by irreversibly killing an account.
+     * Callable only by the zk account owner.
+     * Account cannot be recoverd after such forced exit,
+     * any remaining or newly sent funds would be lost forever.
+     * @param _to withdrawn funds receiver.
+     * @param _amount total account balance to withdraw.
+     * @param _index index of the merkle root used within proof.
+     * @param _nullifier transfer nullifier to be used for withdrawal.
+     * @param _out_commit out commitment for empty list of output notes.
+     * @param _transfer_proof snark proof for transfer verifier.
+     */
+    function forceExit(
+        address _to,
+        uint256 _amount,
+        uint256 _index,
+        uint256 _nullifier,
+        uint256 _out_commit,
+        uint256[8] memory _transfer_proof
+    )
+        external
+    {
+        require(_amount < type(uint64).max, "ZkBobPool: amount too large");
+        require(_index < type(uint48).max, "ZkBobPool: index too large");
+
+        uint256 root = roots[_index];
+        require(root > 0, "ZkBobPool: transfer index out of bounds");
+        require(nullifiers[_nullifier] == 0, "ZkBobPool: doublespend detected");
+
+        uint256[5] memory transfer_pub = [
+            root,
+            _nullifier,
+            _out_commit,
+            (pool_id << (transfer_delta_size * 8)) + (_index << 176) + _amount,
+            uint256(keccak256(abi.encodePacked(_to))) % R
+        ];
+        require(transfer_verifier.verifyProof(transfer_pub, _transfer_proof), "ZkBobPool: bad transfer proof");
+
+        (IZkBobAccounting acc, uint96 poolIndex) = (accounting, pool_index);
+        if (address(acc) != address(0)) {
+            acc.recordOperation(IZkBobAccounting.TxType.ForcedExit, address(0), int256(_amount));
+        }
+        nullifiers[_nullifier] = poolIndex | uint256(0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddead0000000000000000);
+
+        IERC20(token).safeTransfer(_to, _amount * TOKEN_DENOMINATOR);
+
+        emit ForcedExit(poolIndex, _nullifier, _to, _amount);
     }
 
     /**
