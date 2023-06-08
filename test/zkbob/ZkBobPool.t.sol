@@ -304,6 +304,19 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         assertEq(IERC20(token).balanceOf(user3), 0.02 ether / D);
     }
 
+    function testForcedExit() public {
+        bytes memory data = _encodePermitDeposit(int256(0.5 ether / D), 0.01 ether / D);
+        _transact(data);
+
+        uint256 nullifier = _randFR();
+        pool.forceExit(user2, 0.4 ether / D / denominator, 128, nullifier, _randFR(), _randProof());
+        assertEq(IERC20(token).balanceOf(user2), 0.4 ether / D);
+        assertEq(pool.nullifiers(nullifier), 0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddead0000000000000080);
+
+        vm.expectRevert("ZkBobPool: doublespend detected");
+        pool.forceExit(user2, 0.4 ether / D / denominator, 128, nullifier, _randFR(), _randProof());
+    }
+
     function testRejectNegativeDeposits() public {
         bytes memory data1 = _encodePermitDeposit(int256(0.99 ether / D), 0.01 ether / D);
         _transact(data1);
