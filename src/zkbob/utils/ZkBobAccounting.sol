@@ -13,10 +13,11 @@ import "./KycProvidersManagerStorage.sol";
  * and overall transaction count does not exceed 4.3e9 (4.3 billion). Pool usage limits cannot exceed 4.3e9 BOB (4.3 billion) per day.
  */
 contract ZkBobAccounting is KycProvidersManagerStorage {
-    uint256 internal constant PRECISION = 1_000_000_000;
     uint256 internal constant SLOT_DURATION = 1 hours;
     uint256 internal constant DAY_SLOTS = 1 days / SLOT_DURATION;
     uint256 internal constant WEEK_SLOTS = 1 weeks / SLOT_DURATION;
+
+    uint256 internal immutable PRECISION;
 
     struct Slot0 {
         // max seen average tvl over period of at least 1 week (granularity of 1e9), might not be precise
@@ -117,6 +118,10 @@ contract ZkBobAccounting is KycProvidersManagerStorage {
 
     event UpdateLimits(uint8 indexed tier, TierLimits limits);
     event UpdateTier(address user, uint8 tier);
+
+    constructor(uint256 _precision) {
+        PRECISION = _precision;
+    }
 
     /**
      * @dev Returns currently configured limits and remaining quotas for the given user as of the current block.
@@ -329,7 +334,7 @@ contract ZkBobAccounting is KycProvidersManagerStorage {
         emit UpdateLimits(_tier, tl);
     }
 
-    // Tier is set as per the KYC Providers Manager recomendation only in the case if no
+    // Tier is set as per the KYC Providers Manager recommendation only in the case if no
     // specific tier assigned to the user
     function _adjustConfiguredTierForUser(address _user, uint8 _configuredTier) internal view returns (uint8) {
         IKycProvidersManager kycProvidersMgr = kycProvidersManager();

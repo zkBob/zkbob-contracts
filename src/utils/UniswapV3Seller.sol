@@ -8,7 +8,6 @@ import "@uniswap/v3-periphery/contracts/interfaces/IPeripheryImmutableState.sol"
 import "@uniswap/v3-periphery/contracts/interfaces/IQuoter.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol";
 import "../interfaces/ITokenSeller.sol";
-import "./Sacrifice.sol";
 
 /**
  * @title UniswapV3Seller
@@ -56,7 +55,9 @@ contract UniswapV3Seller is ITokenSeller {
 
         uint256 amountOut = swapRouter.exactInput(
             ISwapRouter.ExactInputParams({
-                path: abi.encodePacked(token0, fee0, token1, fee1, WETH),
+                path: token1 == address(0)
+                    ? abi.encodePacked(token0, fee0, WETH)
+                    : abi.encodePacked(token0, fee0, token1, fee1, WETH),
                 recipient: address(this),
                 deadline: block.timestamp,
                 amountIn: _amount,
@@ -65,7 +66,8 @@ contract UniswapV3Seller is ITokenSeller {
         );
         WETH.withdraw(amountOut);
         if (!payable(_receiver).send(amountOut)) {
-            new Sacrifice{value: amountOut}(_receiver);
+            WETH.deposit{value: amountOut}();
+            WETH.transfer(_receiver, amountOut);
         }
         uint256 remainingBalance = IERC20(token0).balanceOf(address(this));
         if (remainingBalance + _amount > balance) {
@@ -82,6 +84,9 @@ contract UniswapV3Seller is ITokenSeller {
      * @return received eth amount.
      */
     function quoteSellForETH(uint256 _amount) external returns (uint256) {
-        return quoter.quoteExactInput(abi.encodePacked(token0, fee0, token1, fee1, WETH), _amount);
+        bytes memory path = token1 == address(0)
+            ? abi.encodePacked(token0, fee0, WETH)
+            : abi.encodePacked(token0, fee0, token1, fee1, WETH);
+        return quoter.quoteExactInput(path, _amount);
     }
 }

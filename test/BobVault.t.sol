@@ -242,7 +242,6 @@ abstract contract AbstractBobVault3poolTest is AbstractBobVaultTest, AbstractFor
         value = value - value * 0.002 ether / 1 ether;
         assertEq(dai.balanceOf(user1), 0);
         assertEq(usdc.balanceOf(user1), value);
-        vm.stopPrank();
     }
 
     function testAmountEstimation() public {
@@ -478,6 +477,40 @@ abstract contract AbstractBobVaultAAVETest is AbstractBobVaultTest, AbstractFork
         vm.roll(block.number + 100 days / 12 seconds);
 
         assertEq(usdc.balanceOf(address(vault)), 1_000_000 * 1e6);
+    }
+
+    function testStatAndFarm() public {
+        vault.setYieldAdmin(user2);
+
+        AAVEYieldImplementation aImpl = new AAVEYieldImplementation(lendingPool);
+        vault.addCollateral(
+            address(usdc),
+            BobVault.Collateral(
+                0,
+                1_000_000 * 1e6,
+                1e6,
+                address(aImpl),
+                1e6,
+                0.001 ether,
+                0.002 ether,
+                type(uint128).max,
+                type(uint128).max
+            )
+        );
+
+        bob.mint(address(vault), 100_000_000 ether);
+
+        deal(address(usdc), user1, 100 * 1e6);
+        vm.prank(user1);
+        vault.buy(address(usdc), 100 * 1e6);
+
+        BobVault.Stat memory stat = vault.stat(address(usdc));
+        assertEq(stat.total, 100 * 1e6);
+        assertEq(stat.required, 100_900_000);
+        assertEq(stat.farmed, 0);
+
+        vault.farm(address(usdc));
+        assertEq(usdc.balanceOf(user2), 0);
     }
 
     function testAAVEIntegration() public {

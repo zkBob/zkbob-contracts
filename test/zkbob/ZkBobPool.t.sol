@@ -3,39 +3,68 @@
 pragma solidity 0.8.15;
 
 import "forge-std/Test.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/presets/ERC721PresetMinterPauserAutoId.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
 import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import "../shared/Env.t.sol";
+import "../shared/ForkTests.t.sol";
 import "../mocks/TransferVerifierMock.sol";
 import "../mocks/TreeUpdateVerifierMock.sol";
 import "../mocks/BatchDepositVerifierMock.sol";
 import "../mocks/DummyImpl.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
-import "../../src/zkbob/ZkBobPoolETH.sol";
+import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
-import "../../src/BobToken.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
-import "../shared/ForkTests.t.sol";
 import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
-import "../../src/zkbob/ZkBobDirectDepositQueueETH.sol";
 import "../interfaces/IZkBobDirectDepositsAdmin.sol";
 import "../interfaces/IZkBobPoolAdmin.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "../../src/interfaces/IERC677.sol";
+import "../../src/zkbob/ZkBobPoolUSDC.sol";
+import "../../src/zkbob/ZkBobDirectDepositQueueETH.sol";
+import "../../src/zkbob/ZkBobPoolERC20.sol";
+import "../../src/zkbob/ZkBobPoolBOB.sol";
+import "../../src/zkbob/ZkBobPoolETH.sol";
+import "../../src/utils/UniswapV3Seller.sol";
 
-abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
+abstract contract AbstractZkBobPoolTest is AbstractForkTest {
+    address constant permit2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     address constant uniV3Router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
     address constant uniV3Quoter = 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6;
-    address constant uniV3Positions = 0xC36442b4a4522E871399CD717aBDD847Ab11FE88;
-    address constant usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address constant permit2Address = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
+
+    uint256 constant initialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
+
+    enum PoolType {
+        BOB,
+        ETH,
+        USDC,
+        ERC20
+    }
+    enum PermitType {
+        BOBPermit,
+        Permit2,
+        USDCPermit
+    }
+
+    uint256 D;
+    address token;
+    address weth;
+    address tempToken;
+    bool autoApproveQueue;
+    PoolType poolType;
+    PermitType permitType;
+    uint256 denominator;
+    uint256 precision;
 
     bytes constant zkAddress = "QsnTijXekjRm9hKcq5kLNPsa6P4HtMRrc3RxVx3jsLHeo2AiysYxVJP86mriHfN";
 
     bytes32 constant TOKEN_PERMISSIONS_TYPEHASH = keccak256("TokenPermissions(address token,uint256 amount)");
     bytes32 constant PERMIT_TRANSFER_FROM_TYPEHASH = keccak256(
         "PermitTransferFrom(TokenPermissions permitted,address spender,uint256 nonce,uint256 deadline)TokenPermissions(address token,uint256 amount)"
+    );
+    bytes32 constant TRANSFER_WITH_AUTHORIZATION_TYPEHASH = keccak256(
+        "TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
     );
 
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
@@ -52,11 +81,76 @@ abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
 
     IZkBobPoolAdmin pool;
     IZkBobDirectDepositsAdmin queue;
-    address token;
     IOperatorManager operatorManager;
 
+    function setUp() public {
+        vm.createSelectFork(forkRpcUrl, forkBlock);
+
+        EIP1967Proxy poolProxy = new EIP1967Proxy(address(this), address(0xdead), "");
+        EIP1967Proxy queueProxy = new EIP1967Proxy(address(this), address(0xdead), "");
+
+        ZkBobPool impl;
+        if (poolType == PoolType.ETH) {
+            impl = new ZkBobPoolETH(
+                0, token,
+                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                address(queueProxy), permit2
+            );
+        } else if (poolType == PoolType.BOB) {
+            impl = new ZkBobPoolBOB(
+                0, token,
+                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                address(queueProxy)
+            );
+        } else if (poolType == PoolType.USDC) {
+            impl = new ZkBobPoolUSDC(
+                0, token,
+                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                address(queueProxy)
+            );
+        } else if (poolType == PoolType.ERC20) {
+            impl = new ZkBobPoolERC20(
+                0, token,
+                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                address(queueProxy), permit2, 1_000_000_000, 1_000_000_000
+            );
+        }
+
+        bytes memory initData = abi.encodeWithSelector(
+            ZkBobPool.initialize.selector,
+            initialRoot,
+            1_000_000 ether / D,
+            100_000 ether / D,
+            100_000 ether / D,
+            10_000 ether / D,
+            10_000 ether / D,
+            0,
+            0
+        );
+        poolProxy.upgradeToAndCall(address(impl), initData);
+        pool = IZkBobPoolAdmin(address(poolProxy));
+
+        ZkBobDirectDepositQueue queueImpl;
+        if (poolType == PoolType.ETH) {
+            queueImpl = new ZkBobDirectDepositQueueETH(address(pool), token, denominator);
+        } else {
+            queueImpl = new ZkBobDirectDepositQueue(address(pool), token, denominator);
+        }
+        queueProxy.upgradeTo(address(queueImpl));
+        queue = IZkBobDirectDepositsAdmin(address(queueProxy));
+
+        operatorManager = new MutableOperatorManager(user2, user3, "https://example.com");
+        pool.setOperatorManager(operatorManager);
+        queue.setOperatorManager(operatorManager);
+        queue.setDirectDepositFee(uint64(0.1 ether / D));
+        queue.setDirectDepositTimeout(1 days);
+
+        deal(token, user1, 1 ether / D);
+        deal(token, user3, 0);
+    }
+
     function testSimpleTransaction() public {
-        bytes memory data1 = _encodePermitDeposit(0.5 ether, 0.01 ether);
+        bytes memory data1 = _encodePermitDeposit(int256(0.5 ether / D), 0.01 ether / D);
         _transact(data1);
 
         bytes memory data2 = _encodeTransfer();
@@ -64,14 +158,14 @@ abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
 
         vm.prank(user3);
         pool.withdrawFee(user2, user3);
-        assertEq(IERC20(token).balanceOf(user3), 0.02 ether);
+        assertEq(IERC20(token).balanceOf(user3), 0.02 ether / D);
     }
 
     function testGetters() public {
         assertEq(pool.pool_index(), 0);
-        assertEq(pool.denominator(), 1 gwei);
+        assertEq(pool.denominator(), denominator);
 
-        bytes memory data1 = _encodePermitDeposit(0.5 ether, 0.01 ether);
+        bytes memory data1 = _encodePermitDeposit(int256(0.5 ether / D), 0.01 ether / D);
         _transact(data1);
 
         assertEq(pool.pool_index(), 128);
@@ -82,29 +176,52 @@ abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
         assertEq(pool.pool_index(), 256);
     }
 
+    function testAuthRights() public {
+        vm.startPrank(user1);
+
+        vm.expectRevert("ZkBobPool: not initializer");
+        pool.initialize(0, 0, 0, 0, 0, 0, 0, 0);
+        vm.expectRevert("Ownable: caller is not the owner");
+        pool.setOperatorManager(IOperatorManager(address(0)));
+        try pool.tokenSeller() {
+            vm.expectRevert("Ownable: caller is not the owner");
+            pool.setTokenSeller(address(0));
+        } catch {}
+        vm.expectRevert("Ownable: caller is not the owner");
+        pool.setLimits(0, 0, 0, 0, 0, 0, 0, 0);
+        vm.expectRevert("Ownable: caller is not the owner");
+        pool.setUsersTier(0, new address[](1));
+        vm.expectRevert("Ownable: caller is not the owner");
+        pool.resetDailyLimits(0);
+
+        vm.stopPrank();
+    }
+
     function testUsersTiers() public {
-        pool.setLimits(1, 2_000_000 ether, 200_000 ether, 200_000 ether, 20_000 ether, 20_000 ether, 0, 0);
+        pool.setLimits(
+            1, 2_000_000 ether / D, 200_000 ether / D, 200_000 ether / D, 20_000 ether / D, 20_000 ether / D, 0, 0
+        );
         address[] memory users = new address[](1);
         users[0] = user2;
         pool.setUsersTier(1, users);
 
         assertEq(pool.getLimitsFor(user1).tier, 0);
-        assertEq(pool.getLimitsFor(user1).depositCap, 10_000 gwei);
+        assertEq(pool.getLimitsFor(user1).depositCap, 10_000 ether / D / denominator);
         assertEq(pool.getLimitsFor(user2).tier, 1);
-        assertEq(pool.getLimitsFor(user2).depositCap, 20_000 gwei);
+        assertEq(pool.getLimitsFor(user2).depositCap, 20_000 ether / D / denominator);
     }
 
     function testResetDailyLimits() public {
-        deal(token, user1, 10 ether);
+        deal(token, user1, 10 ether / D);
 
-        bytes memory data1 = _encodePermitDeposit(5 ether, 0.01 ether);
+        bytes memory data1 = _encodePermitDeposit(int256(5 ether / D), 0.01 ether / D);
         _transact(data1);
 
-        bytes memory data2 = _encodeWithdrawal(user1, 4 ether, 0 ether);
+        bytes memory data2 = _encodeWithdrawal(user1, 4 ether / D, 0);
         _transact(data2);
 
-        assertEq(pool.getLimitsFor(user1).dailyDepositCapUsage, 5 gwei);
-        assertEq(pool.getLimitsFor(user1).dailyWithdrawalCapUsage, 4.01 gwei);
+        assertEq(pool.getLimitsFor(user1).dailyDepositCapUsage, 5 ether / D / denominator);
+        assertEq(pool.getLimitsFor(user1).dailyWithdrawalCapUsage, 4.01 ether / D / denominator);
 
         pool.resetDailyLimits(0);
 
@@ -122,108 +239,142 @@ abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
     }
 
     function testPermitDeposit() public {
-        bytes memory data = _encodePermitDeposit(0.5 ether, 0.01 ether);
+        bytes memory data = _encodePermitDeposit(int256(0.5 ether / D), 0.01 ether / D);
         _transact(data);
 
         vm.prank(user3);
         pool.withdrawFee(user2, user3);
-        assertEq(IERC20(token).balanceOf(user1), 0.49 ether);
-        assertEq(IERC20(token).balanceOf(address(pool)), 0.5 ether);
-        assertEq(IERC20(token).balanceOf(user3), 0.01 ether);
+        assertEq(IERC20(token).balanceOf(user1), 0.49 ether / D);
+        assertEq(IERC20(token).balanceOf(address(pool)), 0.5 ether / D);
+        assertEq(IERC20(token).balanceOf(user3), 0.01 ether / D);
     }
 
-    function testUsualDeposit() public {
-        vm.prank(user1);
-        IERC20(token).approve(address(pool), 0.51 ether);
+    function testMultiplePermitDeposits() public {
+        for (uint256 i = 1; i < 10; i++) {
+            deal(address(token), user1, 0.101 ether / D * i);
+            bytes memory data = _encodePermitDeposit(int256(0.1 ether / D) * int256(i), 0.001 ether / D * i);
+            _transact(data);
+        }
 
-        bytes memory data = _encodeDeposit(0.5 ether, 0.01 ether);
-        _transact(data);
-
-        vm.prank(user3);
-        pool.withdrawFee(user2, user3);
-        assertEq(IERC20(token).balanceOf(user1), 0.49 ether);
-        assertEq(IERC20(token).balanceOf(address(pool)), 0.5 ether);
-        assertEq(IERC20(token).balanceOf(user3), 0.01 ether);
-    }
-
-    function testWithdrawal() public {
-        bytes memory data1 = _encodePermitDeposit(0.5 ether, 0.01 ether);
-        _transact(data1);
-
-        bytes memory data2 = _encodeWithdrawal(user1, 0.1 ether, 0 ether);
+        bytes memory data2 = _encodeTransfer();
         _transact(data2);
 
         vm.prank(user3);
         pool.withdrawFee(user2, user3);
-        assertEq(IERC20(token).balanceOf(user1), 0.59 ether);
-        assertEq(IERC20(token).balanceOf(address(pool)), 0.39 ether);
-        assertEq(IERC20(token).balanceOf(user3), 0.02 ether);
+        assertEq(IERC20(token).balanceOf(user3), 0.055 ether / D);
+    }
+
+    function testUsualDeposit() public {
+        vm.prank(user1);
+        IERC20(token).approve(address(pool), 0.51 ether / D);
+
+        bytes memory data = _encodeDeposit(int256(0.5 ether / D), 0.01 ether / D);
+        _transact(data);
+
+        vm.prank(user3);
+        pool.withdrawFee(user2, user3);
+        assertEq(IERC20(token).balanceOf(user1), 0.49 ether / D);
+        assertEq(IERC20(token).balanceOf(address(pool)), 0.5 ether / D);
+        assertEq(IERC20(token).balanceOf(user3), 0.01 ether / D);
+    }
+
+    function testWithdrawal() public {
+        bytes memory data1 = _encodePermitDeposit(int256(0.5 ether / D), 0.01 ether / D);
+        _transact(data1);
+
+        bytes memory data2 = _encodeWithdrawal(user1, 0.1 ether / D, 0);
+        _transact(data2);
+
+        vm.prank(user3);
+        pool.withdrawFee(user2, user3);
+        assertEq(IERC20(token).balanceOf(user1), 0.59 ether / D);
+        assertEq(IERC20(token).balanceOf(address(pool)), 0.39 ether / D);
+        assertEq(IERC20(token).balanceOf(user3), 0.02 ether / D);
     }
 
     function testRejectNegativeDeposits() public {
-        bytes memory data1 = _encodePermitDeposit(0.99 ether, 0.01 ether);
+        bytes memory data1 = _encodePermitDeposit(int256(0.99 ether / D), 0.01 ether / D);
         _transact(data1);
 
-        bytes memory data2 = _encodePermitDeposit(-0.5 ether, 1 ether);
+        bytes memory data2 = _encodePermitDeposit(-int256(0.5 ether / D), 1 ether / D);
         _transactReverted(data2, "ZkBobPool: incorrect deposit amounts");
 
         vm.prank(user1);
-        IERC20(token).approve(address(pool), 0.5 ether);
+        IERC20(token).approve(address(pool), 0.5 ether / D);
 
-        bytes memory data3 = _encodeDeposit(-0.5 ether, 1 ether);
+        bytes memory data3 = _encodeDeposit(-int256(0.5 ether / D), 1 ether / D);
         _transactReverted(data3, "ZkBobPool: incorrect deposit amounts");
     }
 
     function _setUpDD() internal {
-        deal(user1, 100 ether);
-        deal(user2, 100 ether);
-        deal(address(token), user1, 100 ether);
-        deal(address(token), user2, 100 ether);
+        deal(user1, 100 ether / D);
+        deal(user2, 100 ether / D);
+        deal(address(token), user1, 100 ether / D);
+        deal(address(token), user2, 100 ether / D);
 
-        pool.setLimits(1, 2_000_000 ether, 200_000 ether, 200_000 ether, 20_000 ether, 20_000 ether, 25 ether, 10 ether);
+        pool.setLimits(
+            1,
+            2_000_000 ether / D,
+            200_000 ether / D,
+            200_000 ether / D,
+            20_000 ether / D,
+            20_000 ether / D,
+            25 ether / D,
+            10 ether / D
+        );
         address[] memory users = new address[](1);
         users[0] = user1;
         pool.setUsersTier(1, users);
 
-        queue.setDirectDepositFee(0.1 gwei);
+        queue.setDirectDepositFee(uint64(0.1 ether / D / pool.denominator()));
+
+        if (autoApproveQueue) {
+            vm.prank(user1);
+            IERC20(token).approve(address(queue), type(uint256).max);
+            vm.prank(user2);
+            IERC20(token).approve(address(queue), type(uint256).max);
+        }
     }
 
     function testDirectDepositSubmit() public {
         _setUpDD();
 
-        vm.prank(user2);
+        vm.startPrank(user2);
         vm.expectRevert("ZkBobAccounting: single direct deposit cap exceeded");
-        _transferAndCall(10 ether, user2, zkAddress);
+        _directDeposit(10 ether / D, user2, zkAddress);
+        vm.stopPrank();
 
         vm.startPrank(user1);
         vm.expectRevert("ZkBobDirectDepositQueue: direct deposit amount is too low");
-        _transferAndCall(0.01 ether, user2, zkAddress);
+        _directDeposit(0.01 ether / D, user2, zkAddress);
 
         vm.expectRevert(ZkAddress.InvalidZkAddressLength.selector);
-        _transferAndCall(10 ether, user2, "invalid");
+        _directDeposit(10 ether / D, user2, "invalid");
 
         vm.expectRevert("ZkBobAccounting: single direct deposit cap exceeded");
-        _transferAndCall(15 ether, user2, zkAddress);
+        _directDeposit(15 ether / D, user2, zkAddress);
 
         ZkAddress.ZkAddress memory parsedZkAddress = ZkAddress.parseZkAddress(zkAddress, 0);
         vm.expectEmit(true, true, false, true);
-        emit SubmitDirectDeposit(user1, 0, user2, parsedZkAddress, 9.9 gwei);
-        _transferAndCall(10 ether, user2, zkAddress);
+        emit SubmitDirectDeposit(user1, 0, user2, parsedZkAddress, uint64(9.9 ether / D / denominator));
+        _directDeposit(10 ether / D, user2, zkAddress);
 
-        IERC20(token).approve(address(queue), 10 ether);
+        if (!autoApproveQueue) {
+            IERC20(token).approve(address(queue), 10 ether / D);
+        }
         vm.expectEmit(true, true, false, true);
-        emit SubmitDirectDeposit(user1, 1, user2, parsedZkAddress, 9.9 gwei);
-        queue.directDeposit(user2, 10 ether, zkAddress);
+        emit SubmitDirectDeposit(user1, 1, user2, parsedZkAddress, uint64(9.9 ether / D / denominator));
+        queue.directDeposit(user2, 10 ether / D, zkAddress);
 
         vm.expectRevert("ZkBobAccounting: daily user direct deposit cap exceeded");
-        _transferAndCall(10 ether, user2, zkAddress);
+        _directDeposit(10 ether / D, user2, zkAddress);
 
         for (uint256 i = 0; i < 2; i++) {
             IZkBobDirectDeposits.DirectDeposit memory deposit = queue.getDirectDeposit(i);
             assertEq(deposit.fallbackReceiver, user2);
-            assertEq(deposit.sent, 10 ether);
-            assertEq(deposit.deposit, 9.9 gwei);
-            assertEq(deposit.fee, 0.1 gwei);
+            assertEq(deposit.sent, 10 ether / D);
+            assertEq(deposit.deposit, uint64(9.9 ether / D / denominator));
+            assertEq(deposit.fee, 0.1 ether / D / denominator);
             assertEq(uint8(deposit.status), uint8(IZkBobDirectDeposits.DirectDepositStatus.Pending));
         }
         vm.stopPrank();
@@ -232,11 +383,10 @@ abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
     function testAppendDirectDeposits() public {
         _setUpDD();
 
-        vm.prank(user1);
-        _transferAndCall(10 ether, user2, zkAddress);
-
-        vm.prank(user1);
-        _transferAndCall(5 ether, user2, zkAddress);
+        vm.startPrank(user1);
+        _directDeposit(10 ether / D, user2, zkAddress);
+        _directDeposit(5 ether / D, user2, zkAddress);
+        vm.stopPrank();
 
         uint256[] memory indices = new uint256[](2);
         indices[0] = 0;
@@ -247,10 +397,10 @@ abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
             outCommitment,
             bytes10(0xc2767ac851b6b1e19eda), // first deposit receiver zk address (42 bytes)
             bytes32(0x2f6f6ef223959602c05afd2b73ea8952fe0a10ad19ed665b3ee5a0b0b9e4e3ef),
-            uint64(9.9 gwei), // first deposit amount
+            uint64(9.9 ether / D / denominator), // first deposit amount
             bytes10(0xc2767ac851b6b1e19eda), // second deposit receiver zk address (42 bytes)
             bytes32(0x2f6f6ef223959602c05afd2b73ea8952fe0a10ad19ed665b3ee5a0b0b9e4e3ef),
-            uint64(4.9 gwei), // second deposit amount
+            uint64(4.9 ether / D / denominator), // second deposit amount
             new bytes(14 * 50)
         );
         vm.expectCall(
@@ -269,11 +419,11 @@ abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
             uint64(0), // first deposit nonce
             bytes10(0xc2767ac851b6b1e19eda), // first deposit receiver zk address (42 bytes)
             bytes32(0x2f6f6ef223959602c05afd2b73ea8952fe0a10ad19ed665b3ee5a0b0b9e4e3ef),
-            uint64(9.9 gwei), // first deposit amount
+            uint64(9.9 ether / D / denominator), // first deposit amount
             uint64(1), // second deposit nonce
             bytes10(0xc2767ac851b6b1e19eda), // second deposit receiver zk address (42 bytes)
             bytes32(0x2f6f6ef223959602c05afd2b73ea8952fe0a10ad19ed665b3ee5a0b0b9e4e3ef),
-            uint64(4.9 gwei) // second deposit amount
+            uint64(4.9 ether / D / denominator) // second deposit amount
         );
         vm.expectEmit(true, false, false, true);
         emit Message(128, bytes32(0), message);
@@ -284,11 +434,10 @@ abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
     function testRefundDirectDeposit() public {
         _setUpDD();
 
-        vm.prank(user1);
-        _transferAndCall(10 ether + 1, user2, zkAddress);
-
-        vm.prank(user1);
-        _transferAndCall(5 ether + 1, user2, zkAddress);
+        vm.startPrank(user1);
+        _directDeposit(10 ether / D + 1, user2, zkAddress);
+        _directDeposit(5 ether / D + 1, user2, zkAddress);
+        vm.stopPrank();
 
         vm.expectRevert("ZkBobDirectDepositQueue: direct deposit timeout not passed");
         queue.refundDirectDeposit(0);
@@ -301,20 +450,20 @@ abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
 
         vm.prank(user2);
         vm.expectEmit(true, false, false, true);
-        emit RefundDirectDeposit(0, user2, 10 ether + 1);
+        emit RefundDirectDeposit(0, user2, 10 ether / D + 1);
         queue.refundDirectDeposit(0);
         vm.expectRevert("ZkBobDirectDepositQueue: direct deposit not pending");
         queue.refundDirectDeposit(0);
-        assertEq(IERC20(token).balanceOf(user2), 10 ether + 1);
+        assertEq(IERC20(token).balanceOf(user2), 10 ether / D + 1);
 
         skip(2 days);
 
         vm.expectEmit(true, false, false, true);
-        emit RefundDirectDeposit(1, user2, 5 ether + 1);
+        emit RefundDirectDeposit(1, user2, 5 ether / D + 1);
         queue.refundDirectDeposit(1);
         vm.expectRevert("ZkBobDirectDepositQueue: direct deposit not pending");
         queue.refundDirectDeposit(1);
-        assertEq(IERC20(token).balanceOf(user2), 15 ether + 2);
+        assertEq(IERC20(token).balanceOf(user2), 15 ether / D + 2);
     }
 
     function testDepositForUserWithKYCPassed() public {
@@ -324,41 +473,107 @@ abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
         SimpleKYCProviderManager manager = new SimpleKYCProviderManager(nft, tier);
         pool.setKycProvidersManager(manager);
 
-        pool.setLimits(tier, 50 ether, 10 ether, 2 ether, 6 ether, 5 ether, 0, 0);
+        pool.setLimits(tier, 50 ether / D, 10 ether / D, 2 ether / D, 6 ether / D, 5 ether / D, 0, 0);
         address[] memory users = new address[](1);
         users[0] = user1;
         pool.setUsersTier(tier, users);
 
         nft.mint(user1);
 
-        deal(address(token), address(user1), 10 ether);
+        deal(address(token), address(user1), 10 ether / D);
 
-        bytes memory data = _encodePermitDeposit(4 ether, 0.01 ether);
+        bytes memory data = _encodePermitDeposit(int256(4 ether / D), 0.01 ether / D);
         _transact(data);
 
-        bytes memory data2 = _encodeWithdrawal(user1, 1 ether, 0 ether);
+        bytes memory data2 = _encodeWithdrawal(user1, 1 ether / D, 0);
         _transact(data2);
 
-        bytes memory data3 = _encodePermitDeposit(3 ether, 0.01 ether);
+        bytes memory data3 = _encodePermitDeposit(int256(3 ether / D), 0.01 ether / D);
         _transactReverted(data3, "ZkBobAccounting: daily user deposit cap exceeded");
 
-        bytes memory data4 = _encodeWithdrawal(user1, 2 ether, 0 ether);
+        bytes memory data4 = _encodeWithdrawal(user1, 2 ether / D, 0);
         _transactReverted(data4, "ZkBobAccounting: daily withdrawal cap exceeded");
 
-        assertEq(pool.getLimitsFor(user1).dailyUserDepositCapUsage, 4 gwei);
-        assertEq(pool.getLimitsFor(user1).dailyWithdrawalCapUsage, 1.01 gwei); // 1 requested + 0.01 fees
+        assertEq(pool.getLimitsFor(user1).dailyUserDepositCapUsage, 4 ether / D / denominator);
+        assertEq(pool.getLimitsFor(user1).dailyWithdrawalCapUsage, 1.01 ether / D / denominator); // 1 requested + 0.01 fees
+    }
+
+    function _quoteNativeSwap(uint256 _amount) internal returns (uint256) {
+        if (poolType == PoolType.ETH) {
+            return _amount;
+        }
+        return pool.tokenSeller().quoteSellForETH(_amount);
+    }
+
+    function testNativeWithdrawal() public {
+        if (poolType != PoolType.ETH) {
+            // enable token swaps for ETH
+            address addr;
+            if (tempToken == address(0)) {
+                addr = address(new UniswapV3Seller(uniV3Router, uniV3Quoter, token, 500, address(0), 0));
+            } else {
+                addr = address(new UniswapV3Seller(uniV3Router, uniV3Quoter, token, 100, tempToken, 500));
+            }
+            pool.setTokenSeller(addr);
+            assertEq(address(uint160(uint256(vm.load(address(pool), bytes32(uint256(11)))))), addr);
+        }
+
+        vm.deal(user1, 0);
+
+        bytes memory data1 = _encodePermitDeposit(int256(0.99 ether / D), 0.01 ether / D);
+        _transact(data1);
+
+        // user1 withdraws 0.4 BOB, 0.3 BOB gets converted to ETH
+        uint256 quote2 = _quoteNativeSwap(0.3 ether / D);
+        bytes memory data2 = _encodeWithdrawal(user1, 0.4 ether / D, 0.3 ether / D);
+        _transact(data2);
+
+        // user1 withdraws 0.2 BOB, trying to convert 0.3 BOB to ETH
+        bytes memory data4 = _encodeWithdrawal(user1, 0.2 ether / D, 0.3 ether / D);
+        vm.prank(user2);
+        (bool status, bytes memory returnData) = address(pool).call(data4);
+        assert(!status);
+        assertEq(returnData, stdError.arithmeticError);
+
+        address dummy = address(new DummyImpl(0));
+        uint256 quote3 = _quoteNativeSwap(0.3 ether / D);
+        bytes memory data3 = _encodeWithdrawal(dummy, 0.4 ether / D, 0.3 ether / D);
+        _transact(data3);
+
+        vm.prank(user3);
+        pool.withdrawFee(user2, user3);
+
+        assertEq(IERC20(token).balanceOf(user3), 0.03 ether / D);
+        assertEq(IERC20(token).balanceOf(address(pool)), 0.17 ether / D);
+        assertEq(IERC20(token).balanceOf(user1), 0.1 ether / D);
+        assertGt(user1.balance, 1 gwei);
+        assertEq(user1.balance, quote2);
+
+        assertEq(dummy.balance, 0);
+        if (token == weth) {
+            assertEq(IERC20(token).balanceOf(dummy), 0.4 ether / D);
+        } else {
+            assertEq(IERC20(token).balanceOf(dummy), 0.1 ether / D);
+            assertGt(IERC20(weth).balanceOf(dummy), 1 gwei);
+            assertEq(IERC20(weth).balanceOf(dummy), quote3);
+        }
     }
 
     function _encodeDeposit(int256 _amount, uint256 _fee) internal returns (bytes memory) {
         bytes32 nullifier = bytes32(_randFR());
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
         bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector, nullifier, _randFR(), uint48(0), uint112(0), int64(_amount / 1 gwei)
+            ZkBobPool.transact.selector,
+            nullifier,
+            _randFR(),
+            uint48(0),
+            uint112(0),
+            int64(_amount / int256(denominator))
         );
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());
         }
-        data = abi.encodePacked(data, uint16(0), uint16(44), uint64(_fee / 1 gwei), bytes4(0x01000000), _randFR());
+        data = abi.encodePacked(data, uint16(0), uint16(44), uint64(_fee / denominator), bytes4(0x01000000), _randFR());
         return abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
     }
 
@@ -369,7 +584,7 @@ abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
             _randFR(),
             uint48(0),
             uint112(0),
-            int64(-int256((_amount + 0.01 ether) / 1 gwei))
+            int64(-int256((_amount / denominator) + 0.01 ether / D / denominator))
         );
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());
@@ -378,8 +593,8 @@ abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
             data,
             uint16(2),
             uint16(72),
-            uint64(0.01 ether / 1 gwei),
-            uint64(_nativeAmount / 1 gwei),
+            uint64(0.01 ether / D / denominator),
+            uint64(_nativeAmount / denominator),
             _to,
             bytes4(0x01000000),
             _randFR()
@@ -388,12 +603,19 @@ abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
 
     function _encodeTransfer() internal returns (bytes memory) {
         bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector, _randFR(), _randFR(), uint48(0), uint112(0), int64(-0.01 ether / 1 gwei)
+            ZkBobPool.transact.selector,
+            _randFR(),
+            _randFR(),
+            uint48(0),
+            uint112(0),
+            -int64(uint64(0.01 ether / D / denominator))
         );
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());
         }
-        return abi.encodePacked(data, uint16(1), uint16(44), uint64(0.01 ether / 1 gwei), bytes4(0x01000000), _randFR());
+        return abi.encodePacked(
+            data, uint16(1), uint16(44), uint64(0.01 ether / D / denominator), bytes4(0x01000000), _randFR()
+        );
     }
 
     function _transact(bytes memory _data) internal {
@@ -418,7 +640,176 @@ abstract contract AbstractZkBobPoolTest is AbstractMainnetForkTest {
         return [_randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR()];
     }
 
-    function _encodePermitDeposit(int256 _amount, uint256 _fee) internal virtual returns (bytes memory);
+    function _encodePermitDeposit(int256 _amount, uint256 _fee) internal returns (bytes memory) {
+        if (permitType == PermitType.Permit2) {
+            vm.prank(user1);
+            IERC20(token).approve(permit2, type(uint256).max);
+        }
 
-    function _transferAndCall(uint256 amount, address fallbackUser, bytes memory _zkAddress) internal virtual;
+        uint256 expiry = block.timestamp + 1 hours;
+        bytes32 nullifier = bytes32(_randFR());
+
+        bytes32 digest;
+        if (permitType == PermitType.BOBPermit) {
+            digest = _digestSaltedPermit(user1, address(pool), uint256(_amount + int256(_fee)), expiry, nullifier);
+        } else if (permitType == PermitType.Permit2) {
+            digest = _digestPermit2(user1, address(pool), uint256(_amount + int256(_fee)), expiry, nullifier);
+        } else if (permitType == PermitType.USDCPermit) {
+            digest = _digestUSDCPermit(user1, address(pool), uint256(_amount + int256(_fee)), expiry, nullifier);
+        }
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, digest);
+
+        bytes memory data = abi.encodePacked(
+            ZkBobPool.transact.selector,
+            nullifier,
+            _randFR(),
+            uint48(0),
+            uint112(0),
+            int64(_amount / int256(denominator))
+        );
+        for (uint256 i = 0; i < 17; i++) {
+            data = abi.encodePacked(data, _randFR());
+        }
+        data = abi.encodePacked(
+            data,
+            uint16(3),
+            uint16(72),
+            uint64(_fee / denominator),
+            uint64(expiry),
+            user1,
+            bytes4(0x01000000),
+            _randFR()
+        );
+        return abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
+    }
+
+    function _digestSaltedPermit(
+        address _holder,
+        address _spender,
+        uint256 _value,
+        uint256 _expiry,
+        bytes32 _salt
+    )
+        internal
+        view
+        returns (bytes32)
+    {
+        uint256 nonce = IERC20Permit(token).nonces(_holder);
+        return ECDSA.toTypedDataHash(
+            IERC20Permit(token).DOMAIN_SEPARATOR(),
+            keccak256(
+                abi.encode(
+                    IERC20Permit(token).SALTED_PERMIT_TYPEHASH(), _holder, _spender, _value, nonce, _expiry, _salt
+                )
+            )
+        );
+    }
+
+    function _digestPermit2(
+        address _holder,
+        address _spender,
+        uint256 _value,
+        uint256 _expiry,
+        bytes32 _salt
+    )
+        internal
+        view
+        returns (bytes32)
+    {
+        return ECDSA.toTypedDataHash(
+            IPermit2(permit2).DOMAIN_SEPARATOR(),
+            keccak256(
+                abi.encode(
+                    PERMIT_TRANSFER_FROM_TYPEHASH,
+                    keccak256(abi.encode(TOKEN_PERMISSIONS_TYPEHASH, token, _value)),
+                    _spender,
+                    _salt,
+                    _expiry
+                )
+            )
+        );
+    }
+
+    function _digestUSDCPermit(
+        address _holder,
+        address _spender,
+        uint256 _value,
+        uint256 _expiry,
+        bytes32 _salt
+    )
+        internal
+        view
+        returns (bytes32)
+    {
+        return ECDSA.toTypedDataHash(
+            IERC20Permit(token).DOMAIN_SEPARATOR(),
+            keccak256(abi.encode(TRANSFER_WITH_AUTHORIZATION_TYPEHASH, _holder, _spender, _value, 0, _expiry, _salt))
+        );
+    }
+
+    function _directDeposit(uint256 amount, address fallbackUser, bytes memory _zkAddress) internal {
+        if (poolType == PoolType.ETH) {
+            ZkBobDirectDepositQueueETH(address(queue)).directNativeDeposit{value: amount}(fallbackUser, _zkAddress);
+        } else if (poolType == PoolType.BOB) {
+            IERC677(token).transferAndCall(address(queue), amount, abi.encode(fallbackUser, _zkAddress));
+        } else {
+            queue.directDeposit(fallbackUser, amount, _zkAddress);
+        }
+    }
+}
+
+contract ZkBobPoolBOBPolygonTest is AbstractZkBobPoolTest, AbstractPolygonForkTest {
+    constructor() {
+        D = 1;
+        token = address(0xB0B195aEFA3650A6908f15CdaC7D92F8a5791B0B);
+        weth = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
+        tempToken = address(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
+        poolType = PoolType.BOB;
+        autoApproveQueue = false;
+        permitType = PermitType.BOBPermit;
+        denominator = 1_000_000_000;
+        precision = 1_000_000_000;
+    }
+}
+
+contract ZkBobPoolETHMainnetTest is AbstractZkBobPoolTest, AbstractMainnetForkTest {
+    constructor() {
+        D = 1;
+        token = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+        weth = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+        tempToken = address(0);
+        poolType = PoolType.ETH;
+        autoApproveQueue = false;
+        permitType = PermitType.Permit2;
+        denominator = 1_000_000_000;
+        precision = 1_000_000_000;
+    }
+}
+
+contract ZkBobPoolDAIMainnetTest is AbstractZkBobPoolTest, AbstractMainnetForkTest {
+    constructor() {
+        D = 1;
+        token = address(0x6B175474E89094C44Da98b954EedeAC495271d0F);
+        weth = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+        tempToken = address(0);
+        poolType = PoolType.ERC20;
+        autoApproveQueue = true;
+        permitType = PermitType.Permit2;
+        denominator = 1_000_000_000;
+        precision = 1_000_000_000;
+    }
+}
+
+contract ZkBobPoolUSDCPolygonTest is AbstractZkBobPoolTest, AbstractPolygonForkTest {
+    constructor() {
+        D = 10 ** 12;
+        token = address(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
+        weth = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
+        tempToken = address(0);
+        poolType = PoolType.USDC;
+        autoApproveQueue = true;
+        permitType = PermitType.USDCPermit;
+        denominator = 1;
+        precision = 1_000_000;
+    }
 }

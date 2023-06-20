@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 
 import "../../src/zkbob/utils/ZkBobAccounting.sol";
 
-contract ZkBobAccountingMock is ZkBobAccounting {
+contract ZkBobAccountingMock is ZkBobAccounting(1_000_000_000) {
     uint256 tvl;
     uint56 public weekMaxTvl;
     uint32 public weekMaxCount;

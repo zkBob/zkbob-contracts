@@ -91,7 +91,11 @@ contract BobVault is EIP1967Admin, Ownable, YieldConnector {
             res.total += _delegateInvestedAmount(yield, _token);
             res.required += dust;
         }
-        res.farmed = res.total - res.required;
+        if (res.required >= res.total) {
+            res.farmed = 0;
+        } else {
+            res.farmed = res.total - res.required;
+        }
     }
 
     /**
