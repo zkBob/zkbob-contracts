@@ -4,26 +4,15 @@ pragma solidity 0.8.15;
 
 import "forge-std/Script.sol";
 import "./Env.s.sol";
-import "../../test/shared/EIP2470.t.sol";
-import "../../src/BobToken.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPool.sol";
-import "../../src/zkbob/ZkBobPoolERC20.sol";
-import "../../src/zkbob/manager/MutableOperatorManager.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
+import "../../src/zkbob/manager/MutableOperatorManager.sol";
+import "../../src/zkbob/ZkBobPoolERC20.sol";
 
-contract DeployLocal is Script {
+contract DeployZkBobPoolERC20 is Script {
     function run() external {
         vm.startBroadcast();
-
-        EIP1967Proxy bobProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
-        BobToken bobImpl = new BobToken(address(bobProxy));
-        bobProxy.upgradeTo(address(bobImpl));
-        BobToken bob = BobToken(address(bobProxy));
-
-        if (bobMinter != address(0)) {
-            bob.updateMinter(bobMinter, true, true);
-        }
 
         ITransferVerifier transferVerifier;
         ITreeVerifier treeVerifier;
@@ -46,72 +35,63 @@ contract DeployLocal is Script {
 
         ZkBobPoolERC20 poolImpl = new ZkBobPoolERC20(
             zkBobPoolId,
-            address(bob),
+            bobVanityAddr,
             transferVerifier,
             treeVerifier,
             batchDepositVerifier,
             address(queueProxy)
         );
-        {
-            bytes memory initData = abi.encodeWithSelector(
-                ZkBobPool.initialize.selector,
-                zkBobInitialRoot,
-                zkBobPoolCap,
-                zkBobDailyDepositCap,
-                zkBobDailyWithdrawalCap,
-                zkBobDailyUserDepositCap,
-                zkBobDepositCap,
-                zkBobDailyUserDirectDepositCap,
-                zkBobDirectDepositCap
-            );
-            poolProxy.upgradeToAndCall(address(poolImpl), initData);
-        }
+        bytes memory initData = abi.encodeWithSelector(
+            ZkBobPool.initialize.selector,
+            zkBobInitialRoot,
+            zkBobPoolCap,
+            zkBobDailyDepositCap,
+            zkBobDailyWithdrawalCap,
+            zkBobDailyUserDepositCap,
+            zkBobDepositCap,
+            zkBobDailyUserDirectDepositCap,
+            zkBobDirectDepositCap
+        );
+        poolProxy.upgradeToAndCall(address(poolImpl), initData);
         ZkBobPoolERC20 pool = ZkBobPoolERC20(address(poolProxy));
 
-        ZkBobDirectDepositQueue queueImpl = new ZkBobDirectDepositQueue(address(pool), address(bob));
+        ZkBobDirectDepositQueue queueImpl = new ZkBobDirectDepositQueue(address(pool), bobVanityAddr);
         queueProxy.upgradeTo(address(queueImpl));
         ZkBobDirectDepositQueue queue = ZkBobDirectDepositQueue(address(queueProxy));
 
-        {
-            IOperatorManager operatorManager =
-                new MutableOperatorManager(zkBobRelayer, zkBobRelayerFeeReceiver, zkBobRelayerURL);
-            pool.setOperatorManager(operatorManager);
-            queue.setOperatorManager(operatorManager);
-            queue.setDirectDepositFee(uint64(zkBobDirectDepositFee));
-            queue.setDirectDepositTimeout(uint40(zkBobDirectDepositTimeout));
+        IOperatorManager operatorManager =
+            new MutableOperatorManager(zkBobRelayer, zkBobRelayerFeeReceiver, zkBobRelayerURL);
+        pool.setOperatorManager(operatorManager);
+        queue.setOperatorManager(operatorManager);
+
+        if (owner != address(0)) {
+            pool.transferOwnership(owner);
+            queue.transferOwnership(owner);
         }
 
-        {
-            if (owner != address(0)) {
-                bob.transferOwnership(owner);
-                pool.transferOwnership(owner);
-                queue.transferOwnership(owner);
-            }
-
-            if (admin != tx.origin) {
-                bobProxy.setAdmin(admin);
-                poolProxy.setAdmin(admin);
-                queueProxy.setAdmin(admin);
-            }
+        if (admin != tx.origin) {
+            poolProxy.setAdmin(admin);
+            queueProxy.setAdmin(admin);
         }
 
         vm.stopBroadcast();
 
-        require(bobProxy.implementation() == address(bobImpl), "Invalid implementation address");
-        require(bobProxy.admin() == admin, "Proxy admin is not configured");
-        require(bob.owner() == owner, "Owner is not configured");
-        require(bobMinter == address(0) || bob.isMinter(bobMinter), "Bob minter is not configured");
         require(poolProxy.implementation() == address(poolImpl), "Invalid implementation address");
         require(poolProxy.admin() == admin, "Proxy admin is not configured");
         require(pool.owner() == owner, "Owner is not configured");
+        require(queueProxy.implementation() == address(queueImpl), "Invalid implementation address");
+        require(queueProxy.admin() == admin, "Proxy admin is not configured");
+        require(queue.owner() == owner, "Owner is not configured");
         require(pool.transfer_verifier() == transferVerifier, "Transfer verifier is not configured");
         require(pool.tree_verifier() == treeVerifier, "Tree verifier is not configured");
+        require(pool.batch_deposit_verifier() == batchDepositVerifier, "Batch deposit verifier is not configured");
 
-        console2.log("BobToken:", address(bob));
-        console2.log("BobToken implementation:", address(bobImpl));
         console2.log("ZkBobPool:", address(pool));
         console2.log("ZkBobPool implementation:", address(poolImpl));
         console2.log("ZkBobDirectDepositQueue:", address(queue));
         console2.log("ZkBobDirectDepositQueue implementation:", address(queueImpl));
+        console2.log("TransferVerifier:", address(transferVerifier));
+        console2.log("TreeUpdateVerifier:", address(treeVerifier));
+        console2.log("BatchDepositVierifier:", address(batchDepositVerifier));
     }
 }

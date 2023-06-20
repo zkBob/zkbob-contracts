@@ -9,6 +9,9 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
  * @title BaseERC20
  */
 abstract contract BaseERC20 is IERC20, IERC20Metadata {
+    uint256 private constant FROZEN_MASK = 0x8000000000000000000000000000000000000000000000000000000000000000;
+    uint256 private constant BALANCE_MASK = 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
+
     mapping(address => uint256) internal _balances;
     mapping(address => mapping(address => uint256)) public allowance;
     uint256 public totalSupply;
@@ -24,7 +27,7 @@ abstract contract BaseERC20 is IERC20, IERC20Metadata {
     function balanceOf(address account) public view virtual override returns (uint256 _balance) {
         _balance = _balances[account];
         assembly {
-            _balance := and(_balance, 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
+            _balance := and(_balance, BALANCE_MASK)
         }
     }
 
@@ -107,7 +110,7 @@ abstract contract BaseERC20 is IERC20, IERC20Metadata {
 
     function _increaseBalance(address _account, uint256 _amount) internal {
         uint256 balance = _balances[_account];
-        require(balance < 1 << 255, "ERC20: account frozen");
+        require(balance < FROZEN_MASK, "ERC20: account frozen");
         unchecked {
             _balances[_account] = balance + _amount;
         }
@@ -115,7 +118,7 @@ abstract contract BaseERC20 is IERC20, IERC20Metadata {
 
     function _decreaseBalance(address _account, uint256 _amount) internal {
         uint256 balance = _balances[_account];
-        require(balance < 1 << 255, "ERC20: account frozen");
+        require(balance < FROZEN_MASK, "ERC20: account frozen");
         require(balance >= _amount, "ERC20: amount exceeds balance");
         unchecked {
             _balances[_account] = balance - _amount;
@@ -130,14 +133,14 @@ abstract contract BaseERC20 is IERC20, IERC20Metadata {
     }
 
     function _isFrozen(address _account) internal view returns (bool) {
-        return _balances[_account] >= 1 << 255;
+        return _balances[_account] >= FROZEN_MASK;
     }
 
     function _freezeBalance(address _account) internal {
-        _balances[_account] |= 1 << 255;
+        _balances[_account] |= FROZEN_MASK;
     }
 
     function _unfreezeBalance(address _account) internal {
-        _balances[_account] &= (1 << 255) - 1;
+        _balances[_account] &= BALANCE_MASK;
     }
 }
