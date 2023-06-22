@@ -20,7 +20,13 @@ import "./ZkBobDirectDepositQueue.sol";
  * Queue for zkBob ETH direct deposits.
  */
 contract ZkBobDirectDepositQueueETH is IZkBobDirectDepositsETH, ZkBobDirectDepositQueue {
-    constructor(address _pool, address _token) ZkBobDirectDepositQueue(_pool, _token) {}
+    constructor(
+        address _pool,
+        address _token,
+        uint256 _denominator
+    )
+        ZkBobDirectDepositQueue(_pool, _token, _denominator)
+    {}
 
     /// @inheritdoc IZkBobDirectDepositsETH
     function directNativeDeposit(

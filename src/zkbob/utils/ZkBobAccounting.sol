@@ -13,10 +13,11 @@ import "./KycProvidersManagerStorage.sol";
  * and overall transaction count does not exceed 4.3e9 (4.3 billion). Pool usage limits cannot exceed 4.3e9 BOB (4.3 billion) per day.
  */
 contract ZkBobAccounting is KycProvidersManagerStorage {
-    uint256 internal constant PRECISION = 1_000_000_000;
     uint256 internal constant SLOT_DURATION = 1 hours;
     uint256 internal constant DAY_SLOTS = 1 days / SLOT_DURATION;
     uint256 internal constant WEEK_SLOTS = 1 weeks / SLOT_DURATION;
+
+    uint256 internal immutable PRECISION;
 
     struct Slot0 {
         // max seen average tvl over period of at least 1 week (granularity of 1e9), might not be precise
@@ -118,6 +119,10 @@ contract ZkBobAccounting is KycProvidersManagerStorage {
     event UpdateLimits(uint8 indexed tier, TierLimits limits);
     event UpdateTier(address user, uint8 tier);
 
+    constructor(uint256 _precision) {
+        PRECISION = _precision;
+    }
+
     /**
      * @dev Returns currently configured limits and remaining quotas for the given user as of the current block.
      * @param _user user for which to retrieve limits.
@@ -198,6 +203,13 @@ contract ZkBobAccounting is KycProvidersManagerStorage {
     }
 
     function _processTVLChange(Slot1 memory s1, address _user, int256 _txAmount) internal {
+        // short path for direct deposits batch processing
+        if (_user == address(0) && _txAmount > 0) {
+            slot1.tvl += uint72(uint256(_txAmount));
+
+            return;
+        }
+
         uint16 curDay = uint16(block.timestamp / SLOT_DURATION / DAY_SLOTS);
 
         UserStats memory us = userStats[_user];
@@ -283,11 +295,6 @@ contract ZkBobAccounting is KycProvidersManagerStorage {
         userStats[_user] = us;
     }
 
-    function _processDirectDepositBatch(uint256 _totalAmount) internal returns (uint256) {
-        slot1.tvl += uint72(_totalAmount);
-        return slot0.txCount++;
-    }
-
     function _resetDailyLimits(uint8 _tier) internal {
         delete tiers[_tier].stats;
     }
@@ -329,7 +336,7 @@ contract ZkBobAccounting is KycProvidersManagerStorage {
         emit UpdateLimits(_tier, tl);
     }
 
-    // Tier is set as per the KYC Providers Manager recomendation only in the case if no
+    // Tier is set as per the KYC Providers Manager recommendation only in the case if no
     // specific tier assigned to the user
     function _adjustConfiguredTierForUser(address _user, uint8 _configuredTier) internal view returns (uint8) {
         IKycProvidersManager kycProvidersMgr = kycProvidersManager();

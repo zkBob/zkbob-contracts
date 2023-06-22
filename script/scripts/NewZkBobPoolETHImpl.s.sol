@@ -4,9 +4,6 @@ pragma solidity 0.8.15;
 
 import "forge-std/Script.sol";
 import "./Env.s.sol";
-import "../../src/proxy/EIP1967Proxy.sol";
-import "../../src/zkbob/ZkBobPool.sol";
-import "../../src/zkbob/manager/MutableOperatorManager.sol";
 import "../../src/zkbob/ZkBobPoolETH.sol";
 
 contract DeployNewZkBobPoolETHImpl is Script {
