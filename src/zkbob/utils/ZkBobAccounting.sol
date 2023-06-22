@@ -203,6 +203,13 @@ contract ZkBobAccounting is KycProvidersManagerStorage {
     }
 
     function _processTVLChange(Slot1 memory s1, address _user, int256 _txAmount) internal {
+        // short path for direct deposits batch processing
+        if (_user == address(0) && _txAmount > 0) {
+            slot1.tvl += uint72(uint256(_txAmount));
+
+            return;
+        }
+
         uint16 curDay = uint16(block.timestamp / SLOT_DURATION / DAY_SLOTS);
 
         UserStats memory us = userStats[_user];
@@ -286,11 +293,6 @@ contract ZkBobAccounting is KycProvidersManagerStorage {
             );
         }
         userStats[_user] = us;
-    }
-
-    function _processDirectDepositBatch(uint256 _totalAmount) internal returns (uint256) {
-        slot1.tvl += uint72(_totalAmount);
-        return slot0.txCount++;
     }
 
     function _resetDailyLimits(uint8 _tier) internal {
