@@ -153,7 +153,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         bytes memory data1 = _encodePermitDeposit(int256(0.5 ether / D), 0.01 ether / D);
         _transact(data1);
 
-        bytes memory data2 = _encodeTransfer();
+        bytes memory data2 = _encodeTransfer(0.01 ether / D);
         _transact(data2);
 
         vm.prank(user3);
@@ -170,7 +170,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
 
         assertEq(pool.pool_index(), 128);
 
-        bytes memory data2 = _encodeTransfer();
+        bytes memory data2 = _encodeTransfer(0.01 ether / D);
         _transact(data2);
 
         assertEq(pool.pool_index(), 256);
@@ -256,7 +256,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             _transact(data);
         }
 
-        bytes memory data2 = _encodeTransfer();
+        bytes memory data2 = _encodeTransfer(0.01 ether / D);
         _transact(data2);
 
         vm.prank(user3);
@@ -559,6 +559,29 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         }
     }
 
+    function testOperatorCannotAvoidWithdrawalLimit() public {
+        deal(token, user1, 1_000_000 ether / D);
+
+        pool.setLimits(
+            0, 1_000_000 ether / D, 500_000 ether / D, 500_000 ether / D, 500_000 ether / D, 500_000 ether / D, 0, 0
+        );
+        bytes memory data1 = _encodePermitDeposit(int256(250_000 ether / D), 0.01 ether / D);
+        _transact(data1);
+        pool.setLimits(
+            0, 1_000_000 ether / D, 100_000 ether / D, 100_000 ether / D, 10_000 ether / D, 10_000 ether / D, 0, 0
+        );
+        bytes memory data2 = _encodeTransfer(200_000 ether / D);
+        _transactReverted(data2, "ZkBobAccounting: daily withdrawal cap exceeded");
+
+        bytes memory data3 = _encodeTransfer(20_000 ether / D);
+        _transact(data3);
+
+        vm.prank(user3);
+        pool.withdrawFee(user2, user3);
+        assertEq(IERC20(token).balanceOf(user3), 20_000.01 ether / D);
+        assertEq(pool.getLimitsFor(user2).dailyWithdrawalCapUsage, 20_000 ether / D / denominator);
+    }
+
     function _encodeDeposit(int256 _amount, uint256 _fee) internal returns (bytes memory) {
         bytes32 nullifier = bytes32(_randFR());
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
@@ -601,21 +624,14 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         );
     }
 
-    function _encodeTransfer() internal returns (bytes memory) {
+    function _encodeTransfer(uint256 _fee) internal returns (bytes memory) {
         bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector,
-            _randFR(),
-            _randFR(),
-            uint48(0),
-            uint112(0),
-            -int64(uint64(0.01 ether / D / denominator))
+            ZkBobPool.transact.selector, _randFR(), _randFR(), uint48(0), uint112(0), -int64(uint64(_fee / denominator))
         );
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());
         }
-        return abi.encodePacked(
-            data, uint16(1), uint16(44), uint64(0.01 ether / D / denominator), bytes4(0x01000000), _randFR()
-        );
+        return abi.encodePacked(data, uint16(1), uint16(44), uint64(_fee / denominator), bytes4(0x01000000), _randFR());
     }
 
     function _transact(bytes memory _data) internal {
