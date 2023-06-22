@@ -190,7 +190,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
      * Single transact() call performs either deposit, withdrawal or shielded transfer operation.
      */
     function transact() external onlyOperator {
-        address user;
+        address user = msg.sender;
         uint256 txType = _tx_type();
         if (txType == 0) {
             user = _deposit_spender();
@@ -200,6 +200,12 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
             user = _memo_permit_holder();
         }
         int256 transfer_token_delta = _transfer_token_amount();
+        // For private transfers, operator can receive any fee amount. As receiving a fee is basically a withdrawal,
+        // we should consider operator's tier withdrawal limits respectfully.
+        // For deposits, fee transfers can be left unbounded, since they are paid from the deposits themselves,
+        // not from the pool funds.
+        // For withdrawals, withdrawal amount that is checked against limits for specific user is already inclusive
+        // of operator's fee, thus there is no need to consider it separately.
         (,, uint256 txCount) = _recordOperation(user, transfer_token_delta);
 
         uint256 nullifier = _transfer_nullifier();
@@ -291,7 +297,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         (uint256 total, uint256 totalFee, uint256 hashsum, bytes memory message) =
             direct_deposit_queue.collect(_indices, _out_commit);
 
-        uint256 txCount = _processDirectDepositBatch(total);
+        (,, uint256 txCount) = _recordOperation(address(0), int256(total));
         uint256 _pool_index = txCount << 7;
 
         // verify that _out_commit corresponds to zero output account + 16 chosen notes + 111 empty notes
