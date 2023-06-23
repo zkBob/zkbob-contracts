@@ -23,24 +23,27 @@ address constant bobVanityAddr = address(0xB0B195aEFA3650A6908f15CdaC7D92F8a5791
 bytes32 constant bobSalt = bytes32(uint256(285834900769));
 
 // zkbob
-uint256 constant zkBobPoolId = 0; // 0 is reserved for Polygon MVP pool, do not use for other deployments
-PoolType constant zkBobPoolType = PoolType.BOB;
-string constant zkBobVerifiers = "prodV1";
-address constant zkBobToken = 0xB0B195aEFA3650A6908f15CdaC7D92F8a5791B0B;
+uint256 constant zkBobPoolId = 3; // 0 is reserved for Polygon MVP pool, do not use for other deployments
+PoolType constant zkBobPoolType = PoolType.USDC;
+string constant zkBobVerifiers = "prodV2";
+address constant zkBobToken = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
 uint256 constant zkBobInitialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
-address constant zkBobRelayer = 0xc2c4AD59B78F4A0aFD0CDB8133E640Db08Fa5b90;
-address constant zkBobRelayerFeeReceiver = 0x758768EC473279c4B1Aa61FA5450745340D4B17d;
-string constant zkBobRelayerURL = "https://relayer-mvp.zkbob.com";
-uint256 constant zkBobPoolCap = 1_000_000 ether;
-uint256 constant zkBobDailyDepositCap = 100_000 ether;
-uint256 constant zkBobDailyWithdrawalCap = 100_000 ether;
-uint256 constant zkBobDailyUserDepositCap = 10_000 ether;
-uint256 constant zkBobDepositCap = 10_000 ether;
-uint256 constant zkBobDailyUserDirectDepositCap = 0;
-uint256 constant zkBobDirectDepositCap = 0;
+address constant zkBobRelayer = 0x5754f877Cb5df331a11556CC9b74E8caC9489aF1;
+address constant zkBobRelayerFeeReceiver = 0x810a014233e5c1E561Ad2543437984f0b649d65F;
+string constant zkBobRelayerURL = "https://relayer-usdc-mvp.zkbob.com";
+uint256 constant zkBobPoolCap = 2_000_000 * (10 ** 6);
+uint256 constant zkBobDailyDepositCap = 300_000 * (10 ** 6);
+uint256 constant zkBobDailyWithdrawalCap = 300_000 * (10 ** 6);
+uint256 constant zkBobDailyUserDepositCap = 10_000 * (10 ** 6);
+uint256 constant zkBobDepositCap = 10_000 * (10 ** 6);
+uint256 constant zkBobDailyUserDirectDepositCap = 10_000 * (10 ** 6);
+uint256 constant zkBobDirectDepositCap = 1_000 * (10 ** 6);
 uint256 constant zkBobDirectDepositFee = 0.1 gwei;
 uint256 constant zkBobDirectDepositTimeout = 1 days;
 address constant permit2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
+
+//KYC
+address constant KycNFT = 0xE3c6Fd631043A0a1927c4681C736b778aA8F8feF;
 
 // new zkbob impl
 address constant zkBobPool = 0x72e6B59D4a90ab232e55D4BB7ed2dD17494D62fB;

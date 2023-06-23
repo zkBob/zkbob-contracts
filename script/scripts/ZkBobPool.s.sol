@@ -12,8 +12,45 @@ import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "../../src/zkbob/ZkBobPoolETH.sol";
 import "../../src/zkbob/ZkBobPoolUSDC.sol";
 import "../../src/zkbob/ZkBobPoolERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "../../src/utils/UniswapV3Seller.sol";
+import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
 
 contract DeployZkBobPool is Script {
+    function setKycManager(ZkBobPool pool) internal {
+        SimpleKYCProviderManager mgr = new SimpleKYCProviderManager(IERC721(KycNFT), 254);
+        pool.setLimits({
+            _tier: 254,
+            _tvlCap: zkBobPoolCap,
+            _dailyDepositCap: zkBobDailyDepositCap,
+            _dailyWithdrawalCap: zkBobDailyWithdrawalCap,
+            _dailyUserDepositCap: zkBobDailyUserDepositCap * 2,
+            _depositCap: zkBobDepositCap * 2,
+            _dailyUserDirectDepositCap: zkBobDailyUserDirectDepositCap,
+            _directDepositCap: zkBobDirectDepositCap
+        });
+        pool.setKycProvidersManager(mgr);
+    }
+
+    function checkKycManager(ZkBobPool pool) internal view {
+        require(pool.kycProvidersManager() != SimpleKYCProviderManager(address(0)), "KYC manager is not configured");
+
+        ZkBobPool.Limits memory limits = pool.getLimitsFor(0x2e865643394C736B78789D36333521d708d61995);
+
+        require((limits.depositCap == zkBobDepositCap * 2), "Incorrect limits");
+    }
+
+    function setTokenSeller(ZkBobTokenSellerMixin pool) internal {
+        UniswapV3Seller seller = new UniswapV3Seller(uniV3Router, uniV3Quoter, zkBobToken, 100, address(0), 0);
+        pool.setTokenSeller(address(seller));
+    }
+
+    function checkTokenSeller(ZkBobTokenSellerMixin pool) internal {
+        require(pool.tokenSeller() != UniswapV3Seller(payable(address(0))), "Token seller is not configured");
+
+        require(pool.tokenSeller().quoteSellForETH(2 * 1_000_000) > 0, "Incorrect quote");
+    }
+
     function run() external {
         vm.startBroadcast();
 
@@ -81,7 +118,7 @@ contract DeployZkBobPool is Script {
             zkBobDirectDepositCap
         );
         poolProxy.upgradeToAndCall(address(poolImpl), initData);
-        ZkBobPool pool = ZkBobPool(address(poolProxy));
+        ZkBobPoolUSDC pool = ZkBobPoolUSDC(address(poolProxy));
 
         ZkBobDirectDepositQueue queueImpl;
         if (zkBobPoolType == PoolType.ETH) {
@@ -96,6 +133,9 @@ contract DeployZkBobPool is Script {
             new MutableOperatorManager(zkBobRelayer, zkBobRelayerFeeReceiver, zkBobRelayerURL);
         pool.setOperatorManager(operatorManager);
         queue.setOperatorManager(operatorManager);
+
+        setTokenSeller(pool);
+        setKycManager(pool);
 
         if (owner != address(0)) {
             pool.transferOwnership(owner);
@@ -118,6 +158,9 @@ contract DeployZkBobPool is Script {
         require(pool.transfer_verifier() == transferVerifier, "Transfer verifier is not configured");
         require(pool.tree_verifier() == treeVerifier, "Tree verifier is not configured");
         require(pool.batch_deposit_verifier() == batchDepositVerifier, "Batch deposit verifier is not configured");
+
+        checkTokenSeller(pool);
+        checkKycManager(pool);
 
         console2.log("ZkBobPool:", address(pool));
         console2.log("ZkBobPool implementation:", address(poolImpl));
