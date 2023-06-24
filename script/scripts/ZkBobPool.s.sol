@@ -12,8 +12,33 @@ import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "../../src/zkbob/ZkBobPoolETH.sol";
 import "../../src/zkbob/ZkBobPoolUSDC.sol";
 import "../../src/zkbob/ZkBobPoolERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
 
 contract DeployZkBobPool is Script {
+    function setKycManager(ZkBobPool pool) internal {
+        SimpleKYCProviderManager mgr = new SimpleKYCProviderManager(IERC721(KycNFT), 254);
+        pool.setLimits({
+            _tier: 254,
+            _tvlCap: zkBobPoolCap,
+            _dailyDepositCap: zkBobDailyDepositCap,
+            _dailyWithdrawalCap: zkBobDailyWithdrawalCap,
+            _dailyUserDepositCap: zkBobDailyUserDepositCap * 2,
+            _depositCap: zkBobDepositCap * 2,
+            _dailyUserDirectDepositCap: zkBobDailyUserDirectDepositCap,
+            _directDepositCap: zkBobDirectDepositCap
+        });
+        pool.setKycProvidersManager(mgr);
+    }
+
+    function checkKycManager(ZkBobPool pool) internal view {
+        require(pool.kycProvidersManager() != SimpleKYCProviderManager(address(0)), "KYC manager is not configured");
+
+        ZkBobPool.Limits memory limits = pool.getLimitsFor(0x5F3c11Fb686126FC71cc2EC8B0e93D0a9557219B);
+
+        require((limits.depositCap == zkBobDepositCap * 2), "Incorrect limits");
+    }
+
     function run() external {
         vm.startBroadcast();
 
@@ -96,6 +121,8 @@ contract DeployZkBobPool is Script {
             new MutableOperatorManager(zkBobRelayer, zkBobRelayerFeeReceiver, zkBobRelayerURL);
         pool.setOperatorManager(operatorManager);
         queue.setOperatorManager(operatorManager);
+
+        setKycManager(pool);
 
         if (owner != address(0)) {
             pool.transferOwnership(owner);
