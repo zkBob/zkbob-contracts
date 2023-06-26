@@ -41,7 +41,7 @@ contract DeployZkBobPool is Script {
     }
 
     function setTokenSeller(ZkBobTokenSellerMixin pool) internal {
-        UniswapV3Seller seller = new UniswapV3Seller(uniV3Router, uniV3Quoter, zkBobToken, 100, address(0), 0);
+        UniswapV3Seller seller = new UniswapV3Seller(uniV3Router, uniV3Quoter, zkBobToken, fee0, interimTokenForSwap, fee1);
         pool.setTokenSeller(address(seller));
     }
 
