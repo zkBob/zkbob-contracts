@@ -36,7 +36,7 @@ contract DeployZkBobPool is Script {
 
         ZkBobPool.Limits memory limits = pool.getLimitsFor(0x5F3c11Fb686126FC71cc2EC8B0e93D0a9557219B);
 
-        require((limits.depositCap == zkBobDepositCap * 2), "Incorrect limits");
+        require((limits.depositCap * pool.denominator() == zkBobDepositCap * 2), "Incorrect limits");
     }
 
     function run() external {
@@ -145,6 +145,8 @@ contract DeployZkBobPool is Script {
         require(pool.transfer_verifier() == transferVerifier, "Transfer verifier is not configured");
         require(pool.tree_verifier() == treeVerifier, "Tree verifier is not configured");
         require(pool.batch_deposit_verifier() == batchDepositVerifier, "Batch deposit verifier is not configured");
+
+        checkKycManager(pool);
 
         console2.log("ZkBobPool:", address(pool));
         console2.log("ZkBobPool implementation:", address(poolImpl));

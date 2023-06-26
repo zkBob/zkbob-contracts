@@ -13,8 +13,8 @@ enum PoolType {
 
 // common
 address constant deployer = 0x39F0bD56c1439a22Ee90b4972c16b7868D161981;
-address constant admin = 0xd4a3D9Ca00fa1fD8833D560F9217458E61c446d8;
-address constant owner = 0xd4a3D9Ca00fa1fD8833D560F9217458E61c446d8;
+address constant admin = 0x14fc6a1a996A2EB889cF86e5c8cD17323bC85290;
+address constant owner = 0x14fc6a1a996A2EB889cF86e5c8cD17323bC85290;
 address constant mockImpl = address(0xdead);
 
 // bob
