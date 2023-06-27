@@ -10,6 +10,7 @@ import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
+import "../../src/zkbob/utils/ZkBobAccounting.sol";
 
 contract DeployLocal is Script {
     function run() external {
@@ -52,9 +53,19 @@ contract DeployLocal is Script {
             address(queueProxy)
         );
         {
-            bytes memory initData = abi.encodeWithSelector(
-                ZkBobPool.initialize.selector,
-                zkBobInitialRoot,
+            bytes memory initData = abi.encodeWithSelector(ZkBobPool.initialize.selector, zkBobInitialRoot);
+            poolProxy.upgradeToAndCall(address(poolImpl), initData);
+        }
+        ZkBobPoolBOB pool = ZkBobPoolBOB(address(poolProxy));
+
+        ZkBobDirectDepositQueue queueImpl = new ZkBobDirectDepositQueue(address(pool), address(bob), 1_000_000_000);
+        queueProxy.upgradeTo(address(queueImpl));
+        ZkBobDirectDepositQueue queue = ZkBobDirectDepositQueue(address(queueProxy));
+
+        {
+            ZkBobAccounting accounting = new ZkBobAccounting(address(pool), 1_000_000_000);
+            accounting.setLimits(
+                0,
                 zkBobPoolCap,
                 zkBobDailyDepositCap,
                 zkBobDailyWithdrawalCap,
@@ -63,13 +74,8 @@ contract DeployLocal is Script {
                 zkBobDailyUserDirectDepositCap,
                 zkBobDirectDepositCap
             );
-            poolProxy.upgradeToAndCall(address(poolImpl), initData);
+            pool.setAccounting(accounting);
         }
-        ZkBobPoolBOB pool = ZkBobPoolBOB(address(poolProxy));
-
-        ZkBobDirectDepositQueue queueImpl = new ZkBobDirectDepositQueue(address(pool), address(bob), 1_000_000_000);
-        queueProxy.upgradeTo(address(queueImpl));
-        ZkBobDirectDepositQueue queue = ZkBobDirectDepositQueue(address(queueProxy));
 
         {
             IOperatorManager operatorManager =

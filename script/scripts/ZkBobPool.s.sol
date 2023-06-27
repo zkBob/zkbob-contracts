@@ -12,9 +12,24 @@ import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "../../src/zkbob/ZkBobPoolETH.sol";
 import "../../src/zkbob/ZkBobPoolUSDC.sol";
 import "../../src/zkbob/ZkBobPoolERC20.sol";
+import "../../src/zkbob/utils/ZkBobAccounting.sol";
 
 contract DeployZkBobPool is Script {
+    struct Vars {
+        uint8 decimals;
+        uint256 denominator;
+        uint256 precision;
+        EIP1967Proxy poolProxy;
+        EIP1967Proxy queueProxy;
+        ZkBobPool poolImpl;
+    }
+
     function run() external {
+        Vars memory vars;
+        vars.decimals = IERC20Metadata(zkBobToken).decimals();
+        vars.denominator = vars.decimals > 9 ? 10 ** (vars.decimals - 9) : 1;
+        vars.precision = vars.decimals > 9 ? 1_000_000_000 : 10 ** vars.decimals;
+
         vm.startBroadcast();
 
         ITransferVerifier transferVerifier;
@@ -33,64 +48,50 @@ contract DeployZkBobPool is Script {
             batchDepositVerifier := create(0, add(code3, 0x20), mload(code3))
         }
 
-        EIP1967Proxy poolProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
-        EIP1967Proxy queueProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
+        vars.poolProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
+        vars.queueProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
 
-        ZkBobPool poolImpl;
         if (zkBobPoolType == PoolType.ETH) {
-            poolImpl = new ZkBobPoolETH(
+            vars.poolImpl = new ZkBobPoolETH(
                 zkBobPoolId, zkBobToken,
                 transferVerifier, treeVerifier, batchDepositVerifier,
-                address(queueProxy), permit2
+                address(vars.queueProxy), permit2
             );
         } else if (zkBobPoolType == PoolType.BOB) {
-            poolImpl = new ZkBobPoolBOB(
+            vars.poolImpl = new ZkBobPoolBOB(
                 zkBobPoolId, zkBobToken,
                 transferVerifier, treeVerifier, batchDepositVerifier,
-                address(queueProxy)
+                address(vars.queueProxy)
             );
         } else if (zkBobPoolType == PoolType.USDC) {
-            poolImpl = new ZkBobPoolUSDC(
+            vars.poolImpl = new ZkBobPoolUSDC(
                 zkBobPoolId, zkBobToken,
                 transferVerifier, treeVerifier, batchDepositVerifier,
-                address(queueProxy)
+                address(vars.queueProxy)
             );
         } else if (zkBobPoolType == PoolType.ERC20) {
-            uint8 decimals = IERC20Metadata(zkBobToken).decimals();
-            uint256 denominator = decimals > 9 ? 10 ** (decimals - 9) : 1;
-            uint256 precision = decimals > 9 ? 1_000_000_000 : 10 ** decimals;
-            poolImpl = new ZkBobPoolERC20(
+            vars.poolImpl = new ZkBobPoolERC20(
                 zkBobPoolId, zkBobToken,
                 transferVerifier, treeVerifier, batchDepositVerifier,
-                address(queueProxy), permit2,
-                denominator, precision
+                address(vars.queueProxy), permit2,
+                vars.denominator
             );
         } else {
             revert("Unknown pool type");
         }
 
-        bytes memory initData = abi.encodeWithSelector(
-            ZkBobPool.initialize.selector,
-            zkBobInitialRoot,
-            zkBobPoolCap,
-            zkBobDailyDepositCap,
-            zkBobDailyWithdrawalCap,
-            zkBobDailyUserDepositCap,
-            zkBobDepositCap,
-            zkBobDailyUserDirectDepositCap,
-            zkBobDirectDepositCap
-        );
-        poolProxy.upgradeToAndCall(address(poolImpl), initData);
-        ZkBobPool pool = ZkBobPool(address(poolProxy));
+        bytes memory initData = abi.encodeWithSelector(ZkBobPool.initialize.selector, zkBobInitialRoot);
+        vars.poolProxy.upgradeToAndCall(address(vars.poolImpl), initData);
+        ZkBobPool pool = ZkBobPool(address(vars.poolProxy));
 
         ZkBobDirectDepositQueue queueImpl;
         if (zkBobPoolType == PoolType.ETH) {
-            queueImpl = new ZkBobDirectDepositQueueETH(address(pool), zkBobToken, pool.denominator());
+            queueImpl = new ZkBobDirectDepositQueueETH(address(pool), zkBobToken, vars.denominator);
         } else {
-            queueImpl = new ZkBobDirectDepositQueue(address(pool), zkBobToken, pool.denominator());
+            queueImpl = new ZkBobDirectDepositQueue(address(pool), zkBobToken, vars.denominator);
         }
-        queueProxy.upgradeTo(address(queueImpl));
-        ZkBobDirectDepositQueue queue = ZkBobDirectDepositQueue(address(queueProxy));
+        vars.queueProxy.upgradeTo(address(queueImpl));
+        ZkBobDirectDepositQueue queue = ZkBobDirectDepositQueue(address(vars.queueProxy));
 
         IOperatorManager operatorManager =
             new MutableOperatorManager(zkBobRelayer, zkBobRelayerFeeReceiver, zkBobRelayerURL);
@@ -99,32 +100,46 @@ contract DeployZkBobPool is Script {
         queue.setDirectDepositFee(uint64(zkBobDirectDepositFee));
         queue.setDirectDepositTimeout(uint40(zkBobDirectDepositTimeout));
 
+        ZkBobAccounting accounting = new ZkBobAccounting(address(pool), vars.precision);
+        accounting.setLimits(
+            0,
+            zkBobPoolCap,
+            zkBobDailyDepositCap,
+            zkBobDailyWithdrawalCap,
+            zkBobDailyUserDepositCap,
+            zkBobDepositCap,
+            zkBobDailyUserDirectDepositCap,
+            zkBobDirectDepositCap
+        );
+        pool.setAccounting(accounting);
+
         if (owner != address(0)) {
             pool.transferOwnership(owner);
             queue.transferOwnership(owner);
         }
 
         if (admin != tx.origin) {
-            poolProxy.setAdmin(admin);
-            queueProxy.setAdmin(admin);
+            vars.poolProxy.setAdmin(admin);
+            vars.queueProxy.setAdmin(admin);
         }
 
         vm.stopBroadcast();
 
-        require(poolProxy.implementation() == address(poolImpl), "Invalid implementation address");
-        require(poolProxy.admin() == admin, "Proxy admin is not configured");
+        require(vars.poolProxy.implementation() == address(vars.poolImpl), "Invalid implementation address");
+        require(vars.poolProxy.admin() == admin, "Proxy admin is not configured");
         require(pool.owner() == owner, "Owner is not configured");
-        require(queueProxy.implementation() == address(queueImpl), "Invalid implementation address");
-        require(queueProxy.admin() == admin, "Proxy admin is not configured");
+        require(vars.queueProxy.implementation() == address(queueImpl), "Invalid implementation address");
+        require(vars.queueProxy.admin() == admin, "Proxy admin is not configured");
         require(queue.owner() == owner, "Owner is not configured");
         require(pool.transfer_verifier() == transferVerifier, "Transfer verifier is not configured");
         require(pool.tree_verifier() == treeVerifier, "Tree verifier is not configured");
         require(pool.batch_deposit_verifier() == batchDepositVerifier, "Batch deposit verifier is not configured");
 
         console2.log("ZkBobPool:", address(pool));
-        console2.log("ZkBobPool implementation:", address(poolImpl));
+        console2.log("ZkBobPool implementation:", address(vars.poolImpl));
         console2.log("ZkBobDirectDepositQueue:", address(queue));
         console2.log("ZkBobDirectDepositQueue implementation:", address(queueImpl));
+        console2.log("ZkBobAccounting:", address(accounting));
         console2.log("TransferVerifier:", address(transferVerifier));
         console2.log("TreeUpdateVerifier:", address(treeVerifier));
         console2.log("BatchDepositVierifier:", address(batchDepositVerifier));
