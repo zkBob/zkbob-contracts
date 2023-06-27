@@ -18,16 +18,17 @@ import "../interfaces/IERC20Permit.sol";
 import "../interfaces/ITokenSeller.sol";
 import "../interfaces/IZkBobDirectDepositQueue.sol";
 import "../interfaces/IZkBobPool.sol";
+import "../interfaces/IZkBobAccounting.sol";
 import "./utils/Parameters.sol";
-import "./utils/ZkBobAccounting.sol";
 import "../utils/Ownable.sol";
 import "../proxy/EIP1967Admin.sol";
+import "../interfaces/IEnergyRedeemer.sol";
 
 /**
  * @title ZkBobPool
  * Shielded transactions pool
  */
-abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
+abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters {
     using SafeERC20 for IERC20;
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
@@ -42,6 +43,11 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
     address public immutable token;
     IZkBobDirectDepositQueue public immutable direct_deposit_queue;
 
+    uint256[3] private __deprecatedGap;
+    IEnergyRedeemer public redeemer;
+    IZkBobAccounting public accounting;
+    uint96 public pool_index;
+
     IOperatorManager public operatorManager;
 
     mapping(uint256 => uint256) public nullifiers;
@@ -51,6 +57,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
     mapping(address => uint256) public accumulatedFee;
 
     event UpdateOperatorManager(address manager);
+    event UpdateAccounting(address accounting);
+    event UpdateRedeemer(address redeemer);
     event WithdrawFee(address indexed operator, uint256 fee);
 
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
@@ -62,11 +70,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         ITreeVerifier _tree_verifier,
         IBatchDepositVerifier _batch_deposit_verifier,
         address _direct_deposit_queue,
-        uint256 _denominator,
-        uint256 _precision
-    )
-        ZkBobAccounting(_precision)
-    {
+        uint256 _denominator
+    ) {
         require(__pool_id <= MAX_POOL_ID, "ZkBobPool: exceeds max pool id");
         require(Address.isContract(_token), "ZkBobPool: not a contract");
         require(Address.isContract(address(_transfer_verifier)), "ZkBobPool: not a contract");
@@ -95,40 +100,12 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
      * @dev Initializes pool proxy storage.
      * Callable only once and only through EIP1967Proxy constructor / upgradeToAndCall.
      * @param _root initial empty merkle tree root.
-     * @param _tvlCap initial upper cap on the entire pool tvl, 18 decimals.
-     * @param _dailyDepositCap initial daily limit on the sum of all deposits, 18 decimals.
-     * @param _dailyWithdrawalCap initial daily limit on the sum of all withdrawals, 18 decimals.
-     * @param _dailyUserDepositCap initial daily limit on the sum of all per-address deposits, 18 decimals.
-     * @param _depositCap initial limit on the amount of a single deposit, 18 decimals.
-     * @param _dailyUserDirectDepositCap initial daily limit on the sum of all per-address direct deposits, 18 decimals.
-     * @param _directDepositCap initial limit on the amount of a single direct deposit, 18 decimals.
      */
-    function initialize(
-        uint256 _root,
-        uint256 _tvlCap,
-        uint256 _dailyDepositCap,
-        uint256 _dailyWithdrawalCap,
-        uint256 _dailyUserDepositCap,
-        uint256 _depositCap,
-        uint256 _dailyUserDirectDepositCap,
-        uint256 _directDepositCap
-    )
-        external
-    {
+    function initialize(uint256 _root) external {
         require(msg.sender == address(this), "ZkBobPool: not initializer");
         require(roots[0] == 0, "ZkBobPool: already initialized");
         require(_root != 0, "ZkBobPool: zero root");
         roots[0] = _root;
-        _setLimits(
-            0,
-            _tvlCap / TOKEN_DENOMINATOR,
-            _dailyDepositCap / TOKEN_DENOMINATOR,
-            _dailyWithdrawalCap / TOKEN_DENOMINATOR,
-            _dailyUserDepositCap / TOKEN_DENOMINATOR,
-            _depositCap / TOKEN_DENOMINATOR,
-            _dailyUserDirectDepositCap / TOKEN_DENOMINATOR,
-            _directDepositCap / TOKEN_DENOMINATOR
-        );
     }
 
     /**
@@ -143,20 +120,35 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
     }
 
     /**
+     * @dev Updates used accounting module.
+     * Callable only by the contract owner / proxy admin.
+     * @param _accounting new operator manager implementation.
+     */
+    function setAccounting(IZkBobAccounting _accounting) external onlyOwner {
+        require(
+            address(_accounting) == address(0) || Address.isContract(address(_accounting)), "ZkBobPool: not a contract"
+        );
+        accounting = _accounting;
+        emit UpdateAccounting(address(_accounting));
+    }
+
+    /**
+     * @dev Updates used energy redemption module.
+     * Callable only by the contract owner / proxy admin.
+     * @param _redeemer new energy redeemer implementation.
+     */
+    function setEnergyRedeemer(IEnergyRedeemer _redeemer) external onlyOwner {
+        require(address(_redeemer) == address(0) || Address.isContract(address(_redeemer)), "ZkBobPool: not a contract");
+        redeemer = _redeemer;
+        emit UpdateRedeemer(address(_redeemer));
+    }
+
+    /**
      * @dev Tells the denominator for converting BOB into zkBOB units.
      * 1e18 BOB units = 1e9 zkBOB units.
      */
     function denominator() external view returns (uint256) {
         return TOKEN_DENOMINATOR;
-    }
-
-    /**
-     * @dev Tells the current merkle tree index, which will be used for the next operation.
-     * Each operation increases merkle tree size by 128, so index is equal to the total number of seen operations, multiplied by 128.
-     * @return next operator merkle index.
-     */
-    function pool_index() external view returns (uint256) {
-        return _txCount() << 7;
     }
 
     function _root() internal view override returns (uint256) {
@@ -200,35 +192,36 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
             user = _memo_permit_holder();
         }
         int256 transfer_token_delta = _transfer_token_amount();
-        // For private transfers, operator can receive any fee amount. As receiving a fee is basically a withdrawal,
-        // we should consider operator's tier withdrawal limits respectfully.
-        // For deposits, fee transfers can be left unbounded, since they are paid from the deposits themselves,
-        // not from the pool funds.
-        // For withdrawals, withdrawal amount that is checked against limits for specific user is already inclusive
-        // of operator's fee, thus there is no need to consider it separately.
-        (,, uint256 txCount) = _recordOperation(user, transfer_token_delta);
+
+        (IZkBobAccounting acc, uint96 poolIndex) = (accounting, pool_index);
+        if (address(acc) != address(0)) {
+            // For private transfers, operator can receive any fee amount. As receiving a fee is basically a withdrawal,
+            // we should consider operator's tier withdrawal limits respectfully.
+            // For deposits, fee transfers can be left unbounded, since they are paid from the deposits themselves,
+            // not from the pool funds.
+            // For withdrawals, withdrawal amount that is checked against limits for specific user is already inclusive
+            // of operator's fee, thus there is no need to consider it separately.
+            acc.recordOperation(IZkBobAccounting.TxType.Common, user, transfer_token_delta);
+        }
 
         uint256 nullifier = _transfer_nullifier();
         {
-            uint256 _pool_index = txCount << 7;
-
             require(nullifiers[nullifier] == 0, "ZkBobPool: doublespend detected");
-            require(_transfer_index() <= _pool_index, "ZkBobPool: transfer index out of bounds");
+            require(_transfer_index() <= poolIndex, "ZkBobPool: transfer index out of bounds");
             require(transfer_verifier.verifyProof(_transfer_pub(), _transfer_proof()), "ZkBobPool: bad transfer proof");
-            require(
-                tree_verifier.verifyProof(_tree_pub(roots[_pool_index]), _tree_proof()), "ZkBobPool: bad tree proof"
-            );
+            require(tree_verifier.verifyProof(_tree_pub(roots[poolIndex]), _tree_proof()), "ZkBobPool: bad tree proof");
 
             nullifiers[nullifier] = uint256(keccak256(abi.encodePacked(_transfer_out_commit(), _transfer_delta())));
-            _pool_index += 128;
-            roots[_pool_index] = _tree_root_after();
+            poolIndex += 128;
+            roots[poolIndex] = _tree_root_after();
             bytes memory message = _memo_message();
             // restrict memo message prefix (items count in little endian) to be < 2**16
             require(bytes4(message) & 0x0000ffff == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
             bytes32 message_hash = keccak256(message);
             bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
             all_messages_hash = _all_messages_hash;
-            emit Message(_pool_index, _all_messages_hash, message);
+            pool_index = poolIndex;
+            emit Message(poolIndex, _all_messages_hash, message);
         }
 
         uint256 fee = _memo_fee();
@@ -257,10 +250,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
                 IERC20(token).safeTransfer(user, withdraw_amount);
             }
 
-            // energy withdrawals are not yet implemented, any transaction with non-zero energy_amount will revert
-            // future version of the protocol will support energy withdrawals through negative energy_amount
             if (energy_amount < 0) {
-                revert("ZkBobPool: XP claiming is not yet enabled");
+                redeemer.redeem(user, uint256(-energy_amount));
             }
         } else if (txType == 3) {
             // Permittable token deposit
@@ -297,28 +288,31 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         (uint256 total, uint256 totalFee, uint256 hashsum, bytes memory message) =
             direct_deposit_queue.collect(_indices, _out_commit);
 
-        (,, uint256 txCount) = _recordOperation(address(0), int256(total));
-        uint256 _pool_index = txCount << 7;
+        (IZkBobAccounting acc, uint96 poolIndex) = (accounting, pool_index);
+        if (address(acc) != address(0)) {
+            acc.recordOperation(IZkBobAccounting.TxType.AppendDirectDeposits, address(0), int256(total));
+        }
 
         // verify that _out_commit corresponds to zero output account + 16 chosen notes + 111 empty notes
         require(
             batch_deposit_verifier.verifyProof([hashsum], _batch_deposit_proof), "ZkBobPool: bad batch deposit proof"
         );
 
-        uint256[3] memory tree_pub = [roots[_pool_index], _root_after, _out_commit];
+        uint256[3] memory tree_pub = [roots[poolIndex], _root_after, _out_commit];
         require(tree_verifier.verifyProof(tree_pub, _tree_proof), "ZkBobPool: bad tree proof");
 
-        _pool_index += 128;
-        roots[_pool_index] = _root_after;
+        poolIndex += 128;
+        roots[poolIndex] = _root_after;
         bytes32 message_hash = keccak256(message);
         bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
         all_messages_hash = _all_messages_hash;
+        pool_index = poolIndex;
 
         if (totalFee > 0) {
             accumulatedFee[msg.sender] += totalFee;
         }
 
-        emit Message(_pool_index, _all_messages_hash, message);
+        emit Message(poolIndex, _all_messages_hash, message);
     }
 
     /**
@@ -329,7 +323,10 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
      */
     function recordDirectDeposit(address _sender, uint256 _amount) external {
         require(msg.sender == address(direct_deposit_queue), "ZkBobPool: not authorized");
-        _checkDirectDepositLimits(_sender, _amount);
+        IZkBobAccounting acc = accounting;
+        if (address(acc) != address(0)) {
+            acc.recordOperation(IZkBobAccounting.TxType.DirectDeposit, _sender, int256(_amount));
+        }
     }
 
     /**
@@ -348,65 +345,6 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         IERC20(token).safeTransfer(_to, fee);
         accumulatedFee[_operator] = 0;
         emit WithdrawFee(_operator, fee);
-    }
-
-    /**
-     * @dev Updates pool usage limits.
-     * Callable only by the contract owner / proxy admin.
-     * @param _tier pool limits tier (0-254).
-     * @param _tvlCap new upper cap on the entire pool tvl, 18 decimals.
-     * @param _dailyDepositCap new daily limit on the sum of all deposits, 18 decimals.
-     * @param _dailyWithdrawalCap new daily limit on the sum of all withdrawals, 18 decimals.
-     * @param _dailyUserDepositCap new daily limit on the sum of all per-address deposits, 18 decimals.
-     * @param _depositCap new limit on the amount of a single deposit, 18 decimals.
-     * @param _dailyUserDirectDepositCap new daily limit on the sum of all per-address direct deposits, 18 decimals.
-     * @param _directDepositCap new limit on the amount of a single direct deposit, 18 decimals.
-     */
-    function setLimits(
-        uint8 _tier,
-        uint256 _tvlCap,
-        uint256 _dailyDepositCap,
-        uint256 _dailyWithdrawalCap,
-        uint256 _dailyUserDepositCap,
-        uint256 _depositCap,
-        uint256 _dailyUserDirectDepositCap,
-        uint256 _directDepositCap
-    )
-        external
-        onlyOwner
-    {
-        _setLimits(
-            _tier,
-            _tvlCap / TOKEN_DENOMINATOR,
-            _dailyDepositCap / TOKEN_DENOMINATOR,
-            _dailyWithdrawalCap / TOKEN_DENOMINATOR,
-            _dailyUserDepositCap / TOKEN_DENOMINATOR,
-            _depositCap / TOKEN_DENOMINATOR,
-            _dailyUserDirectDepositCap / TOKEN_DENOMINATOR,
-            _directDepositCap / TOKEN_DENOMINATOR
-        );
-    }
-
-    /**
-     * @dev Resets daily limit usage for the current day.
-     * Callable only by the contract owner / proxy admin.
-     * @param _tier tier id to reset daily limits for.
-     */
-    function resetDailyLimits(uint8 _tier) external onlyOwner {
-        _resetDailyLimits(_tier);
-    }
-
-    /**
-     * @dev Updates users limit tiers.
-     * Callable only by the contract owner / proxy admin.
-     * @param _tier pool limits tier (0-255).
-     * 0 is the default tier.
-     * 1-254 are custom pool limit tiers, configured at runtime.
-     * 255 is the special tier with zero limits, used to effectively prevent some address from accessing the pool.
-     * @param _users list of user account addresses to assign a tier for.
-     */
-    function setUsersTier(uint8 _tier, address[] memory _users) external onlyOwner {
-        _setUsersTier(_tier, _users);
     }
 
     /**

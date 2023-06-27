@@ -26,7 +26,6 @@ contract ZkBobPoolBOB is ZkBobPool, ZkBobTokenSellerMixin, ZkBobSaltedPermitMixi
             _tree_verifier,
             _batch_deposit_verifier,
             _direct_deposit_queue,
-            1_000_000_000,
             1_000_000_000
         )
     {}

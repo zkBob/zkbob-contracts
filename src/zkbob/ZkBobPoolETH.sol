@@ -27,7 +27,6 @@ contract ZkBobPoolETH is ZkBobPool, ZkBobWETHMixin, ZkBobPermit2Mixin {
             _tree_verifier,
             _batch_deposit_verifier,
             _direct_deposit_queue,
-            1_000_000_000,
             1_000_000_000
         )
         ZkBobPermit2Mixin(_permit2)

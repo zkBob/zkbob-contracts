@@ -19,15 +19,6 @@ contract ZkBobPoolUSDC is ZkBobPool, ZkBobTokenSellerMixin, ZkBobUSDCPermitMixin
         IBatchDepositVerifier _batch_deposit_verifier,
         address _direct_deposit_queue
     )
-        ZkBobPool(
-            __pool_id,
-            _token,
-            _transfer_verifier,
-            _tree_verifier,
-            _batch_deposit_verifier,
-            _direct_deposit_queue,
-            1,
-            1_000_000
-        )
+        ZkBobPool(__pool_id, _token, _transfer_verifier, _tree_verifier, _batch_deposit_verifier, _direct_deposit_queue, 1)
     {}
 }

@@ -2,51 +2,37 @@
 
 pragma solidity 0.8.15;
 
-import "../../src/zkbob/utils/ZkBobAccounting.sol";
+import "../../src/interfaces/IEnergyRedeemer.sol";
 
-contract ZkBobAccountingMock is ZkBobAccounting(1_000_000_000) {
-    uint256 tvl;
-    uint56 public weekMaxTvl;
-    uint32 public weekMaxCount;
-    uint256 public txCount;
+contract ZkBobAccountingMock {
+    uint56 maxWeeklyAvgTvl;
+    uint32 maxWeeklyTxCount;
 
-    function slot0() external view returns (bytes32 res) {
-        assembly {
-            res := sload(0)
-        }
+    constructor(uint56 _maxWeeklyAvgTvl, uint32 _maxWeeklyTxCount) {
+        maxWeeklyAvgTvl = _maxWeeklyAvgTvl;
+        maxWeeklyTxCount = _maxWeeklyTxCount;
     }
 
-    function transact(int256 _amount) external {
-        (weekMaxTvl, weekMaxCount, txCount) = _recordOperation(msg.sender, _amount / 1 gwei);
+    function accounting() external view returns (address) {
+        return address(this);
     }
 
-    function setUserTier(uint8 _tier, address _user) external {
-        address[] memory users = new address[](1);
-        users[0] = _user;
-        _setUsersTier(_tier, users);
-    }
-
-    function setLimits(
-        uint8 _tier,
-        uint256 _tvlCap,
-        uint256 _dailyDepositCap,
-        uint256 _dailyWithdrawalCap,
-        uint256 _dailyUserDepositCap,
-        uint256 _depositCap,
-        uint256 _dailyUserDirectDepositCap,
-        uint256 _directDepositCap
-    )
+    function slot0()
         external
+        view
+        returns (
+            uint56 _maxWeeklyAvgTvl,
+            uint32 _maxWeeklyTxCount,
+            uint24 _tailSlot,
+            uint24 _headSlot,
+            uint88 _cumTvl,
+            uint32 _txCount
+        )
     {
-        _setLimits(
-            _tier,
-            _tvlCap / 1 gwei,
-            _dailyDepositCap / 1 gwei,
-            _dailyWithdrawalCap / 1 gwei,
-            _dailyUserDepositCap / 1 gwei,
-            _depositCap / 1 gwei,
-            _dailyUserDirectDepositCap / 1 gwei,
-            _directDepositCap / 1 gwei
-        );
+        return (maxWeeklyAvgTvl, maxWeeklyTxCount, 0, 0, 0, 0);
+    }
+
+    function redeem(address _redeemer, address _to, uint256 _energy) external {
+        IEnergyRedeemer(_redeemer).redeem(_to, _energy);
     }
 }
