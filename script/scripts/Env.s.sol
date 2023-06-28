@@ -12,20 +12,21 @@ enum PoolType {
 }
 
 // common
-address constant deployer = 0x39F0bD56c1439a22Ee90b4972c16b7868D161981;
-address constant admin = 0xd4a3D9Ca00fa1fD8833D560F9217458E61c446d8;
-address constant owner = 0xd4a3D9Ca00fa1fD8833D560F9217458E61c446d8;
+address constant admin = 0xC325D80FF4A883E0E6bCfaF239B7d9405D6830fb;
+address constant owner = 0xC325D80FF4A883E0E6bCfaF239B7d9405D6830fb;
+address constant deployer = 0xC325D80FF4A883E0E6bCfaF239B7d9405D6830fb;
+
 address constant mockImpl = address(0xdead);
 
 // bob
-address constant bobMinter = 0xd4a3D9Ca00fa1fD8833D560F9217458E61c446d8;
+address constant bobMinter = 0xC325D80FF4A883E0E6bCfaF239B7d9405D6830fb;
 address constant bobVanityAddr = address(0xB0B195aEFA3650A6908f15CdaC7D92F8a5791B0B);
 bytes32 constant bobSalt = bytes32(uint256(285834900769));
 
 // zkbob
 uint256 constant zkBobPoolId = 0; // 0 is reserved for Polygon MVP pool, do not use for other deployments
 PoolType constant zkBobPoolType = PoolType.BOB;
-string constant zkBobVerifiers = "prodV1";
+string constant zkBobVerifiers = "stageV2";
 address constant zkBobToken = 0xB0B195aEFA3650A6908f15CdaC7D92F8a5791B0B;
 uint256 constant zkBobInitialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
 address constant zkBobRelayer = 0xc2c4AD59B78F4A0aFD0CDB8133E640Db08Fa5b90;

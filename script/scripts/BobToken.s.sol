@@ -41,7 +41,7 @@ contract DeployBobToken is Script {
 
         vm.stopBroadcast();
 
-        require(address(bob) == bobVanityAddr, "Invalid vanity address");
+        // require(address(bob) == bobVanityAddr, "Invalid vanity address");
         require(proxy.implementation() == address(impl), "Invalid implementation address");
         require(proxy.admin() == admin, "Proxy admin is not configured");
         require(bob.owner() == owner, "Owner is not configured");
