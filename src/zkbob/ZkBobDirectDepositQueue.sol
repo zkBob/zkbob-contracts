@@ -12,12 +12,19 @@ import "../interfaces/IZkBobDirectDepositQueue.sol";
 import "../interfaces/IZkBobPool.sol";
 import "../utils/Ownable.sol";
 import "../proxy/EIP1967Admin.sol";
+import "./utils/DecimalAdjustment.sol";
 
 /**
  * @title ZkBobDirectDepositQueue
  * Queue for zkBob direct deposits.
  */
-contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQueue, EIP1967Admin, Ownable {
+contract ZkBobDirectDepositQueue is
+    IZkBobDirectDeposits,
+    IZkBobDirectDepositQueue,
+    EIP1967Admin,
+    Ownable,
+    DecimalAdjustment
+{
     using SafeERC20 for IERC20;
 
     uint256 internal constant R = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
@@ -151,7 +158,11 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
 
         hashsum = uint256(keccak256(input)) % R;
 
-        IERC20(token).safeTransfer(msg.sender, (total + totalFee) * TOKEN_DENOMINATOR);
+        // Since (total + totalFee) is in the legacy nomination,
+        // amount of tokens to transfer must be calculated as
+        // (total + totalFee) * D, where
+        //   D = 10 ** (token.decimals() - 9)
+        IERC20(token).safeTransfer(msg.sender, poolToToken(total + totalFee, TOKEN_DENOMINATOR));
 
         emit CompleteDirectDepositBatch(_indices);
     }
@@ -245,7 +256,12 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
 
         uint64 fee = directDepositFee;
         // small amount of wei might get lost during division, this amount will stay in the contract indefinitely
-        uint64 depositAmount = uint64(_amount / TOKEN_DENOMINATOR);
+        //
+        // In order to preserve nomination (let's call it legacy)
+        // of BOB->USDC pool depositAmount must be calculated as
+        // _amount / D, where
+        //   D = 10 ** (token.decimals() - 9)
+        uint64 depositAmount = tokenToPool(_amount, TOKEN_DENOMINATOR);
         require(depositAmount > fee, "ZkBobDirectDepositQueue: direct deposit amount is too low");
         unchecked {
             depositAmount -= fee;
