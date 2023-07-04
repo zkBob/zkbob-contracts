@@ -35,7 +35,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
 
     uint256 internal immutable TOKEN_DENOMINATOR;
-    uint256 internal constant TOKEN_NUMERATOR = 1000;
+    uint256 internal constant TOKEN_NUMERATOR = 1;
 
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;
@@ -122,8 +122,6 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         require(roots[0] == 0, "ZkBobPool: already initialized");
         require(_root != 0, "ZkBobPool: zero root");
         roots[0] = _root;
-        // Assuming that this code will not be called for the BOB->USDC pool,
-        // no need to adjust these calculations involving TOKEN_DENOMINATOR
         _setLimits(
             0,
             _tvlCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
@@ -148,8 +146,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
     }
 
     /**
-     * @dev Tells the denominator for converting BOB into zkBOB units.
-     * 1e18 BOB units = 1e9 zkBOB units.
+     * @dev Tells the denominator for converting pool token into zkBOB units.
      */
     function denominator() external view returns (uint256) {
         return TOKEN_NUMERATOR == 1 ? TOKEN_DENOMINATOR : (1 << 255) | TOKEN_NUMERATOR;
@@ -240,13 +237,16 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         int256 token_amount = transfer_token_delta + int256(fee);
         int256 energy_amount = _transfer_energy_amount();
 
+        require(
+            token_amount
+                == (token_amount * int256(TOKEN_DENOMINATOR) / int256(TOKEN_NUMERATOR)) / int256(TOKEN_DENOMINATOR)
+                    * int256(TOKEN_NUMERATOR),
+            "ZkBobPool: incorrect token amount"
+        );
+
         if (txType == 0) {
             // Deposit
             require(transfer_token_delta > 0 && energy_amount == 0, "ZkBobPool: incorrect deposit amounts");
-            // Assuming token_amount is in the legacy nomination,
-            // amount of tokens to transfer must be calculated as
-            // token_amount * D, where
-            //   D = 10 ** (token.decimals() - 9)
             IERC20(token).safeTransferFrom(
                 user, address(this), uint256(token_amount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR
             );
@@ -257,10 +257,6 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
             // Withdraw
             require(token_amount <= 0 && energy_amount <= 0, "ZkBobPool: incorrect withdraw amounts");
 
-            // Assuming native_amount and withdraw_amount are in the legacy nomination,
-            // amounts of tokens to transfer must be calculated as
-            // _memo_native_amount() * D and -token_amount * D, where
-            //   D = 10 ** (token.decimals() - 9)
             uint256 native_amount = _memo_native_amount() * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
             uint256 withdraw_amount = uint256(-token_amount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
 
@@ -358,10 +354,6 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
             _operator == msg.sender || operatorManager.isOperatorFeeReceiver(_operator, msg.sender),
             "ZkBobPool: not authorized"
         );
-        // Since accumulatedFee is in the legacy nomination,
-        // amount of tokens to transfer must be calculated as
-        // accumulatedFee[_operator] * D, where
-        //   D = 10 ** (token.decimals() - 9)
         uint256 fee = accumulatedFee[_operator] * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
         require(fee > 0, "ZkBobPool: no fee to withdraw");
         IERC20(token).safeTransfer(_to, fee);

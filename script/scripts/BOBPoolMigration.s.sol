@@ -9,9 +9,8 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPoolBOB.sol";
-import "../../src/zkbob/ZkBobPoolUSDC.sol";
+import "../../src/zkbob/ZkBobPoolUSDCMigrated.sol";
 import "../../src/zkbob/utils/ZkBobAccounting.sol";
-import "../../src/interfaces/IERCProxy.sol";
 
 contract BOBPoolMigration is Script, StdCheats {
     ZkBobPoolBOB pool = ZkBobPoolBOB(0x72e6B59D4a90ab232e55D4BB7ed2dD17494D62fB);
@@ -34,7 +33,7 @@ contract BOBPoolMigration is Script, StdCheats {
         IZkBobDirectDepositQueue queue_proxy = pool.direct_deposit_queue();
 
         vm.startPrank(deployer);
-        ZkBobPoolUSDC poolImpl = new ZkBobPoolUSDC(
+        ZkBobPoolUSDCMigrated poolImpl = new ZkBobPoolUSDCMigrated(
             pool_id, usdc_addr,
             transferVerifier, treeVerifier, batchDepositVerifier,
             address(queue_proxy)
@@ -140,19 +139,21 @@ contract BOBPoolMigration is Script, StdCheats {
         // logic.
         address usdc_impl = deployCode("UChildAdministrableERC20.sol:UChildAdministrableERC20");
         bytes memory code = usdc_impl.code;
-        vm.etch(IERCProxy(usdc_addr).implementation(), code);
+        vm.etch(EIP1967Proxy(payable(usdc_addr)).implementation(), code);
     }
 
     function run() external {
-        uint256 bobToUSDCshift = 10 ** (IERC20Metadata(bob_addr).decimals() - IERC20Metadata(usdc_addr).decimals());
+        if (block.number != 44_632_406) {
+            return;
+        }
 
-        // Assumed to be run on fork with the head on 44_632_406
+        uint256 bobToUSDCshift = 10 ** (IERC20Metadata(bob_addr).decimals() - IERC20Metadata(usdc_addr).decimals());
 
         VerificationValues memory prev = getVerificationValues();
 
         migrate();
 
-        require(pool.denominator() == (1 << 255) | 1000, 'Incorrect denominator');
+        require(pool.denominator() == (1 << 255) | 1000, "Incorrect denominator");
 
         uint256 prev_balance = IERC20(usdc_addr).balanceOf(address(pool));
         makeWithdrawal();
