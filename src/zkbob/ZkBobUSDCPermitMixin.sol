@@ -15,7 +15,7 @@ abstract contract ZkBobUSDCPermitMixin is ZkBobPool {
         IUSDCPermit(token).transferWithAuthorization(
             _user,
             address(this),
-            poolToToken(uint256(_tokenAmount), TOKEN_DENOMINATOR),
+            uint256(_tokenAmount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR,
             0,
             _memo_permit_deadline(),
             bytes32(_nullifier),

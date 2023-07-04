@@ -12,19 +12,12 @@ import "../interfaces/IZkBobDirectDepositQueue.sol";
 import "../interfaces/IZkBobPool.sol";
 import "../utils/Ownable.sol";
 import "../proxy/EIP1967Admin.sol";
-import "./utils/DecimalAdjustment.sol";
 
 /**
  * @title ZkBobDirectDepositQueue
  * Queue for zkBob direct deposits.
  */
-contract ZkBobDirectDepositQueue is
-    IZkBobDirectDeposits,
-    IZkBobDirectDepositQueue,
-    EIP1967Admin,
-    Ownable,
-    DecimalAdjustment
-{
+contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQueue, EIP1967Admin, Ownable {
     using SafeERC20 for IERC20;
 
     uint256 internal constant R = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
@@ -32,6 +25,7 @@ contract ZkBobDirectDepositQueue is
     bytes4 internal constant MESSAGE_PREFIX_DIRECT_DEPOSIT_V1 = 0x00000001;
 
     uint256 internal immutable TOKEN_DENOMINATOR;
+    uint256 internal constant TOKEN_NUMERATOR = 1000;
 
     address public immutable token;
     uint256 public immutable pool_id;
@@ -60,6 +54,7 @@ contract ZkBobDirectDepositQueue is
 
     constructor(address _pool, address _token, uint256 _denominator) {
         require(Address.isContract(_token), "ZkBobDirectDepositQueue: not a contract");
+        require(TOKEN_NUMERATOR == 1 || _denominator == 1, "ZkBobDirectDepositQueue: incorrect denominator");
         pool = _pool;
         token = _token;
         TOKEN_DENOMINATOR = _denominator;
@@ -162,7 +157,7 @@ contract ZkBobDirectDepositQueue is
         // amount of tokens to transfer must be calculated as
         // (total + totalFee) * D, where
         //   D = 10 ** (token.decimals() - 9)
-        IERC20(token).safeTransfer(msg.sender, poolToToken(total + totalFee, TOKEN_DENOMINATOR));
+        IERC20(token).safeTransfer(msg.sender, (total + totalFee) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR);
 
         emit CompleteDirectDepositBatch(_indices);
     }
@@ -261,7 +256,7 @@ contract ZkBobDirectDepositQueue is
         // of BOB->USDC pool depositAmount must be calculated as
         // _amount / D, where
         //   D = 10 ** (token.decimals() - 9)
-        uint64 depositAmount = tokenToPool(_amount, TOKEN_DENOMINATOR);
+        uint64 depositAmount = uint64(_amount / TOKEN_DENOMINATOR * TOKEN_NUMERATOR);
         require(depositAmount > fee, "ZkBobDirectDepositQueue: direct deposit amount is too low");
         unchecked {
             depositAmount -= fee;

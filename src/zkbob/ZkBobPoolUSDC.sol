@@ -26,7 +26,7 @@ contract ZkBobPoolUSDC is ZkBobPool, ZkBobTokenSellerMixin, ZkBobUSDCPermitMixin
             _tree_verifier,
             _batch_deposit_verifier,
             _direct_deposit_queue,
-            1_000 | 0x8000000000000000000000000000000000000000000000000000000000000000,
+            1,
             1_000_000_000
         )
     {}

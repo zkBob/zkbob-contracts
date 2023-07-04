@@ -21,7 +21,6 @@ import "../interfaces/IZkBobPool.sol";
 import "../interfaces/IBobVault.sol";
 import "./utils/Parameters.sol";
 import "./utils/ZkBobAccounting.sol";
-import "./utils/DecimalAdjustment.sol";
 import "../utils/Ownable.sol";
 import "../proxy/EIP1967Admin.sol";
 
@@ -29,13 +28,14 @@ import "../proxy/EIP1967Admin.sol";
  * @title ZkBobPool
  * Shielded transactions pool
  */
-abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccounting, DecimalAdjustment {
+abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ZkBobAccounting {
     using SafeERC20 for IERC20;
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
 
     uint256 internal immutable TOKEN_DENOMINATOR;
+    uint256 internal constant TOKEN_NUMERATOR = 1000;
 
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;
@@ -75,6 +75,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         require(Address.isContract(address(_tree_verifier)), "ZkBobPool: not a contract");
         require(Address.isContract(address(_batch_deposit_verifier)), "ZkBobPool: not a contract");
         require(Address.isContract(_direct_deposit_queue), "ZkBobPool: not a contract");
+        require(TOKEN_NUMERATOR == 1 || _denominator == 1, "ZkBobPool: incorrect denominator");
         pool_id = __pool_id;
         token = _token;
         transfer_verifier = _transfer_verifier;
@@ -125,13 +126,13 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         // no need to adjust these calculations involving TOKEN_DENOMINATOR
         _setLimits(
             0,
-            tokenToPool(_tvlCap, TOKEN_DENOMINATOR),
-            tokenToPool(_dailyDepositCap, TOKEN_DENOMINATOR),
-            tokenToPool(_dailyWithdrawalCap, TOKEN_DENOMINATOR),
-            tokenToPool(_dailyUserDepositCap, TOKEN_DENOMINATOR),
-            tokenToPool(_depositCap, TOKEN_DENOMINATOR),
-            tokenToPool(_dailyUserDirectDepositCap, TOKEN_DENOMINATOR),
-            tokenToPool(_directDepositCap, TOKEN_DENOMINATOR)
+            _tvlCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyWithdrawalCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyUserDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _depositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyUserDirectDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _directDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR
         );
     }
 
@@ -151,7 +152,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
      * 1e18 BOB units = 1e9 zkBOB units.
      */
     function denominator() external view returns (uint256) {
-        return TOKEN_DENOMINATOR;
+        return TOKEN_NUMERATOR == 1 ? TOKEN_DENOMINATOR : (1 << 255) | TOKEN_NUMERATOR;
     }
 
     /**
@@ -246,7 +247,9 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
             // amount of tokens to transfer must be calculated as
             // token_amount * D, where
             //   D = 10 ** (token.decimals() - 9)
-            IERC20(token).safeTransferFrom(user, address(this), poolToToken(uint256(token_amount), TOKEN_DENOMINATOR));
+            IERC20(token).safeTransferFrom(
+                user, address(this), uint256(token_amount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR
+            );
         } else if (txType == 1) {
             // Transfer
             require(token_amount == 0 && energy_amount == 0, "ZkBobPool: incorrect transfer amounts");
@@ -258,8 +261,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
             // amounts of tokens to transfer must be calculated as
             // _memo_native_amount() * D and -token_amount * D, where
             //   D = 10 ** (token.decimals() - 9)
-            uint256 native_amount = poolToToken(_memo_native_amount(), TOKEN_DENOMINATOR);
-            uint256 withdraw_amount = poolToToken(uint256(-token_amount), TOKEN_DENOMINATOR);
+            uint256 native_amount = _memo_native_amount() * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
+            uint256 withdraw_amount = uint256(-token_amount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
 
             if (native_amount > 0) {
                 withdraw_amount -= _withdrawNative(user, native_amount);
@@ -359,7 +362,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         // amount of tokens to transfer must be calculated as
         // accumulatedFee[_operator] * D, where
         //   D = 10 ** (token.decimals() - 9)
-        uint256 fee = poolToToken(accumulatedFee[_operator], TOKEN_DENOMINATOR);
+        uint256 fee = accumulatedFee[_operator] * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
         require(fee > 0, "ZkBobPool: no fee to withdraw");
         IERC20(token).safeTransfer(_to, fee);
         accumulatedFee[_operator] = 0;
@@ -393,13 +396,13 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
     {
         _setLimits(
             _tier,
-            tokenToPool(_tvlCap, TOKEN_DENOMINATOR),
-            tokenToPool(_dailyDepositCap, TOKEN_DENOMINATOR),
-            tokenToPool(_dailyWithdrawalCap, TOKEN_DENOMINATOR),
-            tokenToPool(_dailyUserDepositCap, TOKEN_DENOMINATOR),
-            tokenToPool(_depositCap, TOKEN_DENOMINATOR),
-            tokenToPool(_dailyUserDirectDepositCap, TOKEN_DENOMINATOR),
-            tokenToPool(_directDepositCap, TOKEN_DENOMINATOR)
+            _tvlCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyWithdrawalCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyUserDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _depositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyUserDirectDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _directDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR
         );
     }
 

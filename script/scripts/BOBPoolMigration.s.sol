@@ -103,10 +103,7 @@ contract BOBPoolMigration is Script, StdCheats {
         vm.stopPrank();
     }
 
-    function getVerificationValues()
-        internal
-        returns (VerificationValues memory)
-    {
+    function getVerificationValues() internal returns (VerificationValues memory) {
         uint256 snapshot = vm.snapshot();
 
         uint256 prev_balance = IERC20(bob_addr).balanceOf(address(pool));
@@ -133,7 +130,6 @@ contract BOBPoolMigration is Script, StdCheats {
             fees: prev_fees,
             limits: limits
         });
-
     }
 
     function fakeUSDC() internal {
@@ -155,6 +151,8 @@ contract BOBPoolMigration is Script, StdCheats {
         VerificationValues memory prev = getVerificationValues();
 
         migrate();
+
+        require(pool.denominator() == (1 << 255) | 1000, 'Incorrect denominator');
 
         uint256 prev_balance = IERC20(usdc_addr).balanceOf(address(pool));
         makeWithdrawal();
@@ -182,7 +180,10 @@ contract BOBPoolMigration is Script, StdCheats {
         require(limits.dailyWithdrawalCap == prev.limits.dailyWithdrawalCap, "Incorrect dailyWithdrawalCap limit");
         require(limits.dailyUserDepositCap == prev.limits.dailyUserDepositCap, "Incorrect dailyUserDepositCap limit");
         require(limits.depositCap == prev.limits.depositCap, "Incorrect depositCap limit");
-        require(limits.dailyUserDirectDepositCap == prev.limits.dailyUserDirectDepositCap, "Incorrect dailyUserDirectDepositCap limit");
+        require(
+            limits.dailyUserDirectDepositCap == prev.limits.dailyUserDirectDepositCap,
+            "Incorrect dailyUserDirectDepositCap limit"
+        );
         require(limits.directDepositCap == prev.limits.directDepositCap, "Incorrect directDepositCap limit");
     }
 }
