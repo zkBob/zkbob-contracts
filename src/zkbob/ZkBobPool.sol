@@ -237,12 +237,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         int256 token_amount = transfer_token_delta + int256(fee);
         int256 energy_amount = _transfer_energy_amount();
 
-        require(
-            token_amount
-                == (token_amount * int256(TOKEN_DENOMINATOR) / int256(TOKEN_NUMERATOR)) / int256(TOKEN_DENOMINATOR)
-                    * int256(TOKEN_NUMERATOR),
-            "ZkBobPool: incorrect token amount"
-        );
+        require(token_amount % int256(TOKEN_NUMERATOR) == 0, "ZkBobPool: incorrect token amount");
 
         if (txType == 0) {
             // Deposit
