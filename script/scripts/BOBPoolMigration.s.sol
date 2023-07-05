@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 
 import "forge-std/Script.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
+import "forge-std/Vm.sol";
 import "./Env.s.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -11,10 +12,12 @@ import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "../../src/zkbob/ZkBobPoolUSDCMigrated.sol";
 import "../../src/zkbob/utils/ZkBobAccounting.sol";
+import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
 import "../../src/utils/UniswapV3Seller.sol";
 
 contract BOBPoolMigration is Script, StdCheats {
     ZkBobPoolBOB pool = ZkBobPoolBOB(0x72e6B59D4a90ab232e55D4BB7ed2dD17494D62fB);
+    ZkBobDirectDepositQueue queue_proxy = ZkBobDirectDepositQueue(0x668c5286eAD26fAC5fa944887F9D2F20f7DDF289);
     address bob_addr = address(0xB0B195aEFA3650A6908f15CdaC7D92F8a5791B0B);
     address usdc_addr = address(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
     address relayer_addr = address(0xc2c4AD59B78F4A0aFD0CDB8133E640Db08Fa5b90);
@@ -23,6 +26,7 @@ contract BOBPoolMigration is Script, StdCheats {
         uint256 withdrawalDiff;
         uint256 depositDiff;
         uint256 fees;
+        uint256 ddIn;
         ZkBobAccounting.Limits limits;
     }
 
@@ -31,7 +35,7 @@ contract BOBPoolMigration is Script, StdCheats {
         ITreeVerifier treeVerifier = pool.tree_verifier();
         IBatchDepositVerifier batchDepositVerifier = pool.batch_deposit_verifier();
         uint256 pool_id = pool.pool_id();
-        IZkBobDirectDepositQueue queue_proxy = pool.direct_deposit_queue();
+        require(queue_proxy == pool.direct_deposit_queue(), "Incorrect Direct Depoist queue proxy");
 
         vm.startPrank(deployer);
         ZkBobPoolUSDCMigrated poolImpl = new ZkBobPoolUSDCMigrated(
@@ -40,6 +44,7 @@ contract BOBPoolMigration is Script, StdCheats {
             address(queue_proxy)
         );
         UniswapV3Seller seller = new UniswapV3Seller(uniV3Router, uniV3Quoter, usdc_addr, 500, address(0), 0);
+        ZkBobDirectDepositQueue queueImpl = new ZkBobDirectDepositQueue(address(pool), usdc_addr, 1);
         vm.stopPrank();
 
         bytes memory migrationData = abi.encodePacked(poolImpl.migrationToUSDC.selector);
@@ -48,6 +53,7 @@ contract BOBPoolMigration is Script, StdCheats {
         IERC20(usdc_addr).approve(address(pool), type(uint256).max);
         EIP1967Proxy(payable(address(pool))).upgradeToAndCall(address(poolImpl), migrationData);
         IERC20(usdc_addr).approve(address(pool), 0);
+        EIP1967Proxy(payable(address(queue_proxy))).upgradeTo(address(queueImpl));
         pool.setTokenSeller(address(seller));
         vm.stopPrank();
     }
@@ -91,6 +97,32 @@ contract BOBPoolMigration is Script, StdCheats {
         vm.stopPrank();
     }
 
+    function makeDirectDeposit(bool migrated) internal returns(uint64 retval) {
+        // fork block: 44_681_944
+        // tx: 0x75503777b8ed6e5c533fef1f48f9fa8f1164961a4cca2ad64c23e05f73db3fe2
+        address actor = address(0x39F0bD56c1439a22Ee90b4972c16b7868D161981);
+        uint256 amount;
+        address token_addr;
+        string memory zk_addr = "HEicAjqEQpVwTULiWzBhhsW3vUmbyWxxqaHes6Dz1PSik3N1jWocg3qZbH43Qxc";
+        if (migrated) {
+            amount = 10_000_000;
+            token_addr = usdc_addr;
+        } else {
+            amount = 10_000_000_000_000_000_000;
+            token_addr = bob_addr;
+        }
+        if (IERC20(token_addr).balanceOf(actor) < amount) {
+            deal(token_addr, actor, amount);
+        }
+        vm.startPrank(actor);
+        IERC20(token_addr).approve(address(queue_proxy), amount);
+        vm.recordLogs();
+        queue_proxy.directDeposit(actor, amount, zk_addr);
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        (, , , retval) = abi.decode(entries[2].data, (address, bytes10, bytes32, uint64));
+        vm.stopPrank();
+    }
+
     function setLimits(address user, uint256 denominator) internal {
         vm.startPrank(owner);
         pool.setLimits({
@@ -111,6 +143,8 @@ contract BOBPoolMigration is Script, StdCheats {
 
     function getVerificationValues() internal returns (VerificationValues memory) {
         uint256 snapshot = vm.snapshot();
+
+        uint256 prev_dd_in = uint256(makeDirectDeposit(false));
 
         uint256 prev_balance = IERC20(bob_addr).balanceOf(address(pool));
         makeWithdrawal();
@@ -134,6 +168,7 @@ contract BOBPoolMigration is Script, StdCheats {
             withdrawalDiff: prev_withdrawal_diff,
             depositDiff: prev_deposit_diff,
             fees: prev_fees,
+            ddIn: prev_dd_in,
             limits: limits
         });
     }
@@ -161,6 +196,12 @@ contract BOBPoolMigration is Script, StdCheats {
         migrate();
 
         require(pool.denominator() == (1 << 255) | 1000, "Incorrect denominator");
+
+        uint256 dd_in = uint256(makeDirectDeposit(true));
+        require(
+            dd_in == prev.ddIn,
+            "Input DD value does not match"
+        );
 
         uint256 prev_balance = IERC20(usdc_addr).balanceOf(address(pool));
         makeWithdrawal();
