@@ -23,12 +23,13 @@ import "./utils/Parameters.sol";
 import "../utils/Ownable.sol";
 import "../proxy/EIP1967Admin.sol";
 import "../interfaces/IEnergyRedeemer.sol";
+import "../utils/ExternalSload.sol";
 
 /**
  * @title ZkBobPool
  * Shielded transactions pool
  */
-abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters {
+abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ExternalSload {
     using SafeERC20 for IERC20;
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
