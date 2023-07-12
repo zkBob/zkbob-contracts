@@ -6,6 +6,7 @@ on:
 
 env:
   FOUNDRY_PROFILE: ci
+  FOUNDRY_VERSION: v1.0.0
   FORK_RPC_URL_MAINNET: ${{ secrets.FORK_RPC_URL_MAINNET }}
   FORK_RPC_URL_OPTIMISM: ${{ secrets.FORK_RPC_URL_OPTIMISM }}
   FORK_RPC_URL_POLYGON: ${{ secrets.FORK_RPC_URL_POLYGON }}
@@ -22,7 +23,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: ${{ env.FOUNDRY_VERSION }}
         id: init
 
       - name: Run Forge fmt src
@@ -58,7 +59,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: ${{ env.FOUNDRY_VERSION }}
 
       - name: Run Forge build
         run: |
@@ -86,7 +87,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: ${{ env.FOUNDRY_VERSION }}
 
       - name: Run Forge build
         run: |

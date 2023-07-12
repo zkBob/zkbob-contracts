@@ -13,23 +13,28 @@ Any necessary changes to those parameters should be made there, prior to executi
 
 ## Running scripts
 
-###  Deploy BobToken
-This command will simulate deployment of the token contract in the local fork.
+###  Deploy ZkBobPool
+This command will simulate deployment of the zkBob pool contract in the local fork.
 It will also check any post-deployment constraints specified in the script.
 ```shell
-./script/deploy.sh ./script/scripts/BobToken.s.sol
+./script/deploy.sh ./script/scripts/ZkBobPool.s.sol
 ```
 If deployment simulation succeeded, you will see the total gas used, expected total gas payment.
 Detailed list of all simulated transactions can be found in the printed path at `./broadcast` directory.
 
 If everything looks good, you can re-run the same command with the `--broadcast` flag, this will eventually send transactions on-chain.
 ```shell
-./script/deploy.sh ./script/scripts/BobToken.s.sol --broadcast 
+./script/deploy.sh ./script/scripts/ZkBobPool.s.sol --broadcast 
 ```
 
 When deploying to public chain, contracts may be automatically verified in Etherscan, add `--verify` flag for that.
 ```shell
-./script/deploy.sh ./script/scripts/BobToken.s.sol --broadcast --verify 
+./script/deploy.sh ./script/scripts/ZkBobPool.s.sol --broadcast --verify 
+```
+
+After deploying and verifying contracts in Etherscan, it's also suggested to verify them in Sourcify and Blockscout:
+```shell
+./script/deploy.sh ./script/scripts/ZkBobPool.s.sol --resume --verify --verifier sourcify
 ```
 
 You will see the deployment status, transaction hashes and their receipts in the `./broadcast` directory.
