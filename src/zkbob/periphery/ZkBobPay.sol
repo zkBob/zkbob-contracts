@@ -7,7 +7,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import "../../interfaces/IZkBobDirectDeposits.sol";
 import "../../interfaces/IERC677.sol";
 import "../../interfaces/IERC20Permit.sol";
-import "../../interfaces/IPolygonPermit.sol";
+import "../../interfaces/IUSDCPermit.sol";
 import "../../interfaces/IPermit2.sol";
 
 /**
@@ -16,6 +16,7 @@ import "../../interfaces/IPermit2.sol";
 contract ZkBobPay {
     using SafeERC20 for IERC20;
 
+    event UpdateFeeReceiver(address receiver);
     event Pay(uint256 indexed id, address indexed sender, bytes receiver, uint256 amount, address inToken, bytes note);
 
     error InvalidToken();
@@ -28,7 +29,7 @@ contract ZkBobPay {
     IZkBobDirectDeposits public immutable queue;
     IPermit2 public immutable permit2;
     address public immutable oneInchRouter;
-    address public immutable feeReceiver;
+    address public feeReceiver;
 
     constructor(address _token, address _queue, address _permit2, address _oneInchRouter, address _feeReceiver) {
         token = _token;
@@ -36,18 +37,33 @@ contract ZkBobPay {
         permit2 = IPermit2(_permit2);
         oneInchRouter = _oneInchRouter;
         feeReceiver = _feeReceiver;
+
+        IERC20(token).approve(_queue, type(uint256).max);
     }
 
     function onTokenTransfer(address _from, uint256 _amount, bytes memory _data) external returns (bool) {
+        if (msg.sender != token) {
+            revert Unauthorized();
+        }
+
         (bytes memory zkAddress, bytes memory note) = abi.decode(_data, (bytes, bytes));
-        uint256 id = queue.directDepositNonce();
-        IERC677(token).transferAndCall(address(queue), _amount, abi.encode(_from, zkAddress));
+        uint256 id = queue.directDeposit(_from, _amount, zkAddress);
 
         emit Pay(id, _from, zkAddress, _amount, address(token), note);
 
         return true;
     }
 
+    /**
+     * @dev Makes a payment via zkBob Direct Deposit interface.
+     * @param _zkAddress receiver zk address in one of the supported formats.
+     * @param _inToken input token. Can be different from zkBob pool token. address(0) for native coin.
+     * @param _inAmount input token amount.
+     * @param _depositAmount zkBob deposit amount, inclusive of direct deposit fee.
+     * @param _permit input token approval permit, in one of the supported formats.
+     * @param _oneInchData 1inch swap calldata.
+     * @param _note optional payment-specific note for the receiver.
+     */
     function pay(
         bytes memory _zkAddress,
         address _inToken,
@@ -64,24 +80,32 @@ contract ZkBobPay {
             revert InvalidToken();
         }
 
-        if (msg.value == 0) {
+        if (_inToken != address(0)) {
             _transferFromByPermit(_inToken, msg.sender, _inAmount, _permit);
-
-            IERC20(_inToken).approve(oneInchRouter, _inAmount);
         }
 
-        uint256 balance = IERC20(token).balanceOf(address(this));
-        (bool status,) = oneInchRouter.call{value: msg.value}(_oneInchData);
-        if (!status) {
-            revert SwapFailed();
+        if (_inToken == token) {
+            if (_inAmount < _depositAmount) {
+                revert InsufficientAmount();
+            }
+        } else {
+            uint256 balance = IERC20(token).balanceOf(address(this));
+
+            if (_inToken != address(0)) {
+                IERC20(_inToken).approve(oneInchRouter, _inAmount);
+            }
+
+            (bool status,) = oneInchRouter.call{value: msg.value}(_oneInchData);
+            if (!status) {
+                revert SwapFailed();
+            }
+
+            if (IERC20(token).balanceOf(address(this)) < balance + _depositAmount) {
+                revert InsufficientAmount();
+            }
         }
 
-        if (IERC20(token).balanceOf(address(this)) < balance + _depositAmount) {
-            revert InsufficientAmount();
-        }
-
-        uint256 id = queue.directDepositNonce();
-        IERC677(token).transferAndCall(address(queue), _depositAmount, abi.encode(msg.sender, _zkAddress));
+        uint256 id = queue.directDeposit(msg.sender, _depositAmount, _zkAddress);
 
         emit Pay(id, msg.sender, _zkAddress, _depositAmount, _inToken, _note);
     }
@@ -100,6 +124,27 @@ contract ZkBobPay {
         }
     }
 
+    function updateFeeReceiver(address _receiver) external {
+        if (msg.sender != feeReceiver) {
+            revert Unauthorized();
+        }
+
+        feeReceiver = _receiver;
+
+        emit UpdateFeeReceiver(_receiver);
+    }
+
+    /**
+     * @dev Internal function for input token transfer from user account, using a permit.
+     * @param _token token address to transfer from the user account.
+     * @param _from user address.
+     * @param _amount amount of tokens to transfer.
+     * @param _permit optional permit data.
+     * Empty for regular IERC20.transferFrom.
+     * abi.encode(0, deadline, r, (v << 255) | s) for EIP2612 permit.
+     * abi.encode(nonce, deadline, r, (v << 255) | s) for USDC auth-like permit, with nonce < 1<<248.
+     * abi.encode(nonce, deadline, r, (v << 255) | s) for Permit2-like permit, with 1<<248 <= nonce < 2 * 1<<248.
+     */
     function _transferFromByPermit(address _token, address _from, uint256 _amount, bytes memory _permit) internal {
         if (_permit.length == 0) {
             IERC20(_token).safeTransferFrom(_from, address(this), _amount);
@@ -113,7 +158,7 @@ contract ZkBobPay {
                 IERC20Permit(_token).permit(_from, address(this), _amount, deadline, v, r, s);
                 IERC20(_token).safeTransferFrom(_from, address(this), _amount);
             } else if (nonce < 2 ** 248) {
-                IPolygonPermit(_token).transferWithAuthorization(
+                IUSDCPermit(_token).transferWithAuthorization(
                     _from, address(this), _amount, 0, deadline, bytes32(nonce), v, r, s
                 );
             } else if (nonce < 2 ** 249) {
