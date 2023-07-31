@@ -112,6 +112,15 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     }
 
     /**
+     * @dev Initializes pool index after contract upgrade.
+     * @param _poolIndex current pool index.
+     */
+    function initializePoolIndex(uint96 _poolIndex) external {
+        require(pool_index == 0 && roots[_poolIndex] > 0 && roots[_poolIndex + 128] == 0, "ZkBobPool: invalid index");
+        pool_index = _poolIndex;
+    }
+
+    /**
      * @dev Updates used operator manager contract.
      * Callable only by the contract owner / proxy admin.
      * @param _operatorManager new operator manager implementation.
