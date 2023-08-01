@@ -5,12 +5,13 @@ pragma solidity 0.8.15;
 import "./ZkBobPool.sol";
 import "./ZkBobWETHMixin.sol";
 import "./ZkBobPermit2Mixin.sol";
+import "./ZkBobCompoundingMixin.sol";
 
 /**
  * @title ZkBobPoolETH
  * Shielded transactions pool for native and wrapped native tokens.
  */
-contract ZkBobPoolETH is ZkBobPool, ZkBobWETHMixin, ZkBobPermit2Mixin {
+contract ZkBobPoolETH is ZkBobPool, ZkBobWETHMixin, ZkBobPermit2Mixin, ZkBobCompoundingMixin {
     constructor(
         uint256 __pool_id,
         address _token,

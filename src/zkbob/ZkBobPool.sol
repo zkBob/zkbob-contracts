@@ -3,6 +3,7 @@
 pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -169,6 +170,13 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     function _withdrawNative(address _user, uint256 _tokenAmount) internal virtual returns (uint256);
 
     /**
+     * @dev Withdraws given amount of tokens to the provided address.
+     * @param _user token receiver address.
+     * @param _tokenAmount amount to tokens to withdraw.
+     */
+    function _withdrawToken(address _user, uint256 _tokenAmount) internal virtual;
+
+    /**
      * @dev Performs token transfer using a signed permit signature.
      * @param _user token depositor address, should correspond to the signature author.
      * @param _nullifier nullifier and permit signature salt to avoid transaction data manipulation.
@@ -248,7 +256,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             }
 
             if (withdraw_amount > 0) {
-                IERC20(token).safeTransfer(user, withdraw_amount);
+                _withdrawToken(user, withdraw_amount);
             }
 
             if (energy_amount < 0) {
@@ -343,7 +351,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         );
         uint256 fee = accumulatedFee[_operator] * TOKEN_DENOMINATOR;
         require(fee > 0, "ZkBobPool: no fee to withdraw");
-        IERC20(token).safeTransfer(_to, fee);
+        _withdrawToken(_to, fee);
         accumulatedFee[_operator] = 0;
         emit WithdrawFee(_operator, fee);
     }
