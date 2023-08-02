@@ -32,5 +32,4 @@ contract ZkBobPoolUSDCMigrated is ZkBobPool, ZkBobTokenSellerMixin, ZkBobUSDCPer
             1_000_000_000
         )
     {}
-    }
 }
