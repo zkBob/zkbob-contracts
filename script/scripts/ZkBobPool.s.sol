@@ -96,6 +96,8 @@ contract DeployZkBobPool is Script {
             new MutableOperatorManager(zkBobRelayer, zkBobRelayerFeeReceiver, zkBobRelayerURL);
         pool.setOperatorManager(operatorManager);
         queue.setOperatorManager(operatorManager);
+        queue.setDirectDepositFee(uint64(zkBobDirectDepositFee));
+        queue.setDirectDepositTimeout(uint40(zkBobDirectDepositTimeout));
 
         if (owner != address(0)) {
             pool.transferOwnership(owner);
