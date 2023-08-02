@@ -18,7 +18,6 @@ import "../interfaces/IERC20Permit.sol";
 import "../interfaces/ITokenSeller.sol";
 import "../interfaces/IZkBobDirectDepositQueue.sol";
 import "../interfaces/IZkBobPool.sol";
-import "../interfaces/IBobVault.sol";
 import "./utils/Parameters.sol";
 import "./utils/ZkBobAccounting.sol";
 import "../utils/Ownable.sol";
