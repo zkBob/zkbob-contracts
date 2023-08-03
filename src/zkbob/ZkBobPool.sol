@@ -34,6 +34,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
 
     uint256 internal immutable TOKEN_DENOMINATOR;
+    uint256 internal constant TOKEN_NUMERATOR = 1;
 
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;
@@ -73,6 +74,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         require(Address.isContract(address(_tree_verifier)), "ZkBobPool: not a contract");
         require(Address.isContract(address(_batch_deposit_verifier)), "ZkBobPool: not a contract");
         require(Address.isContract(_direct_deposit_queue), "ZkBobPool: not a contract");
+        require(TOKEN_NUMERATOR == 1 || _denominator == 1, "ZkBobPool: incorrect denominator");
         pool_id = __pool_id;
         token = _token;
         transfer_verifier = _transfer_verifier;
@@ -121,13 +123,13 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         roots[0] = _root;
         _setLimits(
             0,
-            _tvlCap / TOKEN_DENOMINATOR,
-            _dailyDepositCap / TOKEN_DENOMINATOR,
-            _dailyWithdrawalCap / TOKEN_DENOMINATOR,
-            _dailyUserDepositCap / TOKEN_DENOMINATOR,
-            _depositCap / TOKEN_DENOMINATOR,
-            _dailyUserDirectDepositCap / TOKEN_DENOMINATOR,
-            _directDepositCap / TOKEN_DENOMINATOR
+            _tvlCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyWithdrawalCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyUserDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _depositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyUserDirectDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _directDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR
         );
     }
 
@@ -143,11 +145,10 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
     }
 
     /**
-     * @dev Tells the denominator for converting BOB into zkBOB units.
-     * 1e18 BOB units = 1e9 zkBOB units.
+     * @dev Tells the denominator for converting pool token into zkBOB units.
      */
     function denominator() external view returns (uint256) {
-        return TOKEN_DENOMINATOR;
+        return TOKEN_NUMERATOR == 1 ? TOKEN_DENOMINATOR : (1 << 255) | TOKEN_NUMERATOR;
     }
 
     /**
@@ -235,10 +236,14 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         int256 token_amount = transfer_token_delta + int256(fee);
         int256 energy_amount = _transfer_energy_amount();
 
+        require(token_amount % int256(TOKEN_NUMERATOR) == 0, "ZkBobPool: incorrect token amount");
+
         if (txType == 0) {
             // Deposit
             require(transfer_token_delta > 0 && energy_amount == 0, "ZkBobPool: incorrect deposit amounts");
-            IERC20(token).safeTransferFrom(user, address(this), uint256(token_amount) * TOKEN_DENOMINATOR);
+            IERC20(token).safeTransferFrom(
+                user, address(this), uint256(token_amount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR
+            );
         } else if (txType == 1) {
             // Transfer
             require(token_amount == 0 && energy_amount == 0, "ZkBobPool: incorrect transfer amounts");
@@ -246,8 +251,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
             // Withdraw
             require(token_amount <= 0 && energy_amount <= 0, "ZkBobPool: incorrect withdraw amounts");
 
-            uint256 native_amount = _memo_native_amount() * TOKEN_DENOMINATOR;
-            uint256 withdraw_amount = uint256(-token_amount) * TOKEN_DENOMINATOR;
+            uint256 native_amount = _memo_native_amount() * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
+            uint256 withdraw_amount = uint256(-token_amount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
 
             if (native_amount > 0) {
                 withdraw_amount -= _withdrawNative(user, native_amount);
@@ -343,7 +348,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
             _operator == msg.sender || operatorManager.isOperatorFeeReceiver(_operator, msg.sender),
             "ZkBobPool: not authorized"
         );
-        uint256 fee = accumulatedFee[_operator] * TOKEN_DENOMINATOR;
+        uint256 fee = accumulatedFee[_operator] * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
         require(fee > 0, "ZkBobPool: no fee to withdraw");
         IERC20(token).safeTransfer(_to, fee);
         accumulatedFee[_operator] = 0;
@@ -377,13 +382,13 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
     {
         _setLimits(
             _tier,
-            _tvlCap / TOKEN_DENOMINATOR,
-            _dailyDepositCap / TOKEN_DENOMINATOR,
-            _dailyWithdrawalCap / TOKEN_DENOMINATOR,
-            _dailyUserDepositCap / TOKEN_DENOMINATOR,
-            _depositCap / TOKEN_DENOMINATOR,
-            _dailyUserDirectDepositCap / TOKEN_DENOMINATOR,
-            _directDepositCap / TOKEN_DENOMINATOR
+            _tvlCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyWithdrawalCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyUserDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _depositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _dailyUserDirectDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR,
+            _directDepositCap / TOKEN_DENOMINATOR * TOKEN_NUMERATOR
         );
     }
 
