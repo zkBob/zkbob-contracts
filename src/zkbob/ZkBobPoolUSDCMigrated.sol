@@ -9,7 +9,7 @@ import "./ZkBobUSDCPermitMixin.sol";
 /**
  * @title ZkBobPoolUSDCMigrated
  * Shielded transactions pool for USDC tokens supporting USDC transfer authorizations
- * It is intended to be deployed as implemenation of the pool for BOB tokens that is
+ * It is intended to be deployed as implementation of the pool for BOB tokens that is
  * why it supports the same nomination
  */
 contract ZkBobPoolUSDCMigrated is ZkBobPool, ZkBobTokenSellerMixin, ZkBobUSDCPermitMixin {
@@ -28,8 +28,7 @@ contract ZkBobPoolUSDCMigrated is ZkBobPool, ZkBobTokenSellerMixin, ZkBobUSDCPer
             _tree_verifier,
             _batch_deposit_verifier,
             _direct_deposit_queue,
-            1, // Make sure that TOKEN_NUMERATOR is set in 1000 in ZkBobPool and ZkBobDirectDepositQueue
-            1_000_000_000
+            1 // Make sure that TOKEN_NUMERATOR is set in 1000 in ZkBobPool and ZkBobDirectDepositQueue
         )
     {}
 }
