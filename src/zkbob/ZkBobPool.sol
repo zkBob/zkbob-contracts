@@ -168,13 +168,16 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         return pool_id;
     }
 
+    function _beforeWithdrawal(uint256 _tokenAmount) internal virtual returns (address, uint256);
+
     /**
      * @dev Converts given amount of tokens into native coins sent to the provided address.
+     * @param _token token address to unwrap native coins.
      * @param _user native coins receiver address.
      * @param _tokenAmount amount to tokens to convert.
      * @return actual converted amount, might be less than requested amount.
      */
-    function _withdrawNative(address _user, uint256 _tokenAmount) internal virtual returns (uint256);
+    function _withdrawNative(address _token, address _user, uint256 _tokenAmount) internal virtual returns (uint256);
 
     /**
      * @dev Performs token transfer using a signed permit signature.
@@ -254,12 +257,14 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
             uint256 native_amount = _memo_native_amount() * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
             uint256 withdraw_amount = uint256(-token_amount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
 
+            (address token_out, uint256 amount_out) = _beforeWithdrawal(withdraw_amount);
+
             if (native_amount > 0) {
-                withdraw_amount -= _withdrawNative(user, native_amount);
+                amount_out -= _withdrawNative(token_out, user, native_amount);
             }
 
-            if (withdraw_amount > 0) {
-                IERC20(token).safeTransfer(user, withdraw_amount);
+            if (amount_out > 0) {
+                IERC20(token_out).safeTransfer(user, amount_out);
             }
 
             // energy withdrawals are not yet implemented, any transaction with non-zero energy_amount will revert

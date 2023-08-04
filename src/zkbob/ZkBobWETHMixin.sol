@@ -9,11 +9,11 @@ import "./ZkBobPool.sol";
  */
 abstract contract ZkBobWETHMixin is ZkBobPool {
     // @inheritdoc ZkBobPool
-    function _withdrawNative(address _user, uint256 _tokenAmount) internal override returns (uint256) {
-        IWETH9(token).withdraw(_tokenAmount);
+    function _withdrawNative(address _token, address _user, uint256 _tokenAmount) internal override returns (uint256) {
+        IWETH9(_token).withdraw(_tokenAmount);
         if (!payable(_user).send(_tokenAmount)) {
-            IWETH9(token).deposit{value: _tokenAmount}();
-            IWETH9(token).transfer(_user, _tokenAmount);
+            IWETH9(_token).deposit{value: _tokenAmount}();
+            IWETH9(_token).transfer(_user, _tokenAmount);
         }
         return _tokenAmount;
     }

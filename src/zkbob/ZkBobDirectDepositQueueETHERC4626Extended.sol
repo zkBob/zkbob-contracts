@@ -11,34 +11,23 @@ import "../interfaces/IOperatorManager.sol";
 import "../interfaces/IZkBobDirectDepositsETH.sol";
 import "../interfaces/IZkBobDirectDepositQueue.sol";
 import "../interfaces/IZkBobPool.sol";
+import "../interfaces/IATokenVault.sol";
 import "../utils/Ownable.sol";
 import "../proxy/EIP1967Admin.sol";
-import "./ZkBobDirectDepositQueue.sol";
+import "./ZkBobDirectDepositQueueETH.sol";
 
 /**
- * @title ZkBobDirectDepositQueueETH
- * Queue for zkBob ETH direct deposits.
+ * @title ZkBobDirectDepositQueueETHERC4626Extended
+ * Queue for ETH direct deposits to ERC4626 based zkBob pool
  */
-contract ZkBobDirectDepositQueueETH is IZkBobDirectDepositsETH, ZkBobDirectDepositQueue {
+contract ZkBobDirectDepositQueueETHERC4626Extended is ZkBobDirectDepositQueueETH {
     constructor(
         address _pool,
         address _token,
         uint256 _denominator
     )
-        ZkBobDirectDepositQueue(_pool, _token, _denominator)
+        ZkBobDirectDepositQueueETH(_pool, _token, _denominator)
     {}
-
-    /// @inheritdoc IZkBobDirectDepositsETH
-    function directNativeDeposit(
-        address _fallbackUser,
-        string calldata _zkAddress
-    )
-        external
-        payable
-        returns (uint256)
-    {
-        return directNativeDeposit(_fallbackUser, bytes(_zkAddress));
-    }
 
     /// @inheritdoc IZkBobDirectDepositsETH
     function directNativeDeposit(
@@ -47,11 +36,14 @@ contract ZkBobDirectDepositQueueETH is IZkBobDirectDepositsETH, ZkBobDirectDepos
     )
         public
         payable
-        virtual
+        override
         returns (uint256)
     {
         uint256 amount = msg.value;
-        IWETH9(token).deposit{value: amount}();
-        return _recordDirectDeposit(msg.sender, _fallbackUser, amount, _rawZkAddress);
+        IWETH9 weth = IWETH9(IATokenVault(token).UNDERLYING());
+        weth.deposit{value: amount}();
+        IERC20(address(weth)).approve(token, amount);
+        uint256 shares = IATokenVault(token).deposit(amount, address(this));
+        return _recordDirectDeposit(msg.sender, _fallbackUser, shares, _rawZkAddress);
     }
 }

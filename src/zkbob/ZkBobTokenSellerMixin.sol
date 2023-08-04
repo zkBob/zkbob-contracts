@@ -25,10 +25,10 @@ abstract contract ZkBobTokenSellerMixin is ZkBobPool {
     }
 
     // @inheritdoc ZkBobPool
-    function _withdrawNative(address _user, uint256 _tokenAmount) internal override returns (uint256) {
+    function _withdrawNative(address _token, address _user, uint256 _tokenAmount) internal override returns (uint256) {
         ITokenSeller seller = tokenSeller;
         if (address(seller) != address(0)) {
-            IERC20(token).safeTransfer(address(seller), _tokenAmount);
+            IERC20(_token).safeTransfer(address(seller), _tokenAmount);
             (, uint256 refunded) = seller.sellForETH(_user, _tokenAmount);
             return _tokenAmount - refunded;
         }

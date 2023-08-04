@@ -3,22 +3,23 @@
 pragma solidity 0.8.15;
 
 import "./ZkBobPool.sol";
-import "./ZkBobDirectTokenOwnership.sol";
-import "./ZkBobTokenSellerMixin.sol";
-import "./ZkBobUSDCPermitMixin.sol";
+import "./ZkBobERC4626Extended.sol";
+import "./ZkBobWETHMixin.sol";
+import "./ZkBobPermit2Mixin.sol";
 
 /**
- * @title ZkBobPoolUSDC
- * Shielded transactions pool for USDC tokens supporting USDC transfer authorizations
+ * @title ZkBobPoolETHERC4625Extended
+ * Shielded transactions ERC4626 based pool for native and wrapped native tokens.
  */
-contract ZkBobPoolUSDC is ZkBobPool, ZkBobDirectTokenOwnership, ZkBobTokenSellerMixin, ZkBobUSDCPermitMixin {
+contract ZkBobPoolETHERC4625Extended is ZkBobPool, ZkBobERC4626Extended, ZkBobWETHMixin, ZkBobPermit2Mixin {
     constructor(
         uint256 __pool_id,
         address _token,
         ITransferVerifier _transfer_verifier,
         ITreeVerifier _tree_verifier,
         IBatchDepositVerifier _batch_deposit_verifier,
-        address _direct_deposit_queue
+        address _direct_deposit_queue,
+        address _permit2
     )
         ZkBobPool(
             __pool_id,
@@ -27,8 +28,9 @@ contract ZkBobPoolUSDC is ZkBobPool, ZkBobDirectTokenOwnership, ZkBobTokenSeller
             _tree_verifier,
             _batch_deposit_verifier,
             _direct_deposit_queue,
-            1,
-            1_000_000
+            1_000_000_000,
+            1_000_000_000
         )
+        ZkBobPermit2Mixin(_permit2)
     {}
 }
