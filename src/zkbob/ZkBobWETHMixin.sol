@@ -18,7 +18,11 @@ abstract contract ZkBobWETHMixin is ZkBobPool {
         return _tokenAmount;
     }
 
-    receive() external payable {
+    function checkOnReceivingETH() internal virtual {
         require(msg.sender == address(token), "Not a WETH withdrawal");
+    }
+
+    receive() external payable {
+        checkOnReceivingETH();
     }
 }
