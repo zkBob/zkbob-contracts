@@ -6,6 +6,7 @@ import "forge-std/Test.sol";
 import "@openzeppelin/contracts/mocks/ERC20Mock.sol";
 import {ERC4626Mock} from "@openzeppelin/contracts/mocks/ERC4626Mock.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {TransparentUpgradeableProxy as TUP} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import "@openzeppelin/contracts/token/ERC721/presets/ERC721PresetMinterPauserAutoId.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
 import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
@@ -30,6 +31,8 @@ import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "../../src/zkbob/ZkBobPoolETH.sol";
 import "../../src/infra/UniswapV3Seller.sol";
 import {EnergyRedeemer} from "../../src/infra/EnergyRedeemer.sol";
+import "@aave/aave-vault/src/ATokenVault.sol";
+
 
 abstract contract AbstractZkBobPoolTest is AbstractForkTest {
     address constant permit2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
@@ -60,6 +63,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
     uint256 denominator;
     uint256 precision;
     bool isCompounding;
+    address poolAddressesProvider;
 
     bytes constant zkAddress = "QsnTijXekjRm9hKcq5kLNPsa6P4HtMRrc3RxVx3jsLHeo2AiysYxVJP86mriHfN";
 
@@ -159,10 +163,22 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         deal(token, user3, 0);
 
         if (isCompounding) {
-            ERC4626Mock yieldVault = new ERC4626Mock(IERC20Metadata(token), "Wrapped BOB Compounding Token", "wBCT");
+            ATokenVault yieldVault = new ATokenVault(token, 4546, IPoolAddressesProvider(poolAddressesProvider));
+            deal(token, address(this), 1_000_000 ether / D);
+            address yieldProxyAddr = computeCreateAddress(address(this), vm.getNonce(address(this)));
+            IERC20(token).approve(yieldProxyAddr, type(uint256).max);
+            bytes memory initData = abi.encodeWithSelector(
+                ATokenVault.initialize.selector,
+                address(this),
+                0.2 ether, // 20%
+                "Wrapped BOB Yield Token",
+                "wBYT",
+                1_000_000 ether / D
+            );
+            TUP yieldProxy = new TUP(address(yieldVault), user2, initData);
             pool.updateYieldParams(
                 IZkBobPoolAdmin.YieldParams({
-                    yield: address(yieldVault),
+                    yield: address(yieldProxy),
                     maxInvestedAmount: 50_000 ether / D,
                     buffer: 5_000 ether / D,
                     dust: uint96(0.5 ether / D),
@@ -942,7 +958,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         // Keep buffer full after withdrawal if possible
         poolBalance = IERC20(token).balanceOf(address(pool));
         assertEq(poolBalance, 4_000 ether / D);
-        uint256 yieldBalance = IERC20(token).balanceOf(yieldAddress);
+        uint256 yieldBalance = IERC4626(yieldAddress).convertToAssets(IERC4626(yieldAddress).balanceOf(address(pool)));
         assertEq(yieldBalance, 500 ether / D);
     }
 
@@ -980,9 +996,10 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         vm.prank(user2);
         vm.expectRevert("ZkBobCompoundingPool: Claim is an operator-called method");
         uint256 claimed = pool.claim(0);
+        vm.warp(block.timestamp + 365 days);
 
         claimed = pool.claim(0);
-        assertEq(claimed, 5_000 ether / D);
+        assertGt(claimed, 0);
     }
 
     function _encodeDeposit(int256 _amount, uint256 _fee) internal returns (bytes memory) {
@@ -1244,17 +1261,20 @@ contract ZkBobPoolUSDCPolygonTest is AbstractZkBobPoolTest, AbstractPolygonForkT
 contract ZkBobPoolUSDCCompoundingPolygonTest is ZkBobPoolUSDCPolygonTest {
     constructor() {
         isCompounding = true;
+        poolAddressesProvider = address(0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb);
     }
 }
 
 contract ZkBobPoolDAICompoundingMainnetTest is ZkBobPoolDAIMainnetTest {
     constructor() {
         isCompounding = true;
+        poolAddressesProvider = address(0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e);
     }
 }
 
 contract ZkBobPoolETHCompoundingMainnetTest is ZkBobPoolETHMainnetTest {
     constructor() {
         isCompounding = true;
+        poolAddressesProvider = address(0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e);
     }
 }

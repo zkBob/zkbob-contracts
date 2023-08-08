@@ -11,7 +11,6 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
     using SafeERC20 for IERC20;
 
     uint256 public investedAssetsAmount;
-    uint256 public investedSharesAmount;
 
     struct YieldParams {
         // ERC4626 vault address (or address(0) if not set)
@@ -45,10 +44,10 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
             uint256 vaultAmount = investedAssetsAmount;
             if (vaultAmount >= remainder + buffer) {
                 investedAssetsAmount = vaultAmount - remainder - buffer;
-                investedSharesAmount -= yieldVault.withdraw(remainder + buffer, address(this), address(this));
+                yieldVault.withdraw(remainder + buffer, address(this), address(this));
             } else {
                 investedAssetsAmount = vaultAmount - remainder;
-                investedSharesAmount -= yieldVault.withdraw(remainder, address(this), address(this));
+                yieldVault.withdraw(remainder, address(this), address(this));
             }
         }
         IERC20(token).safeTransfer(_user, _tokenAmount);
@@ -119,11 +118,11 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
         }
         if (underlyingBalance > buffer) {
             investedAssetsAmount += balancesDiff;
-            investedSharesAmount += yieldVault.deposit(balancesDiff, address(this));
+            yieldVault.deposit(balancesDiff, address(this));
             emit Rebalance(0, balancesDiff);
         } else {
             investedAssetsAmount -= balancesDiff;
-            investedSharesAmount -= yieldVault.withdraw(balancesDiff, address(this), address(this));
+            yieldVault.withdraw(balancesDiff, address(this), address(this));
             emit Rebalance(balancesDiff, 0);
         }
     }
@@ -151,7 +150,7 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
         uint256 dust = params.dust;
         minClaimAmount = minClaimAmount > dust ? minClaimAmount : dust;
 
-        uint256 currentInvestedSharesAmount = investedSharesAmount;
+        uint256 currentInvestedSharesAmount = yieldVault.balanceOf(address(this));
 
         uint256 toClaimAmount = yieldVault.convertToAssets(currentInvestedSharesAmount) - investedAssetsAmount;
 
@@ -159,8 +158,7 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
             return 0;
         }
 
-        uint256 deltaShares = yieldVault.withdraw(toClaimAmount, address(this), address(this));
-        investedSharesAmount = currentInvestedSharesAmount - deltaShares;
+        yieldVault.withdraw(toClaimAmount, address(this), address(this));
 
         emit Claimed(token, address(yieldVault), toClaimAmount);
         return toClaimAmount;
