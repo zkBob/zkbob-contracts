@@ -652,31 +652,6 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         assertEq(accounting.getLimitsFor(user2).dailyWithdrawalCapUsage, 20_000 ether / D / denominator);
     }
 
-    function testEnergyRedemption() public {
-        deal(token, user1, 2_000_000 ether / D);
-
-        for (uint256 i = 0; i < 100; i++) {
-            bytes memory data1 = _encodePermitDeposit(int256(2_500 ether / D), 0.01 ether / D);
-            _transact(data1);
-
-            skip(6 hours + 1);
-        }
-
-        IERC20 rewardToken = IERC20(new ERC20Mock("Reward token", "RT", address(this), 1_000_000 ether));
-        IEnergyRedeemer redeemer = new EnergyRedeemer(address(pool), address(rewardToken), 1e16, 1e12);
-        rewardToken.transfer(address(redeemer), 1_000_000 ether);
-        pool.setEnergyRedeemer(redeemer);
-
-        // 1e18 energy ~= account balance of 100k BOB across 10k tx indices
-        bytes memory data2 = _encodeWithdrawal(user1, 0, 0, 1e18);
-        _transact(data2);
-
-        // max weekly tvl ~= 200k
-        // max weekly tx count ~= 28
-        // 1e18 energy * (1e16 * 1e12 / 1e18) / 2e5 / 28 ~= 1785e18 reward tokens
-        assertApproxEqAbs(rewardToken.balanceOf(user1), 1785 ether, 200 ether);
-    }
-
     function testRebalance() public {
         if (!isCompounding) {
             return;
@@ -1000,6 +975,32 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
 
         claimed = pool.claim(0);
         assertGt(claimed, 0);
+        assertEq(accounting.getLimitsFor(user2).dailyWithdrawalCapUsage, 20_000 ether / D / denominator);
+    }
+
+    function testEnergyRedemption() public {
+        deal(token, user1, 2_000_000 ether / D);
+
+        for (uint256 i = 0; i < 100; i++) {
+            bytes memory data1 = _encodePermitDeposit(int256(2_500 ether / D), 0.01 ether / D);
+            _transact(data1);
+
+            skip(6 hours + 1);
+        }
+
+        IERC20 rewardToken = IERC20(new ERC20Mock("Reward token", "RT", address(this), 1_000_000 ether));
+        IEnergyRedeemer redeemer = new EnergyRedeemer(address(pool), address(rewardToken), 1e16, 1e12);
+        rewardToken.transfer(address(redeemer), 1_000_000 ether);
+        pool.setEnergyRedeemer(redeemer);
+
+        // 1e18 energy ~= account balance of 100k BOB across 10k tx indices
+        bytes memory data2 = _encodeWithdrawal(user1, 0, 0, 1e18);
+        _transact(data2);
+
+        // max weekly tvl ~= 200k
+        // max weekly tx count ~= 28
+        // 1e18 energy * (1e16 * 1e12 / 1e18) / 2e5 / 28 ~= 1785e18 reward tokens
+        assertApproxEqAbs(rewardToken.balanceOf(user1), 1785 ether, 200 ether);
     }
 
     function _encodeDeposit(int256 _amount, uint256 _fee) internal returns (bytes memory) {

@@ -9,6 +9,7 @@ import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/utils/ZkBobAccounting.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPoolBOB.sol";
+import "../../src/zkbob/ZkBobPoolUSDC.sol";
 
 contract DummyDelegateCall {
     function delegate(address to, bytes calldata data) external {
@@ -30,6 +31,7 @@ contract Migrator {
         uint56 maxWeeklyAvgTvl = uint56(_load(dump, 25, 7));
         uint72 tvl = uint72(_load(dump, 55, 9));
 
+        ZkBobPool(_target).initializePoolIndex(txCount * 128);
         ZkBobPool(_target).setAccounting(IZkBobAccounting(_accounting));
         ZkBobAccounting(_accounting).initialize(txCount + 1, tvl, cumTvl, maxWeeklyTxCount, maxWeeklyAvgTvl);
         ZkBobAccounting(_accounting).setKycProvidersManager(IKycProvidersManager(kycManager));
@@ -53,15 +55,16 @@ contract Migrator {
 
 contract DeployZkBobPoolModules is Script, Test {
     function run() external {
-        ZkBobPoolBOB pool = ZkBobPoolBOB(address(zkBobPool));
+        ZkBobPoolUSDC pool = ZkBobPoolUSDC(address(zkBobPool));
         address owner = pool.owner();
         vm.etch(owner, type(DummyDelegateCall).runtimeCode);
 
         address tokenSeller = address(pool.tokenSeller());
+        uint256 poolIndex = uint256(pool.pool_index());
 
         vm.startBroadcast();
 
-        ZkBobPoolBOB impl = new ZkBobPoolBOB(
+        ZkBobPoolUSDC impl = new ZkBobPoolUSDC(
             pool.pool_id(), pool.token(), pool.transfer_verifier(), pool.tree_verifier(),
             pool.batch_deposit_verifier(), address(pool.direct_deposit_queue())
         );
@@ -78,5 +81,6 @@ contract DeployZkBobPoolModules is Script, Test {
         acc.slot1();
 
         assertEq(address(pool.tokenSeller()), tokenSeller);
+        assertEq(uint256(pool.pool_index()), poolIndex);
     }
 }

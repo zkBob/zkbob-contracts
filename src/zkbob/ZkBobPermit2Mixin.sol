@@ -30,13 +30,16 @@ abstract contract ZkBobPermit2Mixin is ZkBobPool {
 
         permit2.permitTransferFrom(
             IPermit2.PermitTransferFrom({
-                permitted: IPermit2.TokenPermissions({token: token, amount: uint256(_tokenAmount) * TOKEN_DENOMINATOR}),
+                permitted: IPermit2.TokenPermissions({
+                    token: token,
+                    amount: uint256(_tokenAmount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR
+                }),
                 nonce: _nullifier,
                 deadline: uint256(_memo_permit_deadline())
             }),
             IPermit2.SignatureTransferDetails({
                 to: address(this),
-                requestedAmount: uint256(_tokenAmount) * TOKEN_DENOMINATOR
+                requestedAmount: uint256(_tokenAmount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR
             }),
             _user,
             depositSignature

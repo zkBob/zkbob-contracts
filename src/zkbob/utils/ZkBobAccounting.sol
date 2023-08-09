@@ -206,7 +206,6 @@ contract ZkBobAccounting is IZkBobAccounting, Ownable {
         onlyOwner
     {
         require(_tier < 255, "ZkBobAccounting: invalid limit tier");
-        require(_depositCap > 0, "ZkBobAccounting: zero deposit cap");
         require(_tvlCap <= type(uint56).max * PRECISION, "ZkBobAccounting: tvl cap too large");
         require(_dailyDepositCap <= type(uint32).max * PRECISION, "ZkBobAccounting: daily deposit cap too large");
         require(_dailyWithdrawalCap <= type(uint32).max * PRECISION, "ZkBobAccounting: daily withdrawal cap too large");

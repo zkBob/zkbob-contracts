@@ -25,6 +25,7 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
     bytes4 internal constant MESSAGE_PREFIX_DIRECT_DEPOSIT_V1 = 0x00000001;
 
     uint256 internal immutable TOKEN_DENOMINATOR;
+    uint256 internal constant TOKEN_NUMERATOR = 1;
 
     address public immutable token;
     uint256 public immutable pool_id;
@@ -53,6 +54,7 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
 
     constructor(address _pool, address _token, uint256 _denominator) {
         require(Address.isContract(_token), "ZkBobDirectDepositQueue: not a contract");
+        require(TOKEN_NUMERATOR == 1 || _denominator == 1, "ZkBobDirectDepositQueue: incorrect denominator");
         pool = _pool;
         token = _token;
         TOKEN_DENOMINATOR = _denominator;
@@ -151,7 +153,7 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
 
         hashsum = uint256(keccak256(input)) % R;
 
-        IERC20(token).safeTransfer(msg.sender, (total + totalFee) * TOKEN_DENOMINATOR);
+        IERC20(token).safeTransfer(msg.sender, (total + totalFee) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR);
 
         emit CompleteDirectDepositBatch(_indices);
     }
@@ -245,7 +247,7 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
 
         uint64 fee = directDepositFee;
         // small amount of wei might get lost during division, this amount will stay in the contract indefinitely
-        uint64 depositAmount = uint64(_amount / TOKEN_DENOMINATOR);
+        uint64 depositAmount = uint64(_amount / TOKEN_DENOMINATOR * TOKEN_NUMERATOR);
         require(depositAmount > fee, "ZkBobDirectDepositQueue: direct deposit amount is too low");
         unchecked {
             depositAmount -= fee;
