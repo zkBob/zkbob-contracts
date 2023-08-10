@@ -21,6 +21,7 @@ import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
 import "../interfaces/IZkBobDirectDepositsAdmin.sol";
 import "../interfaces/IZkBobPoolAdmin.sol";
 import "../../src/interfaces/IERC677.sol";
+import "../../src/interfaces/IZkBobDirectDepositQueue.sol";
 import "../../src/zkbob/ZkBobPoolUSDC.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueueETH.sol";
 import "../../src/zkbob/ZkBobPoolERC20.sol";
@@ -130,7 +131,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         poolProxy.upgradeToAndCall(address(impl), initData);
         pool = IZkBobPoolAdmin(address(poolProxy));
 
-        ZkBobDirectDepositQueue queueImpl;
+        IZkBobDirectDepositQueue queueImpl;
         if (poolType == PoolType.ETH) {
             queueImpl = new ZkBobDirectDepositQueueETH(address(pool), token, denominator);
         } else {

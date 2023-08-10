@@ -358,9 +358,10 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         );
         uint256 fee = accumulatedFee[_operator] * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
         require(fee > 0, "ZkBobPool: no fee to withdraw");
-        IERC20(token).safeTransfer(_to, fee);
+        (address token_out, uint256 amount_out) = _beforeWithdrawal(fee);
+        IERC20(token_out).safeTransfer(_to, amount_out);
         accumulatedFee[_operator] = 0;
-        emit WithdrawFee(_operator, fee);
+        emit WithdrawFee(_operator, amount_out);
     }
 
     /**

@@ -2,31 +2,29 @@
 
 pragma solidity 0.8.15;
 
-import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol";
-import "../libraries/ZkAddress.sol";
-import "../interfaces/IOperatorManager.sol";
-import "../interfaces/IZkBobDirectDepositsETH.sol";
-import "../interfaces/IZkBobDirectDepositQueue.sol";
 import "../interfaces/IZkBobPool.sol";
 import "../interfaces/IATokenVault.sol";
-import "../utils/Ownable.sol";
-import "../proxy/EIP1967Admin.sol";
-import "./ZkBobDirectDepositQueueETH.sol";
+import "./ZkBobDirectDepositQueueAbs.sol";
+import "./ZkBobDirectDepositETHMixin.sol";
+import "./ZkBobDirectDepositERC4626Mixin.sol";
 
 /**
  * @title ZkBobDirectDepositQueueETHERC4626Extended
  * Queue for ETH direct deposits to ERC4626 based zkBob pool
  */
-contract ZkBobDirectDepositQueueETHERC4626Extended is ZkBobDirectDepositQueueETH {
+contract ZkBobDirectDepositQueueETHERC4626Extended is
+    ZkBobDirectDepositQueueAbs,
+    ZkBobDirectDepositETHMixin,
+    ZkBobDirectDepositERC4626Mixin
+{
     constructor(
         address _pool,
         address _token,
         uint256 _denominator
     )
-        ZkBobDirectDepositQueueETH(_pool, _token, _denominator)
+        ZkBobDirectDepositQueueAbs(_pool, _token, _denominator)
     {}
 
     /// @inheritdoc IZkBobDirectDepositsETH
@@ -45,13 +43,5 @@ contract ZkBobDirectDepositQueueETHERC4626Extended is ZkBobDirectDepositQueueETH
         IERC20(address(weth)).approve(token, amount);
         uint256 shares = IATokenVault(token).deposit(amount, address(this));
         return _recordDirectDeposit(msg.sender, _fallbackUser, shares, _rawZkAddress);
-    }
-
-    function _adjustFees(uint64 _fees, uint256 _shares) internal view override returns (uint64) {
-        uint256 assets = IATokenVault(token).previewRedeem(_shares);
-        uint256 rate = assets * 1 ether / _shares;
-        // assets to shares
-        uint256 converted = uint256(_fees) * 1 ether / rate;
-        return uint64(converted);
     }
 }
