@@ -5,6 +5,7 @@ pragma solidity 0.8.15;
 import "./ZkBobPool.sol";
 import "./ZkBobTokenSellerMixin.sol";
 import "./ZkBobUSDCPermitMixin.sol";
+import "./ZkBobCompoundingMixin.sol";
 
 /**
  * @title ZkBobPoolUSDCMigrated
@@ -12,7 +13,7 @@ import "./ZkBobUSDCPermitMixin.sol";
  * It is intended to be deployed as implementation of the pool for BOB tokens that is
  * why it supports the same nomination
  */
-contract ZkBobPoolUSDCMigrated is ZkBobPool, ZkBobTokenSellerMixin, ZkBobUSDCPermitMixin {
+contract ZkBobPoolUSDCMigrated is ZkBobPool, ZkBobTokenSellerMixin, ZkBobUSDCPermitMixin, ZkBobCompoundingMixin {
     constructor(
         uint256 __pool_id,
         address _token,

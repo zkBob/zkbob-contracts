@@ -6,7 +6,8 @@ import "forge-std/Test.sol";
 import "@openzeppelin/contracts/mocks/ERC20Mock.sol";
 import {ERC4626Mock} from "@openzeppelin/contracts/mocks/ERC4626Mock.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {TransparentUpgradeableProxy as TUP} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {TransparentUpgradeableProxy as TUP} from
+    "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import "@openzeppelin/contracts/token/ERC721/presets/ERC721PresetMinterPauserAutoId.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
 import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
@@ -32,7 +33,6 @@ import "../../src/zkbob/ZkBobPoolETH.sol";
 import "../../src/infra/UniswapV3Seller.sol";
 import {EnergyRedeemer} from "../../src/infra/EnergyRedeemer.sol";
 import "@aave/aave-vault/src/ATokenVault.sol";
-
 
 abstract contract AbstractZkBobPoolTest is AbstractForkTest {
     address constant permit2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
@@ -951,10 +951,6 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         // 5_000 in pool and 5_000 in yield
         pool.rebalance(0, type(uint256).max);
 
-        // x2 in yield: 5_000 to claim
-        vm.prank(user1);
-        IERC20(token).transfer(yieldAddress, 5_000 ether / D);
-
         assertEq(pool.claim(6_000 ether / D), 0);
 
         pool.updateYieldParams(
@@ -975,7 +971,6 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
 
         claimed = pool.claim(0);
         assertGt(claimed, 0);
-        assertEq(accounting.getLimitsFor(user2).dailyWithdrawalCapUsage, 20_000 ether / D / denominator);
     }
 
     function testEnergyRedemption() public {

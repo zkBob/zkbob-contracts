@@ -133,19 +133,6 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     }
 
     /**
-     * @dev Updates used accounting module.
-     * Callable only by the contract owner / proxy admin.
-     * @param _accounting new operator manager implementation.
-     */
-    function setAccounting(IZkBobAccounting _accounting) external onlyOwner {
-        require(
-            address(_accounting) == address(0) || Address.isContract(address(_accounting)), "ZkBobPool: not a contract"
-        );
-        accounting = _accounting;
-        emit UpdateAccounting(address(_accounting));
-    }
-
-    /**
      * @dev Updates used energy redemption module.
      * Callable only by the contract owner / proxy admin.
      * @param _redeemer new energy redeemer implementation.
