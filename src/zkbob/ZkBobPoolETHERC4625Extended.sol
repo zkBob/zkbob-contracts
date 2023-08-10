@@ -34,9 +34,10 @@ contract ZkBobPoolETHERC4625Extended is ZkBobPool, ZkBobERC4626Extended, ZkBobPe
         ZkBobPermit2Mixin(_permit2)
     {}
 
+    // There is no need in this method if a new pool is deployed
     function migrationToERC4626() external {
         require(msg.sender == address(this), "Incorrect invoker");
-        require(token == address(0xac190662aD9b53A4E6D4CD321dbf5d3ECD0E29b0), "Incorrect token");
+        require(token == address(0x4A2207534B019303C6cd856989Ec272F9FD3B654), "Incorrect token");
 
         address weth = address(IATokenVault(token).UNDERLYING());
         uint256 cur_weth_balance = IERC20(weth).balanceOf(address(this));

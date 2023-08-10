@@ -234,6 +234,10 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
         emit RefundDirectDeposit(_index, fallbackReceiver, amount);
     }
 
+    function _adjustFees(uint64 _fees, uint256 _amount) internal view virtual returns (uint64) {
+        return _fees;
+    }
+
     function _recordDirectDeposit(
         address _sender,
         address _fallbackReceiver,
@@ -245,7 +249,7 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
     {
         require(_fallbackReceiver != address(0), "ZkBobDirectDepositQueue: fallback user is zero");
 
-        uint64 fee = directDepositFee;
+        uint64 fee = _adjustFees(directDepositFee, _amount);
         // small amount of wei might get lost during division, this amount will stay in the contract indefinitely
         uint64 depositAmount = uint64(_amount / TOKEN_DENOMINATOR * TOKEN_NUMERATOR);
         require(depositAmount > fee, "ZkBobDirectDepositQueue: direct deposit amount is too low");

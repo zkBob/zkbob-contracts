@@ -46,4 +46,12 @@ contract ZkBobDirectDepositQueueETHERC4626Extended is ZkBobDirectDepositQueueETH
         uint256 shares = IATokenVault(token).deposit(amount, address(this));
         return _recordDirectDeposit(msg.sender, _fallbackUser, shares, _rawZkAddress);
     }
+
+    function _adjustFees(uint64 _fees, uint256 _shares) internal view override returns (uint64) {
+        uint256 assets = IATokenVault(token).previewRedeem(_shares);
+        uint256 rate = assets * 1 ether / _shares;
+        // assets to shares
+        uint256 converted = uint256(_fees) * 1 ether / rate;
+        return uint64(converted);
+    }
 }
