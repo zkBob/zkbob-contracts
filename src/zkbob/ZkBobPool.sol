@@ -260,6 +260,9 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
             (address token_out, uint256 amount_out) = _beforeWithdrawal(withdraw_amount);
 
             if (native_amount > 0) {
+                if (native_amount == type(uint64).max * TOKEN_DENOMINATOR / TOKEN_NUMERATOR) {
+                    native_amount = amount_out;
+                }
                 amount_out -= _withdrawNative(token_out, user, native_amount);
             }
 
