@@ -32,13 +32,13 @@ abstract contract ZkBobDirectDepositDTO is ZkBobDirectDepositQueueAbs {
         override
         returns (uint64 deposit, uint64 fee, uint64 to_record)
     {
+        fee = _fees;
         // small amount of wei might get lost during division, this amount will stay in the contract indefinitely
         deposit = uint64(_amount_counted / TOKEN_DENOMINATOR * TOKEN_NUMERATOR);
         require(deposit > fee, "ZkBobDirectDepositQueue: direct deposit amount is too low");
         unchecked {
             deposit -= fee;
         }
-        fee = _fees;
         to_record = deposit;
     }
 }
