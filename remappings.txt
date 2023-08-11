@@ -7,7 +7,6 @@
 @uniswap/=lib/@uniswap/
 @aave-v3-core/=lib/@aave/aave-vault/lib/aave-v3-core/contracts
 @aave-v3-periphery/=lib/@aave/aave-vault/lib/aave-v3-periphery/contracts/
-base58-solidity/=lib/base58-solidity/contracts/
 ds-test/=lib/forge-std/lib/ds-test/src/
 erc4626-tests/=lib/@aave/aave-vault/lib/erc4626-tests/
 forge-std/=lib/forge-std/src/

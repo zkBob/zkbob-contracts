@@ -51,7 +51,7 @@ contract BOBPoolMigration is Script, StdCheats {
             transferVerifier, treeVerifier, batchDepositVerifier,
             address(queue_proxy)
         );
-        UniswapV3Seller seller = new UniswapV3Seller(uniV3Router, uniV3Quoter, usdc_addr, 500, address(0), 0);
+        ITokenSeller tokenSeller = pool.tokenSeller();
         ZkBobDirectDepositQueue queueImpl = new ZkBobDirectDepositQueue(address(pool), usdc_addr, 1);
         vm.stopPrank();
 
@@ -60,11 +60,12 @@ contract BOBPoolMigration is Script, StdCheats {
         EIP1967Proxy(payable(address(pool))).upgradeTo(address(poolImpl));
         IERC20(usdc_addr).approve(address(pool), 0);
         EIP1967Proxy(payable(address(queue_proxy))).upgradeTo(address(queueImpl));
-        pool.setTokenSeller(address(seller));
+        pool.setTokenSeller(address(tokenSeller));
+        vm.stopPrank();
 
         ATokenVault yieldVault = new ATokenVault(usdc_addr, 4546, IPoolAddressesProvider(poolAddressesProvider));
-        deal(usdc_addr, owner, 1_000_050 ether / D);
-        address yieldProxyAddr = computeCreateAddress(address(owner), vm.getNonce(address(owner)));
+        deal(usdc_addr, address(this), 1_000_050 ether / D);
+        address yieldProxyAddr = computeCreateAddress(address(this), vm.getNonce(address(this)));
         IERC20(usdc_addr).approve(yieldProxyAddr, type(uint256).max);
         bytes memory initData = abi.encodeWithSelector(
             ATokenVault.initialize.selector,
@@ -77,6 +78,7 @@ contract BOBPoolMigration is Script, StdCheats {
         TUP yieldProxy = new TUP(address(yieldVault), owner, initData);
 
         yieldAddress = address(yieldProxy);
+        vm.prank(owner);
         pool.updateYieldParams(
             ZkBobCompoundingMixin.YieldParams({
                 yield: address(yieldProxy),
@@ -88,7 +90,6 @@ contract BOBPoolMigration is Script, StdCheats {
             })
         );
 
-        vm.stopPrank();
     }
 
     function makeWithdrawal() internal {
