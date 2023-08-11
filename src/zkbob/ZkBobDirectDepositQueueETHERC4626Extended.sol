@@ -37,11 +37,11 @@ contract ZkBobDirectDepositQueueETHERC4626Extended is
         override
         returns (uint256)
     {
-        uint256 amount = msg.value;
+        uint256 assets = msg.value;
         IWETH9 weth = IWETH9(IATokenVault(token).UNDERLYING());
-        weth.deposit{value: amount}();
-        IERC20(address(weth)).approve(token, amount);
-        uint256 shares = IATokenVault(token).deposit(amount, address(this));
-        return _recordDirectDeposit(msg.sender, _fallbackUser, shares, _rawZkAddress);
+        weth.deposit{value: assets}();
+        IERC20(address(weth)).approve(token, assets);
+        uint256 shares = IATokenVault(token).deposit(assets, address(this));
+        return _recordDirectDeposit(msg.sender, _fallbackUser, shares, assets, _rawZkAddress);
     }
 }

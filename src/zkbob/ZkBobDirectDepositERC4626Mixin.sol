@@ -24,11 +24,26 @@ abstract contract ZkBobDirectDepositERC4626Mixin is ZkBobDirectDepositQueueAbs {
         assets = IATokenVault(token).redeem(_shares, address(this), _to);
     }
 
-    function _adjustFees(uint64 _fees, uint256 _shares) internal view override returns (uint64) {
-        uint256 assets = IATokenVault(token).previewRedeem(_shares);
-        uint256 rate = assets * 1 ether / _shares;
+    function _adjustAmounts(
+        uint256 _shares,
+        uint256 _assets,
+        uint64 _fees
+    )
+        internal
+        view
+        override
+        returns (uint64 deposit, uint64 fee, uint64 to_record)
+    {
+        // small amount of wei might get lost during division, this amount will stay in the contract indefinitely
+        deposit = uint64(_shares / TOKEN_DENOMINATOR * TOKEN_NUMERATOR);
+        to_record = uint64(_assets / TOKEN_DENOMINATOR * TOKEN_NUMERATOR);
+        uint256 rate = _assets * 1 ether / _shares;
         // Convert assets to shares
-        uint256 converted = uint256(_fees) * 1 ether / rate;
-        return uint64(converted);
+        fee = uint64(uint256(_fees) * 1 ether / rate);
+        require((deposit > fee) && (to_record > _fees), "ZkBobDirectDepositQueue: direct deposit amount is too low");
+        unchecked {
+            deposit -= fee;
+            to_record -= _fees;
+        }
     }
 }

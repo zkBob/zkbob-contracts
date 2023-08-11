@@ -35,6 +35,6 @@ abstract contract ZkBobDirectDepositETHMixin is IZkBobDirectDepositsETH, ZkBobDi
     {
         uint256 amount = msg.value;
         IWETH9(token).deposit{value: amount}();
-        return _recordDirectDeposit(msg.sender, _fallbackUser, amount, _rawZkAddress);
+        return _recordDirectDeposit(msg.sender, _fallbackUser, amount, amount, _rawZkAddress);
     }
 }

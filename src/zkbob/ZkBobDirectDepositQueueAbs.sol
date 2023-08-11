@@ -180,14 +180,14 @@ abstract contract ZkBobDirectDepositQueueAbs is
     /// @inheritdoc IZkBobDirectDeposits
     function directDeposit(
         address _fallbackUser,
-        uint256 _amount,
+        uint256 _amount_sent,
         bytes memory _rawZkAddress
     )
         public
         returns (uint256)
     {
-        uint256 amount_in = _receiveTokensFromSender(msg.sender, _amount);
-        return _recordDirectDeposit(msg.sender, _fallbackUser, amount_in, _rawZkAddress);
+        uint256 amount_counted = _receiveTokensFromSender(msg.sender, _amount_sent);
+        return _recordDirectDeposit(msg.sender, _fallbackUser, amount_counted, _amount_sent, _rawZkAddress);
     }
 
     /// @inheritdoc IZkBobDirectDeposits
@@ -196,7 +196,7 @@ abstract contract ZkBobDirectDepositQueueAbs is
 
         (address fallbackUser, bytes memory rawZkAddress) = abi.decode(_data, (address, bytes));
 
-        _recordDirectDeposit(_from, fallbackUser, _value, rawZkAddress);
+        _recordDirectDeposit(_from, fallbackUser, _value, _value, rawZkAddress);
 
         return true;
     }
@@ -243,12 +243,21 @@ abstract contract ZkBobDirectDepositQueueAbs is
         emit RefundDirectDeposit(_index, fallbackReceiver, amount_out);
     }
 
-    function _adjustFees(uint64 _fees, uint256 _amount) internal view virtual returns (uint64);
+    function _adjustAmounts(
+        uint256 _amount_counted,
+        uint256 _amount_sent,
+        uint64 _fees
+    )
+        internal
+        view
+        virtual
+        returns (uint64 deposit, uint64 fee, uint64 to_record);
 
     function _recordDirectDeposit(
         address _sender,
         address _fallbackReceiver,
-        uint256 _amount,
+        uint256 _amount_counted,
+        uint256 _amount_sent,
         bytes memory _rawZkAddress
     )
         internal
@@ -256,19 +265,14 @@ abstract contract ZkBobDirectDepositQueueAbs is
     {
         require(_fallbackReceiver != address(0), "ZkBobDirectDepositQueue: fallback user is zero");
 
-        uint64 fee = _adjustFees(directDepositFee, _amount);
-        // small amount of wei might get lost during division, this amount will stay in the contract indefinitely
-        uint64 depositAmount = uint64(_amount / TOKEN_DENOMINATOR * TOKEN_NUMERATOR);
-        require(depositAmount > fee, "ZkBobDirectDepositQueue: direct deposit amount is too low");
-        unchecked {
-            depositAmount -= fee;
-        }
+        (uint64 depositAmount, uint64 fee, uint64 to_record) =
+            _adjustAmounts(_amount_counted, _amount_sent, directDepositFee);
 
         ZkAddress.ZkAddress memory zkAddress = ZkAddress.parseZkAddress(_rawZkAddress, uint24(pool_id));
 
         IZkBobDirectDeposits.DirectDeposit memory dd = IZkBobDirectDeposits.DirectDeposit({
             fallbackReceiver: _fallbackReceiver,
-            sent: uint96(_amount),
+            sent: uint96(_amount_counted),
             deposit: depositAmount,
             fee: fee,
             timestamp: uint40(block.timestamp),
@@ -280,7 +284,7 @@ abstract contract ZkBobDirectDepositQueueAbs is
         nonce = directDepositNonce++;
         directDeposits[nonce] = dd;
 
-        IZkBobPool(pool).recordDirectDeposit(_sender, depositAmount);
+        IZkBobPool(pool).recordDirectDeposit(_sender, to_record);
 
         emit SubmitDirectDeposit(_sender, nonce, _fallbackReceiver, zkAddress, depositAmount);
     }
