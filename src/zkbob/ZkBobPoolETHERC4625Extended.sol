@@ -11,7 +11,7 @@ import "./ZkBobPermit2Mixin.sol";
  * @title ZkBobPoolETHERC4625Extended
  * Shielded transactions ERC4626 based pool for native and wrapped native tokens.
  */
-contract ZkBobPoolETHERC4625Extended is ZkBobPool, ZkBobERC4626Extended, ZkBobPermit2Mixin {
+contract ZkBobPoolETHERC4625Extended is ZkBobPool, ZkBobWETHMixin, ZkBobERC4626Extended, ZkBobPermit2Mixin {
     constructor(
         uint256 __pool_id,
         address _token,
@@ -33,6 +33,10 @@ contract ZkBobPoolETHERC4625Extended is ZkBobPool, ZkBobERC4626Extended, ZkBobPe
         )
         ZkBobPermit2Mixin(_permit2)
     {}
+
+    function checkOnReceivingETH() internal override {
+        require(msg.sender == IATokenVault(token).UNDERLYING(), "Not a WETH withdrawal");
+    }
 
     // There is no need in this method if a new pool is deployed
     function migrationToERC4626() external {

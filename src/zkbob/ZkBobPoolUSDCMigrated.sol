@@ -3,7 +3,7 @@
 pragma solidity 0.8.15;
 
 import "./ZkBobPool.sol";
-import "./ZkBobDirectTokenOwnership.sol";
+import "./ZkBobDTO.sol";
 import "./ZkBobTokenSellerMixin.sol";
 import "./ZkBobUSDCPermitMixin.sol";
 
@@ -13,7 +13,7 @@ import "./ZkBobUSDCPermitMixin.sol";
  * It is intended to be deployed as implemenation of the pool for BOB tokens that is
  * why it supports the same nomination
  */
-contract ZkBobPoolUSDCMigrated is ZkBobPool, ZkBobDirectTokenOwnership, ZkBobTokenSellerMixin, ZkBobUSDCPermitMixin {
+contract ZkBobPoolUSDCMigrated is ZkBobPool, ZkBobDTO, ZkBobTokenSellerMixin, ZkBobUSDCPermitMixin {
     constructor(
         uint256 __pool_id,
         address _token,

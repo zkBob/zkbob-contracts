@@ -170,6 +170,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
 
     function _beforeWithdrawal(uint256 _tokenAmount) internal virtual returns (address, uint256);
 
+    function _adjustPriorRecord(int256 _amount) internal view virtual returns (int256);
+
     /**
      * @dev Converts given amount of tokens into native coins sent to the provided address.
      * @param _token token address to unwrap native coins.
@@ -210,7 +212,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         // not from the pool funds.
         // For withdrawals, withdrawal amount that is checked against limits for specific user is already inclusive
         // of operator's fee, thus there is no need to consider it separately.
-        (,, uint256 txCount) = _recordOperation(user, transfer_token_delta);
+        (,, uint256 txCount) = _recordOperation(user, _adjustPriorRecord(transfer_token_delta));
 
         uint256 nullifier = _transfer_nullifier();
         {
