@@ -335,8 +335,9 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     /**
      * @dev Performs a forced withdrawal by irreversibly killing an account.
      * Callable only by the zk account owner.
-     * Account cannot be recoverd after such forced exit,
+     * Account cannot be recovered after such forced exit,
      * any remaining or newly sent funds would be lost forever.
+     * Accumulated account energy is forfeited.
      * @param _to withdrawn funds receiver.
      * @param _amount total account balance to withdraw.
      * @param _index index of the merkle root used within proof.
@@ -354,7 +355,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     )
         external
     {
-        require(_amount < type(uint64).max, "ZkBobPool: amount too large");
+        require(_amount <= 1 << 63, "ZkBobPool: amount too large");
         require(_index < type(uint48).max, "ZkBobPool: index too large");
 
         uint256 root = roots[_index];
@@ -365,7 +366,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             root,
             _nullifier,
             _out_commit,
-            (pool_id << (transfer_delta_size * 8)) + (_index << 176) + _amount,
+            (pool_id << 224) + (_index << 176) + uint64(-int64(uint64(_amount))),
             uint256(keccak256(abi.encodePacked(_to))) % R
         ];
         require(transfer_verifier.verifyProof(transfer_pub, _transfer_proof), "ZkBobPool: bad transfer proof");
@@ -376,7 +377,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         }
         nullifiers[_nullifier] = poolIndex | uint256(0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddead0000000000000000);
 
-        IERC20(token).safeTransfer(_to, _amount * TOKEN_DENOMINATOR);
+        IERC20(token).safeTransfer(_to, _amount * TOKEN_DENOMINATOR / TOKEN_NUMERATOR);
 
         emit ForcedExit(poolIndex, _nullifier, _to, _amount);
     }

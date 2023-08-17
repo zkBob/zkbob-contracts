@@ -304,7 +304,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         assertEq(IERC20(token).balanceOf(user3), 0.02 ether / D);
     }
 
-    function testForcedExit() public {
+    function testForceExit() public {
         bytes memory data = _encodePermitDeposit(int256(0.5 ether / D), 0.01 ether / D);
         _transact(data);
 
