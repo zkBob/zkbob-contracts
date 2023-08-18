@@ -9,14 +9,16 @@ import "../../interfaces/IERC677.sol";
 import "../../interfaces/IERC20Permit.sol";
 import "../../interfaces/IUSDCPermit.sol";
 import "../../interfaces/IPermit2.sol";
+import "../../proxy/EIP1967Admin.sol";
 
 /**
  * @title ZkBobPay
  */
-contract ZkBobPay {
+contract ZkBobPay is EIP1967Admin {
     using SafeERC20 for IERC20;
 
     event UpdateFeeReceiver(address receiver);
+    event UpdateRouter(address router, bytes4[] selectors, bool enabled);
     event Pay(uint256 indexed id, address indexed sender, bytes receiver, uint256 amount, address inToken, bytes note);
 
     error InvalidToken();
@@ -28,17 +30,22 @@ contract ZkBobPay {
     address public immutable token;
     IZkBobDirectDeposits public immutable queue;
     IPermit2 public immutable permit2;
-    address public immutable oneInchRouter;
+
+    mapping(address => mapping(bytes4 => bool)) public enabledRouter;
     address public feeReceiver;
 
-    constructor(address _token, address _queue, address _permit2, address _oneInchRouter, address _feeReceiver) {
+    constructor(address _token, address _queue, address _permit2) {
         token = _token;
         queue = IZkBobDirectDeposits(_queue);
         permit2 = IPermit2(_permit2);
-        oneInchRouter = _oneInchRouter;
-        feeReceiver = _feeReceiver;
+    }
 
-        IERC20(token).approve(_queue, type(uint256).max);
+    function initialize() external {
+        if (msg.sender != address(this)) {
+            revert Unauthorized();
+        }
+
+        IERC20(token).approve(address(queue), type(uint256).max);
     }
 
     function onTokenTransfer(address _from, uint256 _amount, bytes memory _data) external returns (bool) {
@@ -61,17 +68,19 @@ contract ZkBobPay {
      * @param _inAmount input token amount.
      * @param _depositAmount zkBob deposit amount, inclusive of direct deposit fee.
      * @param _permit input token approval permit, in one of the supported formats.
-     * @param _oneInchData 1inch swap calldata.
+     * @param _router router contract address, should be whitelisted by contract admin first.
+     * @param _routerData router swap calldata.
      * @param _note optional payment-specific note for the receiver.
      */
     function pay(
-        bytes memory _zkAddress,
+        bytes calldata _zkAddress,
         address _inToken,
         uint256 _inAmount,
         uint256 _depositAmount,
         bytes memory _permit,
-        bytes memory _oneInchData,
-        bytes memory _note
+        address _router,
+        bytes calldata _routerData,
+        bytes calldata _note
     )
         external
         payable
@@ -89,13 +98,17 @@ contract ZkBobPay {
                 revert InsufficientAmount();
             }
         } else {
+            if (!enabledRouter[_router][bytes4(_routerData[:4])]) {
+                revert Unauthorized();
+            }
+
             uint256 balance = IERC20(token).balanceOf(address(this));
 
             if (_inToken != address(0)) {
-                IERC20(_inToken).approve(oneInchRouter, _inAmount);
+                IERC20(_inToken).approve(_router, _inAmount);
             }
 
-            (bool status,) = oneInchRouter.call{value: msg.value}(_oneInchData);
+            (bool status,) = _router.call{value: msg.value}(_routerData);
             if (!status) {
                 revert SwapFailed();
             }
@@ -115,7 +128,7 @@ contract ZkBobPay {
             revert Unauthorized();
         }
 
-        for (uint256 i = 0; i < _tokens.length; i++) {
+        for (uint256 i = 0; i < _tokens.length; ++i) {
             if (_tokens[i] == address(0)) {
                 payable(msg.sender).transfer(address(this).balance);
             } else {
@@ -124,8 +137,20 @@ contract ZkBobPay {
         }
     }
 
+    function updateRouter(address _router, bytes4[] calldata _selectors, bool _enabled) external {
+        if (msg.sender != _admin()) {
+            revert Unauthorized();
+        }
+
+        for (uint256 i = 0; i < _selectors.length; ++i) {
+            enabledRouter[_router][_selectors[i]] = _enabled;
+        }
+
+        emit UpdateRouter(_router, _selectors, _enabled);
+    }
+
     function updateFeeReceiver(address _receiver) external {
-        if (msg.sender != feeReceiver) {
+        if (msg.sender != feeReceiver && msg.sender != _admin()) {
             revert Unauthorized();
         }
 
