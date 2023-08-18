@@ -297,7 +297,7 @@ contract ZkBobAccounting is IZkBobAccounting, Ownable {
         }
         if (_txType == IZkBobAccounting.TxType.ForcedExit) {
             require(_txAmount > 0, "ZkBobAccounting: negative amount");
-            s1.tvl -= uint72(uint256(_txAmount));
+            slot1.tvl -= uint72(uint256(_txAmount));
             return;
         }
 

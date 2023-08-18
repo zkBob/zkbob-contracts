@@ -27,7 +27,8 @@ interface IZkBobPoolAdmin {
 
     function transact() external;
 
-    function forceExit(
+    function commitForcedExit(
+        address _operator,
         address _to,
         uint256 _amount,
         uint256 _index,
@@ -36,6 +37,8 @@ interface IZkBobPoolAdmin {
         uint256[8] memory _transfer_proof
     )
         external;
+
+    function executeForcedExit(uint256 _nullifier) external;
 
     function appendDirectDeposits(
         uint256 _root_after,

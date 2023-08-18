@@ -304,17 +304,40 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         assertEq(IERC20(token).balanceOf(user3), 0.02 ether / D);
     }
 
-    function testForceExit() public {
+    function testForcedExit() public {
         bytes memory data = _encodePermitDeposit(int256(0.5 ether / D), 0.01 ether / D);
         _transact(data);
 
         uint256 nullifier = _randFR();
-        pool.forceExit(user2, 0.4 ether / D / denominator, 128, nullifier, _randFR(), _randProof());
+        pool.commitForcedExit(user2, user2, 0.4 ether / D / denominator, 128, nullifier, _randFR(), _randProof());
+
+        assertEq(IERC20(token).balanceOf(user2), 0);
+        assertEq(pool.nullifiers(nullifier), 1);
+
+        vm.expectRevert("ZkBobPool: invalid caller");
+        pool.executeForcedExit(nullifier);
+
+        vm.startPrank(user2);
+        vm.expectRevert("ZkBobPool: exit not allowed");
+        pool.executeForcedExit(nullifier);
+
+        skip(25 hours);
+        vm.expectRevert("ZkBobPool: exit not allowed");
+        pool.executeForcedExit(nullifier);
+
+        rewind(23 hours);
+        pool.executeForcedExit(nullifier);
+
+        vm.expectRevert("ZkBobPool: forced exit not registered");
+        pool.executeForcedExit(nullifier);
+
         assertEq(IERC20(token).balanceOf(user2), 0.4 ether / D);
         assertEq(pool.nullifiers(nullifier), 0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddead0000000000000080);
 
         vm.expectRevert("ZkBobPool: doublespend detected");
-        pool.forceExit(user2, 0.4 ether / D / denominator, 128, nullifier, _randFR(), _randProof());
+        pool.commitForcedExit(user2, user2, 0.4 ether / D / denominator, 128, nullifier, _randFR(), _randProof());
+
+        vm.stopPrank();
     }
 
     function testRejectNegativeDeposits() public {

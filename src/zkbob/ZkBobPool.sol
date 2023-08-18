@@ -34,6 +34,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
+    uint256 internal constant FORCED_EXIT_MIN_DELAY = 1 hours;
+    uint256 internal constant FORCED_EXIT_MAX_DELAY = 24 hours;
 
     uint256 internal immutable TOKEN_DENOMINATOR;
     uint256 internal constant TOKEN_NUMERATOR = 1;
@@ -45,7 +47,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     address public immutable token;
     IZkBobDirectDepositQueue public immutable direct_deposit_queue;
 
-    uint256[3] private __deprecatedGap;
+    uint256[2] private __deprecatedGap;
+    mapping(uint256 => ForcedExitParams) public committedForcedExits;
     IEnergyRedeemer public redeemer;
     IZkBobAccounting public accounting;
     uint96 public pool_index;
@@ -65,6 +68,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
 
+    event CommitForcedExit(uint256 indexed nullifier, uint40 exitStart, uint40 exitEnd);
     event ForcedExit(uint256 indexed index, uint256 indexed nullifier, address to, uint256 amount);
 
     constructor(
@@ -219,7 +223,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
         uint256 nullifier = _transfer_nullifier();
         {
-            require(nullifiers[nullifier] == 0, "ZkBobPool: doublespend detected");
+            require(nullifiers[nullifier] < 2, "ZkBobPool: doublespend detected");
             require(_transfer_index() <= poolIndex, "ZkBobPool: transfer index out of bounds");
             require(transfer_verifier.verifyProof(_transfer_pub(), _transfer_proof()), "ZkBobPool: bad transfer proof");
             require(tree_verifier.verifyProof(_tree_pub(roots[poolIndex]), _tree_proof()), "ZkBobPool: bad tree proof");
@@ -333,11 +337,11 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     }
 
     /**
-     * @dev Performs a forced withdrawal by irreversibly killing an account.
-     * Callable only by the zk account owner.
-     * Account cannot be recovered after such forced exit,
+     * @dev Commits a forced withdrawal transaction for future execution after a set delay.
+     * Account cannot be recovered after such forced exit.
      * any remaining or newly sent funds would be lost forever.
      * Accumulated account energy is forfeited.
+     * @param _operator address that is allowed to call executeForcedExit, or address(0) if permissionless.
      * @param _to withdrawn funds receiver.
      * @param _amount total account balance to withdraw.
      * @param _index index of the merkle root used within proof.
@@ -345,7 +349,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      * @param _out_commit out commitment for empty list of output notes.
      * @param _transfer_proof snark proof for transfer verifier.
      */
-    function forceExit(
+    function commitForcedExit(
+        address _operator,
         address _to,
         uint256 _amount,
         uint256 _index,
@@ -360,7 +365,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
         uint256 root = roots[_index];
         require(root > 0, "ZkBobPool: transfer index out of bounds");
-        require(nullifiers[_nullifier] == 0, "ZkBobPool: doublespend detected");
+        require(nullifiers[_nullifier] < 2, "ZkBobPool: doublespend detected");
 
         uint256[5] memory transfer_pub = [
             root,
@@ -371,15 +376,44 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         ];
         require(transfer_verifier.verifyProof(transfer_pub, _transfer_proof), "ZkBobPool: bad transfer proof");
 
+        nullifiers[_nullifier] = 1;
+        committedForcedExits[_nullifier] = ForcedExitParams({
+            to: _to,
+            amount: uint64(_amount),
+            operator: _operator,
+            exitStart: uint40(block.timestamp + FORCED_EXIT_MIN_DELAY),
+            exitEnd: uint40(block.timestamp + FORCED_EXIT_MAX_DELAY)
+        });
+
+        emit CommitForcedExit(
+            _nullifier, uint40(block.timestamp + FORCED_EXIT_MIN_DELAY), uint40(block.timestamp + FORCED_EXIT_MAX_DELAY)
+        );
+    }
+
+    /**
+     * @dev Performs a forced withdrawal by irreversibly killing an account.
+     * Callable only by the operator, if set during latest call to the commitForcedExit.
+     * Account cannot be recovered after such forced exit.
+     * any remaining or newly sent funds would be lost forever.
+     * Accumulated account energy is forfeited.
+     * @param _nullifier transfer nullifier to be used for withdrawal.
+     */
+    function executeForcedExit(uint256 _nullifier) external {
+        require(nullifiers[_nullifier] == 1, "ZkBobPool: forced exit not registered");
+
+        ForcedExitParams memory exit = committedForcedExits[_nullifier];
+        require(exit.operator == address(0) || exit.operator == msg.sender, "ZkBobPool: invalid caller");
+        require(block.timestamp >= exit.exitStart && block.timestamp < exit.exitEnd, "ZkBobPool: exit not allowed");
+
         (IZkBobAccounting acc, uint96 poolIndex) = (accounting, pool_index);
         if (address(acc) != address(0)) {
-            acc.recordOperation(IZkBobAccounting.TxType.ForcedExit, address(0), int256(_amount));
+            acc.recordOperation(IZkBobAccounting.TxType.ForcedExit, address(0), int256(uint256(exit.amount)));
         }
         nullifiers[_nullifier] = poolIndex | uint256(0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddead0000000000000000);
 
-        IERC20(token).safeTransfer(_to, _amount * TOKEN_DENOMINATOR / TOKEN_NUMERATOR);
+        IERC20(token).safeTransfer(exit.to, exit.amount * TOKEN_DENOMINATOR / TOKEN_NUMERATOR);
 
-        emit ForcedExit(poolIndex, _nullifier, _to, _amount);
+        emit ForcedExit(poolIndex, _nullifier, exit.to, exit.amount);
     }
 
     /**
