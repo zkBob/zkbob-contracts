@@ -18,7 +18,7 @@ contract ZkBobPay is EIP1967Admin {
     using SafeERC20 for IERC20;
 
     event UpdateFeeReceiver(address receiver);
-    event UpdateRouter(address router, bool enabled);
+    event UpdateRouter(address router, bytes4[] selectors, bool enabled);
     event Pay(uint256 indexed id, address indexed sender, bytes receiver, uint256 amount, address inToken, bytes note);
 
     error InvalidToken();
@@ -31,7 +31,7 @@ contract ZkBobPay is EIP1967Admin {
     IZkBobDirectDeposits public immutable queue;
     IPermit2 public immutable permit2;
 
-    mapping(address => bool) public enabledRouter;
+    mapping(address => mapping(bytes4 => bool)) public enabledRouter;
     address public feeReceiver;
 
     constructor(address _token, address _queue, address _permit2) {
@@ -73,14 +73,14 @@ contract ZkBobPay is EIP1967Admin {
      * @param _note optional payment-specific note for the receiver.
      */
     function pay(
-        bytes memory _zkAddress,
+        bytes calldata _zkAddress,
         address _inToken,
         uint256 _inAmount,
         uint256 _depositAmount,
         bytes memory _permit,
         address _router,
-        bytes memory _routerData,
-        bytes memory _note
+        bytes calldata _routerData,
+        bytes calldata _note
     )
         external
         payable
@@ -98,7 +98,7 @@ contract ZkBobPay is EIP1967Admin {
                 revert InsufficientAmount();
             }
         } else {
-            if (!enabledRouter[_router]) {
+            if (!enabledRouter[_router][bytes4(_routerData[:4])]) {
                 revert Unauthorized();
             }
 
@@ -128,7 +128,7 @@ contract ZkBobPay is EIP1967Admin {
             revert Unauthorized();
         }
 
-        for (uint256 i = 0; i < _tokens.length; i++) {
+        for (uint256 i = 0; i < _tokens.length; ++i) {
             if (_tokens[i] == address(0)) {
                 payable(msg.sender).transfer(address(this).balance);
             } else {
@@ -137,14 +137,16 @@ contract ZkBobPay is EIP1967Admin {
         }
     }
 
-    function updateRouter(address _router, bool _enabled) external {
+    function updateRouter(address _router, bytes4[] calldata _selectors, bool _enabled) external {
         if (msg.sender != _admin()) {
             revert Unauthorized();
         }
 
-        enabledRouter[_router] = _enabled;
+        for (uint256 i = 0; i < _selectors.length; ++i) {
+            enabledRouter[_router][_selectors[i]] = _enabled;
+        }
 
-        emit UpdateRouter(_router, _enabled);
+        emit UpdateRouter(_router, _selectors, _enabled);
     }
 
     function updateFeeReceiver(address _receiver) external {

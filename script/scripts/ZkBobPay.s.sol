@@ -24,8 +24,10 @@ contract DeployZkBobPay is Script {
         pay = ZkBobPay(address(proxy));
 
         pay.updateFeeReceiver(feeReceiver);
-        pay.updateRouter(lifiRouter1, true);
-        pay.updateRouter(lifiRouter2, true);
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = 0x4630a0d8;
+        pay.updateRouter(lifiRouter1, selectors, true);
+        pay.updateRouter(lifiRouter2, selectors, true);
 
         vm.stopBroadcast();
 

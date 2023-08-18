@@ -40,7 +40,10 @@ contract ZkBobPayTest is AbstractPolygonForkTest {
         pay = ZkBobPay(address(proxy));
 
         pay.updateFeeReceiver(user2);
-        pay.updateRouter(oneInchRouter, true);
+        bytes4[] memory selectors = new bytes4[](2);
+        selectors[0] = 0xe449022e;
+        selectors[1] = 0x12aa3caf;
+        pay.updateRouter(oneInchRouter, selectors, true);
     }
 
     function testPaymentWithUSDC() public {
