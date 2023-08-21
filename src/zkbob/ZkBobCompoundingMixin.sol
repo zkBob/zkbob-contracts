@@ -77,7 +77,7 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
             }
             if (yieldAddress != address(0)) {
                 IERC20(token).approve(yieldAddress, 0);
-                _claim(0, yieldAddress, yieldParams.interestReceiver);
+                _claim(0, yieldAddress, yieldParams.interestReceiver, 0);
             }
         }
 
@@ -179,21 +179,28 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
         uint256 dust = params.dust;
         minClaimAmount = minClaimAmount > dust ? minClaimAmount : dust;
 
-        return _claim(minClaimAmount, yieldAddress, params.interestReceiver);
+        return _claim(minClaimAmount, yieldAddress, params.interestReceiver, dust);
     }
 
     function _claim(
         uint256 minClaimAmount,
         address yieldAddress,
-        address interestReceiver
+        address interestReceiver,
+        uint256 dust
     )
         internal
         returns (uint256)
     {
         IERC4626 yieldVault = IERC4626(yieldAddress);
         uint256 currentInvestedSharesAmount = yieldVault.balanceOf(address(this));
+        uint256 lockedAmount = investedAssetsAmount + dust;
+        uint256 allAssets = yieldVault.convertToAssets(currentInvestedSharesAmount);
 
-        uint256 toClaimAmount = yieldVault.convertToAssets(currentInvestedSharesAmount) - investedAssetsAmount;
+        if (allAssets < lockedAmount) {
+            return 0;
+        }
+
+        uint256 toClaimAmount = allAssets - investedAssetsAmount;
 
         if (toClaimAmount < minClaimAmount || toClaimAmount == 0) {
             return 0;
