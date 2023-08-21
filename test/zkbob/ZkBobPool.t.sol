@@ -87,8 +87,8 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
     event RefundDirectDeposit(uint256 indexed nonce, address receiver, uint256 amount);
     event CompleteDirectDepositBatch(uint256[] indices);
     event UpdateYieldParams(IZkBobPoolAdmin.YieldParams yieldParams);
-    event Claimed(address indexed token, address indexed yield, uint256 amount);
-    event Rebalance(uint256 toPool, uint256 toYield);
+    event Claimed(address indexed yield, uint256 amount);
+    event Rebalance(address indexed yield, uint256 withdrawn, uint256 deposited);
 
     IZkBobPoolAdmin pool;
     IZkBobDirectDepositsAdmin queue;
@@ -180,7 +180,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
                 IZkBobPoolAdmin.YieldParams({
                     yield: address(yieldProxy),
                     maxInvestedAmount: 50_000 ether / D,
-                    buffer: 5_000 ether / D,
+                    buffer: uint96(5_000 ether / D),
                     dust: uint96(0.5 ether / D),
                     interestReceiver: address(this),
                     yieldOperator: address(this)
@@ -657,6 +657,8 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             return;
         }
 
+        address yieldAddress = pool.yieldParams().yield;
+
         deal(token, user1, 11_000 ether / D);
         bytes memory data1 = _encodePermitDeposit(int256(10_000 ether / D), 0);
         _transact(data1);
@@ -667,8 +669,8 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         // POOL -> YIELD
 
         // When diff is more than max bound
-        vm.expectEmit(false, false, false, true);
-        emit Rebalance(0, 4_000 ether / D);
+        vm.expectEmit(true, false, false, true);
+        emit Rebalance(yieldAddress, 0, 4_000 ether / D);
         pool.rebalance(3_000 ether / D, 4_000 ether / D);
         poolBalance = IERC20(token).balanceOf(address(pool));
         assertEq(poolBalance, 6_000 ether / D);
@@ -679,8 +681,8 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         assertEq(poolBalance, 6_000 ether / D);
 
         // When bounds set in wrong order
-        vm.expectEmit(false, false, false, true);
-        emit Rebalance(0, (1_000 ether - 0.4 ether) / D);
+        vm.expectEmit(true, false, false, true);
+        emit Rebalance(yieldAddress, 0, (1_000 ether - 0.4 ether) / D);
         pool.rebalance((1_000 ether - 0.4 ether) / D, 0);
         poolBalance = IERC20(token).balanceOf(address(pool));
         assertEq(poolBalance, 5_000.4 ether / D);
@@ -694,15 +696,15 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             IZkBobPoolAdmin.YieldParams({
                 yield: pool.yieldParams().yield,
                 maxInvestedAmount: 50_000 ether / D,
-                buffer: 4_000 ether / D,
+                buffer: uint96(4_000 ether / D),
                 dust: uint96(0.5 ether / D),
                 interestReceiver: address(this),
                 yieldOperator: address(this)
             })
         );
 
-        vm.expectEmit(false, false, false, true);
-        emit Rebalance(0, 1000.4 ether / D);
+        vm.expectEmit(true, false, false, true);
+        emit Rebalance(yieldAddress, 0, 1000.4 ether / D);
         pool.rebalance(400 ether / D, 2000 ether / D);
         poolBalance = IERC20(token).balanceOf(address(pool));
         assertEq(poolBalance, 4_000 ether / D);
@@ -711,7 +713,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             IZkBobPoolAdmin.YieldParams({
                 yield: pool.yieldParams().yield,
                 maxInvestedAmount: 50_000 ether / D,
-                buffer: 5_000 ether / D,
+                buffer: uint96(5_000 ether / D),
                 dust: uint96(0.5 ether / D),
                 interestReceiver: address(this),
                 yieldOperator: address(this)
@@ -721,8 +723,8 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         // YIELD -> POOL
 
         // When diff is more than max bound
-        vm.expectEmit(false, false, false, true);
-        emit Rebalance(600 ether / D, 0);
+        vm.expectEmit(true, false, false, true);
+        emit Rebalance(yieldAddress, 600 ether / D, 0);
         pool.rebalance(400 ether / D, 600 ether / D);
         poolBalance = IERC20(token).balanceOf(address(pool));
         assertEq(poolBalance, 4_600 ether / D);
@@ -733,8 +735,8 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         assertEq(poolBalance, 4_600 ether / D);
 
         // buffer - dust < poolBalance < buffer
-        vm.expectEmit(false, false, false, true);
-        emit Rebalance(399.5 ether / D, 0);
+        vm.expectEmit(true, false, false, true);
+        emit Rebalance(yieldAddress, 399.5 ether / D, 0);
         pool.rebalance(399.5 ether / D, 399.5 ether / D);
         poolBalance = IERC20(token).balanceOf(address(pool));
         assertEq(poolBalance, 4_999.5 ether / D);
@@ -759,7 +761,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             IZkBobPoolAdmin.YieldParams({
                 yield: address(0),
                 maxInvestedAmount: 50_000 ether / D,
-                buffer: 4_000 ether / D,
+                buffer: uint96(4_000 ether / D),
                 dust: uint96(0.5 ether / D),
                 interestReceiver: address(this),
                 yieldOperator: address(this)
@@ -787,7 +789,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             IZkBobPoolAdmin.YieldParams({
                 yield: pool.yieldParams().yield,
                 maxInvestedAmount: 50_000 ether / D,
-                buffer: 5_000 ether / D,
+                buffer: uint96(5_000 ether / D),
                 dust: uint96(0.5 ether / D),
                 interestReceiver: address(this),
                 yieldOperator: address(0)
@@ -803,7 +805,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             IZkBobPoolAdmin.YieldParams({
                 yield: pool.yieldParams().yield,
                 maxInvestedAmount: 50_000 ether / D,
-                buffer: 5_000 ether / D,
+                buffer: uint96(5_000 ether / D),
                 dust: uint96(0.5 ether / D),
                 interestReceiver: address(this),
                 yieldOperator: address(this)
@@ -825,7 +827,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         IZkBobPoolAdmin.YieldParams memory yieldParams = IZkBobPoolAdmin.YieldParams({
             yield: yieldAddress,
             maxInvestedAmount: 50_000 ether / D,
-            buffer: 5_000 ether / D,
+            buffer: uint96(5_000 ether / D),
             dust: uint96(0.5 ether / D),
             interestReceiver: address(this),
             yieldOperator: address(this)
@@ -852,7 +854,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         yieldParams = IZkBobPoolAdmin.YieldParams({
             yield: address(0),
             maxInvestedAmount: 50_000 ether / D,
-            buffer: 5_000 ether / D,
+            buffer: uint96(5_000 ether / D),
             dust: uint96(0.5 ether / D),
             interestReceiver: address(this),
             yieldOperator: address(this)
@@ -869,7 +871,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         yieldParams = IZkBobPoolAdmin.YieldParams({
             yield: address(0),
             maxInvestedAmount: 50_000 ether / D,
-            buffer: 5_000 ether / D,
+            buffer: uint96(5_000 ether / D),
             dust: uint96(0.5 ether / D),
             interestReceiver: address(this),
             yieldOperator: address(this)
@@ -883,7 +885,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         yieldParams = IZkBobPoolAdmin.YieldParams({
             yield: yieldAddress,
             maxInvestedAmount: 50_000 ether / D,
-            buffer: 5_000 ether / D,
+            buffer: uint96(5_000 ether / D),
             dust: uint96(0.5 ether / D),
             interestReceiver: address(0),
             yieldOperator: address(this)
@@ -907,7 +909,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             IZkBobPoolAdmin.YieldParams({
                 yield: yieldAddress,
                 maxInvestedAmount: 50_000 ether / D,
-                buffer: 4_000 ether / D,
+                buffer: uint96(4_000 ether / D),
                 dust: 0,
                 interestReceiver: address(this),
                 yieldOperator: address(this)
@@ -957,7 +959,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             IZkBobPoolAdmin.YieldParams({
                 yield: yieldAddress,
                 maxInvestedAmount: 50_000 ether / D,
-                buffer: 5_000 ether / D,
+                buffer: uint96(5_000 ether / D),
                 dust: uint96(0.5 ether / D),
                 interestReceiver: user2,
                 yieldOperator: address(this)
@@ -969,6 +971,8 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         uint256 claimed = pool.claim(0);
         vm.warp(block.timestamp + 365 days);
 
+        vm.expectEmit(true, false, false, false);
+        emit Claimed(yieldAddress, 0);
         claimed = pool.claim(0);
         assertGt(claimed, 0);
     }

@@ -13,7 +13,7 @@ interface IZkBobPoolAdmin {
         // maximum amount of underlying tokens that can be invested into vault
         uint256 maxInvestedAmount;
         // expected amount of underlying tokens to be left at the pool after successful rebalance
-        uint256 buffer;
+        uint96 buffer;
         // slippage/rounding protection buffer, small part of accumulated interest that is non-claimable
         uint96 dust;
         // address to receive accumulated interest during the rebalance

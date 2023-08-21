@@ -83,13 +83,12 @@ contract BOBPoolMigration is Script, StdCheats {
             ZkBobCompoundingMixin.YieldParams({
                 yield: address(yieldProxy),
                 maxInvestedAmount: 50_000 ether / D,
-                buffer: 400 ether / D,
+                buffer: uint96(400 ether / D),
                 dust: uint96(0.5 ether / D),
                 interestReceiver: address(this),
                 yieldOperator: address(this)
             })
         );
-
     }
 
     function makeWithdrawal() internal {
