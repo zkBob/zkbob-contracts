@@ -3,6 +3,7 @@
 pragma solidity 0.8.15;
 
 import "./ZkBobPool.sol";
+import "./ZkBobDTO.sol";
 import "./ZkBobTokenSellerMixin.sol";
 import "./ZkBobPermit2Mixin.sol";
 
@@ -10,7 +11,7 @@ import "./ZkBobPermit2Mixin.sol";
  * @title ZkBobPoolERC20
  * Shielded transactions pool for ERC20 tokens
  */
-contract ZkBobPoolERC20 is ZkBobPool, ZkBobTokenSellerMixin, ZkBobPermit2Mixin {
+contract ZkBobPoolERC20 is ZkBobPool, ZkBobDTO, ZkBobTokenSellerMixin, ZkBobPermit2Mixin {
     constructor(
         uint256 __pool_id,
         address _token,
