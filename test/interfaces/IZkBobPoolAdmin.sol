@@ -77,6 +77,8 @@ interface IZkBobPoolAdmin {
 
     function pool_id() external view returns (uint256);
 
+    function investedAssetsAmount() external view returns (uint256);
+
     function yieldParams() external view returns (YieldParams memory);
 
     function updateYieldParams(YieldParams memory _yieldParams) external;
@@ -84,4 +86,6 @@ interface IZkBobPoolAdmin {
     function rebalance(uint256 minRebalanceAmount, uint256 maxRebalanceAmount) external;
 
     function claim(uint256 minClaimAmount) external returns (uint256);
+
+    function emergencyWithdraw() external;
 }

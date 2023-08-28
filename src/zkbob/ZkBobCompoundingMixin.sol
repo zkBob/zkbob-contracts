@@ -182,6 +182,32 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
         return _claim(minClaimAmount, yieldAddress, params.interestReceiver, dust);
     }
 
+    function emergencyWithdraw() external onlyOwner {
+        YieldParams storage params = yieldParams;
+
+        address yieldAddress = params.yield;
+
+        if (yieldAddress == address(0)) {
+            return;
+        }
+
+        IERC4626 yieldVault = IERC4626(yieldAddress);
+
+        uint256 currentInvestedSharesAmount = yieldVault.balanceOf(address(this));
+        uint256 allAssets = yieldVault.convertToAssets(currentInvestedSharesAmount);
+        uint256 currentInvestedAssetsAmount = investedAssetsAmount;
+        uint256 rebalancedAssets = allAssets;
+
+        yieldVault.withdraw(allAssets, address(this), address(this));
+        if (allAssets > currentInvestedAssetsAmount) {
+            IERC20(token).transfer(address(params.interestReceiver), allAssets - currentInvestedAssetsAmount);
+            rebalancedAssets = currentInvestedAssetsAmount;
+            emit Claimed(yieldAddress, allAssets - currentInvestedAssetsAmount);
+        }
+        investedAssetsAmount = 0;
+        emit Rebalance(yieldAddress, rebalancedAssets, 0);
+    }
+
     function _claim(
         uint256 minClaimAmount,
         address yieldAddress,
