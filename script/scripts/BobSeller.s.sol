@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 
 import "forge-std/Script.sol";
 import "./Env.s.sol";
-import "../../src/utils/UniswapV3Seller.sol";
+import "../../src/infra/UniswapV3Seller.sol";
 
 contract DeployBobSeller is Script {
     function run() external {
