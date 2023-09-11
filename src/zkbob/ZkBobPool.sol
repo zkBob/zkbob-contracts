@@ -163,6 +163,17 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         emit UpdateAccounting(address(_accounting));
     }
 
+    /**
+     * @dev Updates used energy redemption module.
+     * Callable only by the contract owner / proxy admin.
+     * @param _redeemer new energy redeemer implementation.
+     */
+    function setEnergyRedeemer(IEnergyRedeemer _redeemer) external onlyOwner {
+        require(address(_redeemer) == address(0) || Address.isContract(address(_redeemer)), "ZkBobPool: not a contract");
+        redeemer = _redeemer;
+        emit UpdateRedeemer(address(_redeemer));
+    }
+
     function _root() internal view override returns (uint256) {
         return roots[_transfer_index()];
     }

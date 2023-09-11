@@ -212,7 +212,6 @@ contract ZkBobAccounting is IZkBobAccounting, Ownable {
         require(_dailyUserDepositCap >= _depositCap, "ZkBobAccounting: daily user deposit cap too low");
         require(_dailyDepositCap >= _dailyUserDepositCap, "ZkBobAccounting: daily deposit cap too low");
         require(_tvlCap >= _dailyDepositCap, "ZkBobAccounting: tvl cap too low");
-        require(_dailyWithdrawalCap > 0, "ZkBobAccounting: zero daily withdrawal cap");
         require(
             _dailyUserDirectDepositCap >= _directDepositCap, "ZkBobAccounting: daily user direct deposit cap too low"
         );
