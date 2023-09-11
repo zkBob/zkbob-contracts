@@ -34,6 +34,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
+    uint256 internal constant FORCED_EXIT_MIN_DELAY = 1 hours;
+    uint256 internal constant FORCED_EXIT_MAX_DELAY = 24 hours;
 
     uint256 internal immutable TOKEN_DENOMINATOR;
     uint256 internal constant TOKEN_NUMERATOR = 1;
@@ -45,7 +47,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     address public immutable token;
     IZkBobDirectDepositQueue public immutable direct_deposit_queue;
 
-    uint256[3] private __deprecatedGap;
+    uint256[2] private __deprecatedGap;
+    mapping(uint256 => bytes32) public committedForcedExits;
     IEnergyRedeemer public redeemer;
     IZkBobAccounting public accounting;
     uint96 public pool_index;
@@ -64,6 +67,11 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     event WithdrawFee(address indexed operator, uint256 fee);
 
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
+
+    event CommitForcedExit(
+        uint256 indexed nullifier, address operator, address to, uint256 amount, uint256 exitStart, uint256 exitEnd
+    );
+    event ForcedExit(uint256 indexed index, uint256 indexed nullifier, address to, uint256 amount);
 
     constructor(
         uint256 __pool_id,
@@ -331,6 +339,104 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     }
 
     /**
+     * @dev Commits a forced withdrawal transaction for future execution after a set delay.
+     * Forced exits can be executed during 23 hours after 1 hour passed since its commitment.
+     * Account cannot be recovered after such forced exit.
+     * any remaining or newly sent funds would be lost forever.
+     * Accumulated account energy is forfeited.
+     * @param _operator address that is allowed to call executeForcedExit, or address(0) if permissionless.
+     * @param _to withdrawn funds receiver.
+     * @param _amount total account balance to withdraw.
+     * @param _index index of the merkle root used within proof.
+     * @param _nullifier transfer nullifier to be used for withdrawal.
+     * @param _out_commit out commitment for empty list of output notes.
+     * @param _transfer_proof snark proof for transfer verifier.
+     */
+    function commitForcedExit(
+        address _operator,
+        address _to,
+        uint256 _amount,
+        uint256 _index,
+        uint256 _nullifier,
+        uint256 _out_commit,
+        uint256[8] memory _transfer_proof
+    )
+        external
+    {
+        require(_amount <= 1 << 63, "ZkBobPool: amount too large");
+        require(_index < type(uint48).max, "ZkBobPool: index too large");
+
+        uint256 root = roots[_index];
+        require(root > 0, "ZkBobPool: transfer index out of bounds");
+        require(nullifiers[_nullifier] == 0, "ZkBobPool: doublespend detected");
+
+        uint256[5] memory transfer_pub = [
+            root,
+            _nullifier,
+            _out_commit,
+            (pool_id << 224) + (_index << 176) + uint64(-int64(uint64(_amount))),
+            uint256(keccak256(abi.encodePacked(_to))) % R
+        ];
+        require(transfer_verifier.verifyProof(transfer_pub, _transfer_proof), "ZkBobPool: bad transfer proof");
+
+        committedForcedExits[_nullifier] = _hashForcedExit(
+            _operator, _to, _amount, block.timestamp + FORCED_EXIT_MIN_DELAY, block.timestamp + FORCED_EXIT_MAX_DELAY
+        );
+
+        emit CommitForcedExit(
+            _nullifier,
+            _operator,
+            _to,
+            _amount,
+            block.timestamp + FORCED_EXIT_MIN_DELAY,
+            block.timestamp + FORCED_EXIT_MAX_DELAY
+        );
+    }
+
+    /**
+     * @dev Performs a forced withdrawal by irreversibly killing an account.
+     * Callable only by the operator, if set during latest call to the commitForcedExit.
+     * Account cannot be recovered after such forced exit.
+     * any remaining or newly sent funds would be lost forever.
+     * Accumulated account energy is forfeited.
+     * @param _nullifier transfer nullifier to be used for withdrawal.
+     * @param _operator operator address set during commitForcedExit.
+     * @param _to withdrawn funds receiver.
+     * @param _amount total account balance to withdraw.
+     * @param _exitStart exit window start timestamp, should match one calculated in commitForcedExit.
+     * @param _exitEnd exit window end timestamp, should match one calculated in commitForcedExit.
+     */
+    function executeForcedExit(
+        uint256 _nullifier,
+        address _operator,
+        address _to,
+        uint256 _amount,
+        uint256 _exitStart,
+        uint256 _exitEnd
+    )
+        external
+    {
+        require(nullifiers[_nullifier] == 0, "ZkBobPool: doublespend detected");
+        require(
+            committedForcedExits[_nullifier] == _hashForcedExit(_operator, _to, _amount, _exitStart, _exitEnd),
+            "ZkBobPool: invalid forced exit"
+        );
+
+        require(_operator == address(0) || _operator == msg.sender, "ZkBobPool: invalid caller");
+        require(block.timestamp >= _exitStart && block.timestamp < _exitEnd, "ZkBobPool: exit not allowed");
+
+        (IZkBobAccounting acc, uint96 poolIndex) = (accounting, pool_index);
+        if (address(acc) != address(0)) {
+            acc.recordOperation(IZkBobAccounting.TxType.ForcedExit, address(0), int256(_amount));
+        }
+        nullifiers[_nullifier] = poolIndex | uint256(0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddead0000000000000000);
+
+        IERC20(token).safeTransfer(_to, _amount * TOKEN_DENOMINATOR / TOKEN_NUMERATOR);
+
+        emit ForcedExit(poolIndex, _nullifier, _to, _amount);
+    }
+
+    /**
      * @dev Records submitted direct deposit into the users limits.
      * Callable only by the direct deposit queue.
      * @param _sender direct deposit sender.
@@ -360,6 +466,29 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         IERC20(token).safeTransfer(_to, fee);
         accumulatedFee[_operator] = 0;
         emit WithdrawFee(_operator, fee);
+    }
+
+    /**
+     * @dev Calculates forced exit operation hash.
+     * @param _operator operator address.
+     * @param _to withdrawn funds receiver.
+     * @param _amount total account balance to withdraw.
+     * @param _exitStart exit window start timestamp, should match one calculated in commitForcedExit.
+     * @param _exitEnd exit window end timestamp, should match one calculated in commitForcedExit.
+     * @return operation hash.
+     */
+    function _hashForcedExit(
+        address _operator,
+        address _to,
+        uint256 _amount,
+        uint256 _exitStart,
+        uint256 _exitEnd
+    )
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(_operator, _to, _amount, _exitStart, _exitEnd));
     }
 
     /**

@@ -304,6 +304,50 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         assertEq(IERC20(token).balanceOf(user3), 0.02 ether / D);
     }
 
+    function testForcedExit() public {
+        bytes memory data = _encodePermitDeposit(int256(0.5 ether / D), 0.01 ether / D);
+        _transact(data);
+
+        uint256 nullifier = _randFR();
+        pool.commitForcedExit(user2, user2, 0.4 ether / D / denominator, 128, nullifier, _randFR(), _randProof());
+        uint256 exitStart = block.timestamp + 1 hours;
+        uint256 exitEnd = block.timestamp + 24 hours;
+
+        assertEq(IERC20(token).balanceOf(user2), 0);
+        assertEq(pool.nullifiers(nullifier), 0);
+
+        vm.expectRevert("ZkBobPool: invalid forced exit");
+        pool.executeForcedExit(nullifier ^ 1, user2, user2, 0.4 ether / D / denominator, exitStart, exitEnd);
+
+        vm.expectRevert("ZkBobPool: invalid forced exit");
+        pool.executeForcedExit(nullifier, user2, user2, 0.4 ether / D / denominator, block.timestamp, exitEnd);
+
+        vm.expectRevert("ZkBobPool: invalid caller");
+        pool.executeForcedExit(nullifier, user2, user2, 0.4 ether / D / denominator, exitStart, exitEnd);
+
+        vm.startPrank(user2);
+        vm.expectRevert("ZkBobPool: exit not allowed");
+        pool.executeForcedExit(nullifier, user2, user2, 0.4 ether / D / denominator, exitStart, exitEnd);
+
+        skip(25 hours);
+        vm.expectRevert("ZkBobPool: exit not allowed");
+        pool.executeForcedExit(nullifier, user2, user2, 0.4 ether / D / denominator, exitStart, exitEnd);
+
+        rewind(23 hours);
+        pool.executeForcedExit(nullifier, user2, user2, 0.4 ether / D / denominator, exitStart, exitEnd);
+
+        vm.expectRevert("ZkBobPool: doublespend detected");
+        pool.executeForcedExit(nullifier, user2, user2, 0.4 ether / D / denominator, exitStart, exitEnd);
+
+        assertEq(IERC20(token).balanceOf(user2), 0.4 ether / D);
+        assertEq(pool.nullifiers(nullifier), 0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddead0000000000000080);
+
+        vm.expectRevert("ZkBobPool: doublespend detected");
+        pool.commitForcedExit(user2, user2, 0.4 ether / D / denominator, 128, nullifier, _randFR(), _randProof());
+
+        vm.stopPrank();
+    }
+
     function testRejectNegativeDeposits() public {
         bytes memory data1 = _encodePermitDeposit(int256(0.99 ether / D), 0.01 ether / D);
         _transact(data1);
