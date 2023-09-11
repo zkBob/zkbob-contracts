@@ -736,13 +736,13 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
 
         // buffer - dust < poolBalance < buffer
         vm.expectEmit(true, false, false, true);
-        emit Rebalance(yieldAddress, 399.5 ether / D, 0);
-        pool.rebalance(399.5 ether / D, 399.5 ether / D);
+        emit Rebalance(yieldAddress, 399.6 ether / D, 0);
+        pool.rebalance(399.6 ether / D, 399.6 ether / D);
         poolBalance = IERC20(token).balanceOf(address(pool));
-        assertEq(poolBalance, 4_999.5 ether / D);
+        assertEq(poolBalance, 4_999.6 ether / D);
         pool.rebalance(0, 1000 ether / D);
         poolBalance = IERC20(token).balanceOf(address(pool));
-        assertEq(poolBalance, 4_999.5 ether / D);
+        assertEq(poolBalance, 4_999.6 ether / D);
     }
 
     function testRebalanceWhenYieldIsAddressZero() public {
@@ -1009,7 +1009,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         uint256 claimed = pool.claim(0);
         vm.warp(block.timestamp + 365 days);
 
-        pool.emergencyWithdraw();
+        pool.emergencyWithdraw(5_000 ether);
 
         assertEq(pool.investedAssetsAmount(), 0);
         assertEq(IERC20(token).balanceOf(address(pool)), 10_000 ether / D);

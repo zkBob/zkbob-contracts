@@ -38,8 +38,7 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
         uint256 underlyingBalance = IERC20(token).balanceOf(address(this));
         if (underlyingBalance < _tokenAmount) {
             YieldParams storage params = yieldParams;
-            IERC4626 yieldVault = IERC4626(params.yield);
-            uint256 buffer = params.buffer;
+            (IERC4626 yieldVault, uint256 buffer) = (IERC4626(params.yield), params.buffer);
             uint256 remainder = _tokenAmount - underlyingBalance;
             uint256 vaultAmount = investedAssetsAmount;
             if (vaultAmount >= remainder + buffer) {
@@ -97,9 +96,9 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
         }
 
         YieldParams storage params = yieldParams;
-        IERC4626 yieldVault = IERC4626(params.yield);
+        (IERC4626 yieldVault, uint256 currentDust, address operator, uint256 buffer, uint256 maxInvestedAmount) =
+            (IERC4626(params.yield), params.dust, params.yieldOperator, params.buffer, params.maxInvestedAmount);
 
-        uint256 currentDust = params.dust;
         if (currentDust > maxRebalanceAmount) {
             return;
         }
@@ -111,46 +110,37 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
             return;
         }
 
-        address operator = params.yieldOperator;
         require(
             operator == address(0) || operator == msg.sender,
             "ZkBobCompoundingPool: Rebalance is an operator-called method"
         );
 
         uint256 underlyingBalance = IERC20(token).balanceOf(address(this));
-        uint256 buffer = params.buffer;
-
-        uint256 balancesDiff = (underlyingBalance >= buffer) ? underlyingBalance - buffer : buffer - underlyingBalance;
-        balancesDiff = (balancesDiff >= minRebalanceAmount)
-            ? ((balancesDiff <= maxRebalanceAmount) ? balancesDiff : maxRebalanceAmount)
-            : 0;
-        if (balancesDiff <= params.dust) {
-            return;
-        }
         uint256 vaultAssets = investedAssetsAmount;
-        uint256 maxInvestedAmount = params.maxInvestedAmount;
-        if (underlyingBalance > buffer) {
+
+        if (
+            underlyingBalance >= buffer + minRebalanceAmount
+                && investedAssetsAmount + minRebalanceAmount <= maxInvestedAmount
+        ) {
+            uint256 balancesDiff = underlyingBalance - buffer;
             if (vaultAssets + balancesDiff > maxInvestedAmount) {
                 balancesDiff = maxInvestedAmount - vaultAssets;
-                if (balancesDiff < minRebalanceAmount) {
-                    return;
-                }
-                investedAssetsAmount = maxInvestedAmount;
-            } else {
-                investedAssetsAmount += balancesDiff;
             }
+            if (balancesDiff > maxRebalanceAmount) {
+                balancesDiff = maxRebalanceAmount;
+            }
+            investedAssetsAmount += balancesDiff;
             yieldVault.deposit(balancesDiff, address(this));
             emit Rebalance(address(yieldVault), 0, balancesDiff);
-        } else {
+        } else if (underlyingBalance + minRebalanceAmount <= buffer && vaultAssets >= minRebalanceAmount) {
+            uint256 balancesDiff = buffer - underlyingBalance;
             if (balancesDiff > vaultAssets) {
                 balancesDiff = vaultAssets;
-                if (balancesDiff < minRebalanceAmount) {
-                    return;
-                }
-                investedAssetsAmount = 0;
-            } else {
-                investedAssetsAmount -= balancesDiff;
             }
+            if (balancesDiff > maxRebalanceAmount) {
+                balancesDiff = maxRebalanceAmount;
+            }
+            investedAssetsAmount -= balancesDiff;
             yieldVault.withdraw(balancesDiff, address(this), address(this));
             emit Rebalance(address(yieldVault), balancesDiff, 0);
         }
@@ -165,27 +155,30 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
     function claim(uint256 minClaimAmount) external returns (uint256) {
         YieldParams storage params = yieldParams;
 
-        address yieldAddress = params.yield;
+        (address yieldAddress, address operator, uint256 dust, address interestReceiver) =
+            (params.yield, params.yieldOperator, params.dust, params.interestReceiver);
 
         if (yieldAddress == address(0)) {
             return 0;
         }
-
-        address operator = params.yieldOperator;
         require(
             operator == address(0) || operator == msg.sender, "ZkBobCompoundingPool: Claim is an operator-called method"
         );
 
-        uint256 dust = params.dust;
         minClaimAmount = minClaimAmount > dust ? minClaimAmount : dust;
 
-        return _claim(minClaimAmount, yieldAddress, params.interestReceiver, dust);
+        return _claim(minClaimAmount, yieldAddress, interestReceiver, dust);
     }
 
-    function emergencyWithdraw() external onlyOwner {
+    /**
+     * @dev Withdraws everything from the yield.
+     * @param targetAmount amount of token to withdraw.
+     * Callable only by the contract owner / proxy admin / yield admin.
+     */
+    function emergencyWithdraw(uint256 targetAmount) external onlyOwner {
         YieldParams storage params = yieldParams;
 
-        address yieldAddress = params.yield;
+        (address yieldAddress, address interestReceiver) = (params.yield, params.interestReceiver);
 
         if (yieldAddress == address(0)) {
             return;
@@ -193,19 +186,19 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
 
         IERC4626 yieldVault = IERC4626(yieldAddress);
 
-        uint256 currentInvestedSharesAmount = yieldVault.balanceOf(address(this));
-        uint256 allAssets = yieldVault.convertToAssets(currentInvestedSharesAmount);
+        yieldVault.withdraw(targetAmount, address(this), address(this));
         uint256 currentInvestedAssetsAmount = investedAssetsAmount;
-        uint256 rebalancedAssets = allAssets;
 
-        yieldVault.withdraw(allAssets, address(this), address(this));
-        if (allAssets > currentInvestedAssetsAmount) {
-            IERC20(token).transfer(address(params.interestReceiver), allAssets - currentInvestedAssetsAmount);
-            rebalancedAssets = currentInvestedAssetsAmount;
-            emit Claimed(yieldAddress, allAssets - currentInvestedAssetsAmount);
+        if (targetAmount > currentInvestedAssetsAmount) {
+            IERC20(token).transfer(interestReceiver, targetAmount - currentInvestedAssetsAmount);
+            emit Claimed(yieldAddress, targetAmount - currentInvestedAssetsAmount);
+            targetAmount = currentInvestedAssetsAmount;
         }
-        investedAssetsAmount = 0;
-        emit Rebalance(yieldAddress, rebalancedAssets, 0);
+
+        investedAssetsAmount = currentInvestedAssetsAmount - targetAmount;
+
+        params.maxInvestedAmount = 0;
+        emit Rebalance(yieldAddress, targetAmount, 0);
     }
 
     function _claim(
@@ -226,7 +219,7 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
             return 0;
         }
 
-        uint256 toClaimAmount = allAssets - investedAssetsAmount;
+        uint256 toClaimAmount = allAssets - lockedAmount;
 
         if (toClaimAmount < minClaimAmount || toClaimAmount == 0) {
             return 0;

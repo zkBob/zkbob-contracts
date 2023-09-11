@@ -87,5 +87,5 @@ interface IZkBobPoolAdmin {
 
     function claim(uint256 minClaimAmount) external returns (uint256);
 
-    function emergencyWithdraw() external;
+    function emergencyWithdraw(uint256 targetAmount) external;
 }
