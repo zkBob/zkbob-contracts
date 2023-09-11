@@ -38,7 +38,15 @@ interface IZkBobPoolAdmin {
     )
         external;
 
-    function executeForcedExit(uint256 _nullifier) external;
+    function executeForcedExit(
+        uint256 _nullifier,
+        address _operator,
+        address _to,
+        uint256 _amount,
+        uint256 _exitStart,
+        uint256 _exitEnd
+    )
+        external;
 
     function appendDirectDeposits(
         uint256 _root_after,
