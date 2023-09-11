@@ -18,10 +18,9 @@ import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
 import "../../src/infra/UniswapV3Seller.sol";
 import "../../src/zkbob/ZkBobPoolUSDC.sol";
 import "@aave/aave-vault/src/ATokenVault.sol";
-import "../../src/zkbob/ZkBobPoolUSDCMigrated.sol";
 
 contract BOBPoolMigration is Script, StdCheats {
-    ZkBobPoolUSDCMigrated pool = ZkBobPoolUSDCMigrated(0x72e6B59D4a90ab232e55D4BB7ed2dD17494D62fB);
+    ZkBobPoolUSDC pool = ZkBobPoolUSDC(0x72e6B59D4a90ab232e55D4BB7ed2dD17494D62fB);
     ZkBobDirectDepositQueue queue_proxy = ZkBobDirectDepositQueue(0x668c5286eAD26fAC5fa944887F9D2F20f7DDF289);
     address usdc_addr = address(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
     address relayer_addr = address(0xc2c4AD59B78F4A0aFD0CDB8133E640Db08Fa5b90);
@@ -46,7 +45,7 @@ contract BOBPoolMigration is Script, StdCheats {
         require(queue_proxy == pool.direct_deposit_queue(), "Incorrect Direct Deposit queue proxy");
 
         vm.startPrank(deployer);
-        ZkBobPoolUSDCMigrated poolImpl = new ZkBobPoolUSDCMigrated(
+        ZkBobPoolUSDC poolImpl = new ZkBobPoolUSDC(
             pool_id, usdc_addr,
             transferVerifier, treeVerifier, batchDepositVerifier,
             address(queue_proxy)
