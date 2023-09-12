@@ -1092,7 +1092,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         uint256 claimed = pool.claim(0);
         vm.warp(block.timestamp + 365 days);
 
-        pool.emergencyWithdraw(5_000 ether);
+        pool.emergencyWithdraw(5_000 ether / D);
 
         assertEq(pool.investedAssetsAmount(), 0);
         assertEq(IERC20(token).balanceOf(address(pool)), 10_000 ether / D);
