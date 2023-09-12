@@ -439,7 +439,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         }
         nullifiers[_nullifier] = poolIndex | uint256(0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddead0000000000000000);
 
-        IERC20(token).safeTransfer(_to, _amount * TOKEN_DENOMINATOR / TOKEN_NUMERATOR);
+        _withdrawToken(_to, _amount * TOKEN_DENOMINATOR / TOKEN_NUMERATOR);
 
         emit ForcedExit(poolIndex, _nullifier, _to, _amount);
     }

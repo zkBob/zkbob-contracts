@@ -696,6 +696,45 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         assertEq(accounting.getLimitsFor(user2).dailyWithdrawalCapUsage, 20_000 ether / D / denominator);
     }
 
+    function testForcedExitCompounding() public {
+        if (!isCompounding) {
+            return;
+        }
+
+        bytes memory data = _encodePermitDeposit(int256(0.5 ether / D), 0.01 ether / D);
+        _transact(data);
+
+        pool.updateYieldParams(
+            IZkBobPoolAdmin.YieldParams({
+                yield: pool.yieldParams().yield,
+                maxInvestedAmount: 50_000 ether / D,
+                buffer: uint96(0.25 ether / D),
+                dust: uint96(0),
+                interestReceiver: address(this),
+                yieldOperator: address(this)
+            })
+        );
+        pool.rebalance(0, type(uint256).max);
+
+        vm.startPrank(user2);
+
+        uint256 nullifier = _randFR();
+        pool.commitForcedExit(user2, user2, 0.4 ether / D / denominator, 128, nullifier, _randFR(), _randProof());
+        uint256 exitStart = block.timestamp + 1 hours;
+        uint256 exitEnd = block.timestamp + 24 hours;
+
+        assertEq(IERC20(token).balanceOf(user2), 0);
+        assertEq(pool.nullifiers(nullifier), 0);
+
+        skip(2 hours);
+        pool.executeForcedExit(nullifier, user2, user2, 0.4 ether / D / denominator, exitStart, exitEnd);
+
+        assertEq(IERC20(token).balanceOf(user2), 0.4 ether / D);
+        assertEq(pool.nullifiers(nullifier), 0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddead0000000000000080);
+
+        vm.stopPrank();
+    }
+
     function testRebalance() public {
         if (!isCompounding) {
             return;
