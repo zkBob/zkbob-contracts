@@ -8,7 +8,6 @@ import "./Env.s.sol";
 import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/utils/ZkBobAccounting.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
-import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "../../src/zkbob/ZkBobPoolUSDC.sol";
 
 contract DummyDelegateCall {
