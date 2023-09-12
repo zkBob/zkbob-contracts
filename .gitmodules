@@ -21,4 +21,4 @@
 	branch = v1.0.2
 [submodule "lib/@aave/aave-vault"]
 	path = lib/@aave/aave-vault
-	url = https://github.com/aave/Aave-Vault
+	url = https://github.com/zkBob/Aave-Vault
