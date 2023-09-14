@@ -140,13 +140,12 @@ contract ZkBobAccounting is IZkBobAccounting, Ownable {
         slot0 = Slot0({
             maxWeeklyAvgTvl: _maxWeeklyAvgTvl,
             maxWeeklyTxCount: _maxWeeklyTxCount,
-            tailSlot: 0,
+            tailSlot: curSlot,
             headSlot: curSlot,
             cumTvl: _cumTvl,
             txCount: _txCount
         });
         slot1 = Slot1({tvl: _tvl});
-        snapshots[0] = Snapshot({nextSlot: curSlot, txCount: _txCount, cumTvl: _cumTvl});
     }
 
     /**
@@ -309,7 +308,7 @@ contract ZkBobAccounting is IZkBobAccounting, Ownable {
         // however, in order to keep constant gas usage, "if" is being used
         // this can lead to a longer sliding window (> 1 week) in some cases,
         // but eventually it will converge back to the 1 week target
-        if (s0.txCount > 0 && curSlot - s0.tailSlot > WEEK_SLOTS) {
+        if (s0.headSlot > s0.tailSlot && curSlot - s0.tailSlot > WEEK_SLOTS) {
             // if tail is more than 1 week behind, we move tail pointer to the next snapshot
             Snapshot memory sn = snapshots[s0.tailSlot];
             delete snapshots[s0.tailSlot];
