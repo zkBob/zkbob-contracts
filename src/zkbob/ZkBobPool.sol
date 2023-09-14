@@ -71,6 +71,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     event CommitForcedExit(
         uint256 indexed nullifier, address operator, address to, uint256 amount, uint256 exitStart, uint256 exitEnd
     );
+    event CancelForcedExit(uint256 indexed nullifier);
     event ForcedExit(uint256 indexed index, uint256 indexed nullifier, address to, uint256 amount);
 
     constructor(
@@ -369,6 +370,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         uint256 root = roots[_index];
         require(root > 0, "ZkBobPool: transfer index out of bounds");
         require(nullifiers[_nullifier] == 0, "ZkBobPool: doublespend detected");
+        require(committedForcedExits[_nullifier] == 0, "ZkBobPool: already exists");
 
         uint256[5] memory transfer_pub = [
             root,
@@ -405,6 +407,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      * @param _amount total account balance to withdraw.
      * @param _exitStart exit window start timestamp, should match one calculated in commitForcedExit.
      * @param _exitEnd exit window end timestamp, should match one calculated in commitForcedExit.
+     * @param _cancel cancel a previously submitted expired forced exit instead of executing it.
      */
     function executeForcedExit(
         uint256 _nullifier,
@@ -412,7 +415,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         address _to,
         uint256 _amount,
         uint256 _exitStart,
-        uint256 _exitEnd
+        uint256 _exitEnd,
+        bool _cancel
     )
         external
     {
@@ -421,6 +425,13 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             committedForcedExits[_nullifier] == _hashForcedExit(_operator, _to, _amount, _exitStart, _exitEnd),
             "ZkBobPool: invalid forced exit"
         );
+        if (_cancel) {
+            require(block.timestamp >= _exitEnd, "ZkBobPool: exit not expired");
+            delete committedForcedExits[_nullifier];
+
+            emit CancelForcedExit(_nullifier);
+            return;
+        }
 
         require(_operator == address(0) || _operator == msg.sender, "ZkBobPool: invalid caller");
         require(block.timestamp >= _exitStart && block.timestamp < _exitEnd, "ZkBobPool: exit not allowed");

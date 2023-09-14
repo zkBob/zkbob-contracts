@@ -27,6 +27,8 @@ interface IZkBobPoolAdmin {
 
     function transact() external;
 
+    function committedForcedExits(uint256 _nullifier) external view returns (bytes32);
+
     function commitForcedExit(
         address _operator,
         address _to,
@@ -44,7 +46,8 @@ interface IZkBobPoolAdmin {
         address _to,
         uint256 _amount,
         uint256 _exitStart,
-        uint256 _exitEnd
+        uint256 _exitEnd,
+        bool _cancel
     )
         external;
 
