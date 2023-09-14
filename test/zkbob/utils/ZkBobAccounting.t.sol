@@ -113,6 +113,20 @@ contract ZkBobAccountingTest is Test {
         _checkStats({_maxWeeklyAvgTvl: 200, _maxWeeklyTxCount: 504, _txCount: 1207});
     }
 
+    function testNoWeeklyActivity() public {
+        pool.recordOperation(IZkBobAccounting.TxType.Common, user1, int256(100 gwei));
+        pool.recordOperation(IZkBobAccounting.TxType.Common, user1, 0);
+
+        vm.warp(block.timestamp + 10 days);
+
+        for (uint256 i = 0; i < 10; i++) {
+            pool.recordOperation(IZkBobAccounting.TxType.Common, user1, 0);
+            vm.warp(block.timestamp + 1 days);
+        }
+
+        _checkStats({_maxWeeklyAvgTvl: 100, _maxWeeklyTxCount: 7, _txCount: 12});
+    }
+
     function testDepositCap() public {
         pool.setLimits(0, 1000 gwei, 500 gwei, 500 gwei, 300 gwei, 100 gwei, 0, 0);
 
