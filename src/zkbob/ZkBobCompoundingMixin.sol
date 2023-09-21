@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.15;
 
+import "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import "./ZkBobPool.sol";
 
 /**
@@ -63,11 +64,11 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
         address yieldAddress = yieldParams.yield;
         require(
             _yieldParams.yield == yieldAddress || investedAssetsAmount == 0,
-            "ZkBobCompoundingPool: Invested amount should be 0 in case of changing yield"
+            "ZkBobCompounding: another yield is active"
         );
         require(
             _yieldParams.yield == address(0) || _yieldParams.interestReceiver != address(0),
-            "ZkBobCompoundingPool: interest receiver should not be address(0) for existed yield"
+            "ZkBobCompounding: zero interest receiver"
         );
 
         if (_yieldParams.yield != yieldAddress) {
@@ -110,10 +111,7 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
             return;
         }
 
-        require(
-            operator == address(0) || operator == msg.sender,
-            "ZkBobCompoundingPool: Rebalance is an operator-called method"
-        );
+        require(operator == address(0) || operator == msg.sender, "ZkBobCompounding: not authorized");
 
         uint256 underlyingBalance = IERC20(token).balanceOf(address(this));
         uint256 vaultAssets = investedAssetsAmount;
@@ -161,9 +159,7 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
         if (yieldAddress == address(0)) {
             return 0;
         }
-        require(
-            operator == address(0) || operator == msg.sender, "ZkBobCompoundingPool: Claim is an operator-called method"
-        );
+        require(operator == address(0) || operator == msg.sender, "ZkBobCompounding: not authorized");
 
         minClaimAmount = minClaimAmount > dust ? minClaimAmount : dust;
 

@@ -6,8 +6,6 @@ import "forge-std/Test.sol";
 import "@openzeppelin/contracts/mocks/ERC20Mock.sol";
 import {ERC4626Mock} from "@openzeppelin/contracts/mocks/ERC4626Mock.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {TransparentUpgradeableProxy as TUP} from
-    "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import "@openzeppelin/contracts/token/ERC721/presets/ERC721PresetMinterPauserAutoId.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
 import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
@@ -165,17 +163,11 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         if (isCompounding) {
             ATokenVault yieldVault = new ATokenVault(token, 4546, IPoolAddressesProvider(poolAddressesProvider));
             deal(token, address(this), 1_000_000 ether / D);
-            address yieldProxyAddr = computeCreateAddress(address(this), vm.getNonce(address(this)));
-            IERC20(token).approve(yieldProxyAddr, type(uint256).max);
-            bytes memory initData = abi.encodeWithSelector(
-                ATokenVault.initialize.selector,
-                address(this),
-                0.2 ether, // 20%
-                "Wrapped BOB Yield Token",
-                "wBYT",
-                1_000_000 ether / D
+            EIP1967Proxy yieldProxy = new EIP1967Proxy(user2, address(yieldVault), "");
+            IERC20(token).approve(address(yieldProxy), type(uint256).max);
+            ATokenVault(address(yieldProxy)).initialize(
+                address(this), 0.2 ether, "AAVE Vault", "AAVE", 1_000_000 ether / D
             );
-            TUP yieldProxy = new TUP(address(yieldVault), user2, initData);
             pool.updateYieldParams(
                 IZkBobPoolAdmin.YieldParams({
                     yield: address(yieldProxy),
@@ -896,7 +888,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         );
 
         vm.prank(user2);
-        vm.expectRevert("ZkBobCompoundingPool: Rebalance is an operator-called method");
+        vm.expectRevert("ZkBobCompounding: not authorized");
         pool.rebalance(3_000 ether / D, 4_000 ether / D);
     }
 
@@ -942,7 +934,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             interestReceiver: address(this),
             yieldOperator: address(this)
         });
-        vm.expectRevert("ZkBobCompoundingPool: Invested amount should be 0 in case of changing yield");
+        vm.expectRevert("ZkBobCompounding: another yield is active");
         pool.updateYieldParams(yieldParams);
 
         bytes memory data2 = _encodeWithdrawal(user1, (10_000 ether - 0.01 ether) / D, 0, 0);
@@ -973,7 +965,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             interestReceiver: address(0),
             yieldOperator: address(this)
         });
-        vm.expectRevert("ZkBobCompoundingPool: interest receiver should not be address(0) for existed yield");
+        vm.expectRevert("ZkBobCompounding: zero interest receiver");
         pool.updateYieldParams(yieldParams);
     }
 
@@ -1050,7 +1042,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         );
 
         vm.prank(user2);
-        vm.expectRevert("ZkBobCompoundingPool: Claim is an operator-called method");
+        vm.expectRevert("ZkBobCompounding: not authorized");
         uint256 claimed = pool.claim(0);
         vm.warp(block.timestamp + 365 days);
 
@@ -1088,7 +1080,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         );
 
         vm.prank(user2);
-        vm.expectRevert("ZkBobCompoundingPool: Claim is an operator-called method");
+        vm.expectRevert("ZkBobCompounding: not authorized");
         uint256 claimed = pool.claim(0);
         vm.warp(block.timestamp + 365 days);
 
