@@ -63,8 +63,7 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
     function updateYieldParams(YieldParams memory _yieldParams) external onlyOwner {
         address yieldAddress = yieldParams.yield;
         require(
-            _yieldParams.yield == yieldAddress || investedAssetsAmount == 0,
-            "ZkBobCompounding: another yield is active"
+            _yieldParams.yield == yieldAddress || investedAssetsAmount == 0, "ZkBobCompounding: another yield is active"
         );
         require(
             _yieldParams.yield == address(0) || _yieldParams.interestReceiver != address(0),
