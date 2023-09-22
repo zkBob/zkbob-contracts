@@ -738,56 +738,14 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         bytes memory data1 = _encodePermitDeposit(int256(10_000 ether / D), 0);
         _transact(data1);
 
-        uint256 poolBalance = IERC20(token).balanceOf(address(pool));
-        assertEq(poolBalance, 10_000 ether / D);
+        assertEq(IERC20(token).balanceOf(address(pool)), 10_000 ether / D);
 
-        // POOL -> YIELD
-
-        // When diff is more than max bound
-        vm.expectEmit(true, false, false, true);
-        emit Rebalance(yieldAddress, 0, 4_000 ether / D);
-        pool.rebalance(3_000 ether / D, 4_000 ether / D);
-        poolBalance = IERC20(token).balanceOf(address(pool));
-        assertEq(poolBalance, 6_000 ether / D);
-
-        // When diff is less than min bound
-        pool.rebalance(3_000 ether / D, 4_000 ether / D);
-        poolBalance = IERC20(token).balanceOf(address(pool));
-        assertEq(poolBalance, 6_000 ether / D);
-
-        // When bounds set in wrong order
-        vm.expectEmit(true, false, false, true);
-        emit Rebalance(yieldAddress, 0, (1_000 ether - 0.4 ether) / D);
-        pool.rebalance((1_000 ether - 0.4 ether) / D, 0);
-        poolBalance = IERC20(token).balanceOf(address(pool));
-        assertEq(poolBalance, 5_000.4 ether / D);
-
-        // buffer < poolBalance < buffer + dust
-        pool.rebalance(0, 1000 ether / D);
-        poolBalance = IERC20(token).balanceOf(address(pool));
-        assertEq(poolBalance, 5_000.4 ether / D);
+        // DEPOSITS
 
         pool.updateYieldParams(
             IZkBobPoolAdmin.YieldParams({
                 yield: pool.yieldParams().yield,
-                maxInvestedAmount: 50_000 ether / D,
-                buffer: uint96(4_000 ether / D),
-                dust: uint96(0.5 ether / D),
-                interestReceiver: address(this),
-                yieldOperator: address(this)
-            })
-        );
-
-        vm.expectEmit(true, false, false, true);
-        emit Rebalance(yieldAddress, 0, 1000.4 ether / D);
-        pool.rebalance(400 ether / D, 2000 ether / D);
-        poolBalance = IERC20(token).balanceOf(address(pool));
-        assertEq(poolBalance, 4_000 ether / D);
-
-        pool.updateYieldParams(
-            IZkBobPoolAdmin.YieldParams({
-                yield: pool.yieldParams().yield,
-                maxInvestedAmount: 50_000 ether / D,
+                maxInvestedAmount: 4_000 ether / D,
                 buffer: uint96(5_000 ether / D),
                 dust: uint96(0.5 ether / D),
                 interestReceiver: address(this),
@@ -795,42 +753,96 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             })
         );
 
-        // YIELD -> POOL
+        // bounded by maxRebalanceAmount
+        vm.expectEmit(true, false, false, true);
+        emit Rebalance(yieldAddress, 0, 3_000 ether / D);
+        pool.rebalance(0, 3_000 ether / D);
+        assertEq(IERC20(token).balanceOf(address(pool)), 7_000 ether / D);
+        assertEq(pool.investedAssetsAmount(), 3_000 ether / D);
 
-        // When diff is more than max bound
+        // bounded by minRebalanceAmount
+        vm.expectRevert("ZkBobCompounding: insufficient rebalance");
+        pool.rebalance(3_000 ether / D, type(uint256).max);
+
+        // bounded by maxInvestedAmount
+        pool.rebalance(0, type(uint256).max);
+        assertEq(IERC20(token).balanceOf(address(pool)), 6_000 ether / D);
+        assertEq(pool.investedAssetsAmount(), 4_000 ether / D);
+
+        pool.updateYieldParams(
+            IZkBobPoolAdmin.YieldParams({
+                yield: pool.yieldParams().yield,
+                maxInvestedAmount: 10_000 ether / D,
+                buffer: uint96(5_000 ether / D),
+                dust: uint96(0.5 ether / D),
+                interestReceiver: address(this),
+                yieldOperator: address(this)
+            })
+        );
+
+        // bounded by buffer
+        pool.rebalance(0, type(uint256).max);
+        assertEq(IERC20(token).balanceOf(address(pool)), 5_000 ether / D);
+        assertEq(pool.investedAssetsAmount(), 5_000 ether / D);
+
+        // bounded by minRebalanceAmount
+        vm.expectRevert("ZkBobCompounding: insufficient rebalance");
+        pool.rebalance(0, type(uint256).max);
+
+        // WITHDRAWALS
+
+        pool.updateYieldParams(
+            IZkBobPoolAdmin.YieldParams({
+                yield: pool.yieldParams().yield,
+                maxInvestedAmount: 50_000 ether / D,
+                buffer: uint96(8_000 ether / D),
+                dust: uint96(0.5 ether / D),
+                interestReceiver: address(this),
+                yieldOperator: address(this)
+            })
+        );
+
+        // bounded by maxRebalanceAmount
         vm.expectEmit(true, false, false, true);
         emit Rebalance(yieldAddress, 600 ether / D, 0);
-        pool.rebalance(400 ether / D, 600 ether / D);
-        poolBalance = IERC20(token).balanceOf(address(pool));
-        assertEq(poolBalance, 4_600 ether / D);
+        pool.rebalance(0, 600 ether / D);
+        assertEq(IERC20(token).balanceOf(address(pool)), 5_600 ether / D);
+        assertEq(pool.investedAssetsAmount(), 4_400 ether / D);
 
-        // When diff is less than min bound
-        pool.rebalance(400.5 ether / D, 600 ether / D);
-        poolBalance = IERC20(token).balanceOf(address(pool));
-        assertEq(poolBalance, 4_600 ether / D);
+        // bounded by minRebalanceAmount
+        vm.expectRevert("ZkBobCompounding: insufficient rebalance");
+        pool.rebalance(3_000 ether / D, type(uint256).max);
 
-        // buffer - dust < poolBalance < buffer
-        vm.expectEmit(true, false, false, true);
-        emit Rebalance(yieldAddress, 399.6 ether / D, 0);
-        pool.rebalance(399.6 ether / D, 399.6 ether / D);
-        poolBalance = IERC20(token).balanceOf(address(pool));
-        assertEq(poolBalance, 4_999.6 ether / D);
-        pool.rebalance(0, 1000 ether / D);
-        poolBalance = IERC20(token).balanceOf(address(pool));
-        assertEq(poolBalance, 4_999.6 ether / D);
+        // bounded by buffer
+        pool.rebalance(0, type(uint256).max);
+        assertEq(IERC20(token).balanceOf(address(pool)), 8_000 ether / D);
+        assertEq(pool.investedAssetsAmount(), 2_000 ether / D);
+
+        // bounded by minRebalanceAmount
+        vm.expectRevert("ZkBobCompounding: insufficient rebalance");
+        pool.rebalance(0, type(uint256).max);
+
+        pool.updateYieldParams(
+            IZkBobPoolAdmin.YieldParams({
+                yield: pool.yieldParams().yield,
+                maxInvestedAmount: 1_000 ether / D,
+                buffer: uint96(7_000 ether / D),
+                dust: uint96(0.5 ether / D),
+                interestReceiver: address(this),
+                yieldOperator: address(this)
+            })
+        );
+
+        // bounded by maxInvestedAmount
+        pool.rebalance(0, type(uint256).max);
+        assertEq(IERC20(token).balanceOf(address(pool)), 9_000 ether / D);
+        assertEq(pool.investedAssetsAmount(), 1_000 ether / D);
     }
 
     function testRebalanceWhenYieldIsAddressZero() public {
         if (!isCompounding) {
             return;
         }
-
-        deal(token, user1, 11_000 ether / D);
-        bytes memory data1 = _encodePermitDeposit(int256(10_000 ether / D), 0);
-        _transact(data1);
-
-        uint256 poolBalance = IERC20(token).balanceOf(address(pool));
-        assertEq(poolBalance, 10_000 ether / D);
 
         pool.updateYieldParams(
             IZkBobPoolAdmin.YieldParams({
@@ -843,9 +855,8 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             })
         );
 
+        vm.expectRevert("ZkBobCompounding: yield not enabled");
         pool.rebalance(0, type(uint256).max);
-        poolBalance = IERC20(token).balanceOf(address(pool));
-        assertEq(poolBalance, 10_000 ether / D);
     }
 
     function testRebalanceAccessControl() public {
@@ -1028,27 +1039,21 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         // 5_000 in pool and 5_000 in yield
         pool.rebalance(0, type(uint256).max);
 
-        assertEq(pool.claim(6_000 ether / D), 0);
-
-        pool.updateYieldParams(
-            IZkBobPoolAdmin.YieldParams({
-                yield: yieldAddress,
-                maxInvestedAmount: 50_000 ether / D,
-                buffer: uint96(5_000 ether / D),
-                dust: uint96(0.5 ether / D),
-                interestReceiver: user2,
-                yieldOperator: address(this)
-            })
-        );
+        vm.expectRevert("ZkBobCompounding: not enough to claim");
+        pool.claim(0);
 
         vm.prank(user2);
         vm.expectRevert("ZkBobCompounding: not authorized");
-        uint256 claimed = pool.claim(0);
-        vm.warp(block.timestamp + 365 days);
+        pool.claim(0);
+
+        skip(365 days);
+
+        vm.expectRevert("ZkBobCompounding: not enough to claim");
+        pool.claim(6_000 ether / D);
 
         vm.expectEmit(true, false, false, false);
         emit Claimed(yieldAddress, 0);
-        claimed = pool.claim(0);
+        uint256 claimed = pool.claim(0);
         assertGt(claimed, 0);
     }
 
@@ -1066,8 +1071,6 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         // 5_000 in pool and 5_000 in yield
         pool.rebalance(0, type(uint256).max);
 
-        assertEq(pool.claim(6_000 ether / D), 0);
-
         pool.updateYieldParams(
             IZkBobPoolAdmin.YieldParams({
                 yield: yieldAddress,
@@ -1082,7 +1085,8 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         vm.prank(user2);
         vm.expectRevert("ZkBobCompounding: not authorized");
         uint256 claimed = pool.claim(0);
-        vm.warp(block.timestamp + 365 days);
+
+        skip(365 days);
 
         pool.emergencyWithdraw(5_000 ether / D);
 

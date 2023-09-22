@@ -38,19 +38,13 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
     function _withdrawToken(address _user, uint256 _tokenAmount) internal override {
         uint256 underlyingBalance = IERC20(token).balanceOf(address(this));
         if (underlyingBalance < _tokenAmount) {
-            YieldParams storage params = yieldParams;
-            (IERC4626 yieldVault, uint256 buffer) = (IERC4626(params.yield), params.buffer);
+            (address yieldAddress, uint256 buffer) = (yieldParams.yield, yieldParams.buffer);
             uint256 remainder = _tokenAmount - underlyingBalance;
-            uint256 vaultAmount = investedAssetsAmount;
-            if (vaultAmount >= remainder + buffer) {
-                investedAssetsAmount = vaultAmount - remainder - buffer;
-                yieldVault.withdraw(remainder + buffer, address(this), address(this));
-                emit Rebalance(address(yieldVault), remainder + buffer, 0);
-            } else {
-                investedAssetsAmount = 0;
-                yieldVault.withdraw(vaultAmount, address(this), address(this));
-                emit Rebalance(address(yieldVault), vaultAmount, 0);
-            }
+            uint256 investedAssets = investedAssetsAmount;
+            uint256 withdrawAmount = investedAssets > remainder + buffer ? remainder + buffer : investedAssets;
+            investedAssetsAmount = investedAssets - withdrawAmount;
+            IERC4626(yieldAddress).withdraw(withdrawAmount, address(this), address(this));
+            emit Rebalance(yieldAddress, withdrawAmount, 0);
         }
         IERC20(token).safeTransfer(_user, _tokenAmount);
     }
@@ -76,7 +70,7 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
             }
             if (yieldAddress != address(0)) {
                 IERC20(token).approve(yieldAddress, 0);
-                _claim(0, yieldAddress, yieldParams.interestReceiver, 0);
+                _claim(yieldAddress, yieldParams.interestReceiver, 0);
             }
         }
 
@@ -91,55 +85,48 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
      * @param maxRebalanceAmount maximum amount of token to move between underlying balance and yield.
      */
     function rebalance(uint256 minRebalanceAmount, uint256 maxRebalanceAmount) external {
-        if (maxRebalanceAmount < minRebalanceAmount) {
-            (minRebalanceAmount, maxRebalanceAmount) = (maxRebalanceAmount, minRebalanceAmount);
-        }
+        (address yieldAddress, address operator, uint256 buffer, uint256 maxInvestedAmount) =
+            (yieldParams.yield, yieldParams.yieldOperator, yieldParams.buffer, yieldParams.maxInvestedAmount);
 
-        YieldParams storage params = yieldParams;
-        (IERC4626 yieldVault, uint256 currentDust, address operator, uint256 buffer, uint256 maxInvestedAmount) =
-            (IERC4626(params.yield), params.dust, params.yieldOperator, params.buffer, params.maxInvestedAmount);
-
-        if (currentDust > maxRebalanceAmount) {
-            return;
-        }
-        if (minRebalanceAmount < currentDust) {
-            minRebalanceAmount = currentDust;
-        }
-
-        if (address(yieldVault) == address(0)) {
-            return;
-        }
-
-        require(operator == address(0) || operator == msg.sender, "ZkBobCompounding: not authorized");
+        require(yieldAddress != address(0), "ZkBobCompounding: yield not enabled");
+        require(operator == address(0) || operator == msg.sender || _isOwner(), "ZkBobCompounding: not authorized");
 
         uint256 underlyingBalance = IERC20(token).balanceOf(address(this));
-        uint256 vaultAssets = investedAssetsAmount;
+        uint256 investedAssets = investedAssetsAmount;
 
-        if (
-            underlyingBalance >= buffer + minRebalanceAmount
-                && investedAssetsAmount + minRebalanceAmount <= maxInvestedAmount
-        ) {
-            uint256 balancesDiff = underlyingBalance - buffer;
-            if (vaultAssets + balancesDiff > maxInvestedAmount) {
-                balancesDiff = maxInvestedAmount - vaultAssets;
+        if (underlyingBalance < buffer || investedAssets > maxInvestedAmount) {
+            uint256 withdrawAmount;
+            if (underlyingBalance < buffer) {
+                withdrawAmount = buffer - underlyingBalance;
+                if (withdrawAmount > investedAssets) {
+                    withdrawAmount = investedAssets;
+                }
+            } else {
+                withdrawAmount = investedAssets - maxInvestedAmount;
             }
-            if (balancesDiff > maxRebalanceAmount) {
-                balancesDiff = maxRebalanceAmount;
+            if (withdrawAmount > maxRebalanceAmount) {
+                withdrawAmount = maxRebalanceAmount;
             }
-            investedAssetsAmount += balancesDiff;
-            yieldVault.deposit(balancesDiff, address(this));
-            emit Rebalance(address(yieldVault), 0, balancesDiff);
-        } else if (underlyingBalance + minRebalanceAmount <= buffer && vaultAssets >= minRebalanceAmount) {
-            uint256 balancesDiff = buffer - underlyingBalance;
-            if (balancesDiff > vaultAssets) {
-                balancesDiff = vaultAssets;
+            require(
+                withdrawAmount > 0 && withdrawAmount >= minRebalanceAmount, "ZkBobCompounding: insufficient rebalance"
+            );
+            investedAssetsAmount = investedAssets - withdrawAmount;
+            IERC4626(yieldAddress).withdraw(withdrawAmount, address(this), address(this));
+            emit Rebalance(yieldAddress, withdrawAmount, 0);
+        } else {
+            uint256 depositAmount = underlyingBalance - buffer;
+            if (investedAssets + depositAmount > maxInvestedAmount) {
+                depositAmount = maxInvestedAmount - investedAssets;
             }
-            if (balancesDiff > maxRebalanceAmount) {
-                balancesDiff = maxRebalanceAmount;
+            if (depositAmount > maxRebalanceAmount) {
+                depositAmount = maxRebalanceAmount;
             }
-            investedAssetsAmount -= balancesDiff;
-            yieldVault.withdraw(balancesDiff, address(this), address(this));
-            emit Rebalance(address(yieldVault), balancesDiff, 0);
+            require(
+                depositAmount > 0 && depositAmount >= minRebalanceAmount, "ZkBobCompounding: insufficient rebalance"
+            );
+            investedAssetsAmount = investedAssets + depositAmount;
+            IERC4626(yieldAddress).deposit(depositAmount, address(this));
+            emit Rebalance(yieldAddress, 0, depositAmount);
         }
     }
 
@@ -150,19 +137,17 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
      * @return Claimed amount.
      */
     function claim(uint256 minClaimAmount) external returns (uint256) {
-        YieldParams storage params = yieldParams;
-
         (address yieldAddress, address operator, uint256 dust, address interestReceiver) =
-            (params.yield, params.yieldOperator, params.dust, params.interestReceiver);
+            (yieldParams.yield, yieldParams.yieldOperator, yieldParams.dust, yieldParams.interestReceiver);
 
-        if (yieldAddress == address(0)) {
-            return 0;
-        }
-        require(operator == address(0) || operator == msg.sender, "ZkBobCompounding: not authorized");
+        require(yieldAddress != address(0), "ZkBobCompounding: yield not enabled");
+        require(operator == address(0) || operator == msg.sender || _isOwner(), "ZkBobCompounding: not authorized");
 
-        minClaimAmount = minClaimAmount > dust ? minClaimAmount : dust;
+        uint256 claimed = _claim(yieldAddress, interestReceiver, dust);
 
-        return _claim(minClaimAmount, yieldAddress, interestReceiver, dust);
+        require(claimed > 0 && claimed >= minClaimAmount, "ZkBobCompounding: not enough to claim");
+
+        return claimed;
     }
 
     /**
@@ -171,58 +156,39 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
      * Callable only by the contract owner / proxy admin / yield admin.
      */
     function emergencyWithdraw(uint256 targetAmount) external onlyOwner {
-        YieldParams storage params = yieldParams;
+        (address yieldAddress, address interestReceiver) = (yieldParams.yield, yieldParams.interestReceiver);
 
-        (address yieldAddress, address interestReceiver) = (params.yield, params.interestReceiver);
+        require(yieldAddress != address(0), "ZkBobCompounding: yield not enabled");
 
-        if (yieldAddress == address(0)) {
-            return;
+        IERC4626(yieldAddress).withdraw(targetAmount, address(this), address(this));
+        uint256 investedAssets = investedAssetsAmount;
+
+        if (targetAmount > investedAssets) {
+            IERC20(token).transfer(interestReceiver, targetAmount - investedAssets);
+            emit Claimed(yieldAddress, targetAmount - investedAssets);
+            targetAmount = investedAssets;
         }
 
-        IERC4626 yieldVault = IERC4626(yieldAddress);
+        investedAssetsAmount = investedAssets - targetAmount;
 
-        yieldVault.withdraw(targetAmount, address(this), address(this));
-        uint256 currentInvestedAssetsAmount = investedAssetsAmount;
-
-        if (targetAmount > currentInvestedAssetsAmount) {
-            IERC20(token).transfer(interestReceiver, targetAmount - currentInvestedAssetsAmount);
-            emit Claimed(yieldAddress, targetAmount - currentInvestedAssetsAmount);
-            targetAmount = currentInvestedAssetsAmount;
-        }
-
-        investedAssetsAmount = currentInvestedAssetsAmount - targetAmount;
-
-        params.maxInvestedAmount = 0;
+        yieldParams.maxInvestedAmount = 0;
         emit Rebalance(yieldAddress, targetAmount, 0);
     }
 
-    function _claim(
-        uint256 minClaimAmount,
-        address yieldAddress,
-        address interestReceiver,
-        uint256 dust
-    )
-        internal
-        returns (uint256)
-    {
-        IERC4626 yieldVault = IERC4626(yieldAddress);
-        uint256 currentInvestedSharesAmount = yieldVault.balanceOf(address(this));
-        uint256 lockedAmount = investedAssetsAmount + dust;
-        uint256 allAssets = yieldVault.convertToAssets(currentInvestedSharesAmount);
+    function _claim(address yieldAddress, address interestReceiver, uint256 dust) internal returns (uint256) {
+        uint256 shares = IERC4626(yieldAddress).balanceOf(address(this));
+        uint256 lockedAssets = investedAssetsAmount + dust;
+        uint256 availableAssets = IERC4626(yieldAddress).convertToAssets(shares);
 
-        if (allAssets < lockedAmount) {
+        if (availableAssets <= lockedAssets) {
             return 0;
         }
 
-        uint256 toClaimAmount = allAssets - lockedAmount;
+        uint256 claimAmount = availableAssets - lockedAssets;
+        IERC4626(yieldAddress).withdraw(claimAmount, interestReceiver, address(this));
 
-        if (toClaimAmount < minClaimAmount || toClaimAmount == 0) {
-            return 0;
-        }
+        emit Claimed(yieldAddress, claimAmount);
 
-        yieldVault.withdraw(toClaimAmount, interestReceiver, address(this));
-
-        emit Claimed(address(yieldVault), toClaimAmount);
-        return toClaimAmount;
+        return claimAmount;
     }
 }
