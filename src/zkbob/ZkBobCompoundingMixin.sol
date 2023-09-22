@@ -16,16 +16,16 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
     struct YieldParams {
         // ERC4626 vault address (or address(0) if not set)
         address yield;
-        // maximum amount of underlying tokens that can be invested into vault
-        uint256 maxInvestedAmount;
         // expected amount of underlying tokens to be left at the pool after successful rebalance
         uint96 buffer;
+        // operator address (or address(0) if permissionless)
+        address yieldOperator;
         // slippage/rounding protection buffer, small part of accumulated interest that is non-claimable
         uint96 dust;
         // address to receive accumulated interest during the rebalance
         address interestReceiver;
-        // operator address (or address(0) if permissionless)
-        address yieldOperator;
+        // maximum amount of underlying tokens that can be invested into vault
+        uint256 maxInvestedAmount;
     }
 
     YieldParams public yieldParams;
