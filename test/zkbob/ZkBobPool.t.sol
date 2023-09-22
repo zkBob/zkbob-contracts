@@ -760,6 +760,8 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         assertEq(IERC20(token).balanceOf(address(pool)), 7_000 ether / D);
         assertEq(pool.investedAssetsAmount(), 3_000 ether / D);
 
+        skip(1 days);
+
         // bounded by minRebalanceAmount
         vm.expectRevert("ZkBobCompounding: insufficient rebalance");
         pool.rebalance(3_000 ether / D, type(uint256).max);
@@ -837,6 +839,22 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         pool.rebalance(0, type(uint256).max);
         assertEq(IERC20(token).balanceOf(address(pool)), 9_000 ether / D);
         assertEq(pool.investedAssetsAmount(), 1_000 ether / D);
+
+        pool.updateYieldParams(
+            IZkBobPoolAdmin.YieldParams({
+                yield: pool.yieldParams().yield,
+                maxInvestedAmount: 50_000 ether / D,
+                buffer: uint96(20_000 ether / D),
+                dust: uint96(0.5 ether / D),
+                interestReceiver: address(this),
+                yieldOperator: address(this)
+            })
+        );
+
+        // bounded by investedAssets
+        pool.rebalance(0, type(uint256).max);
+        assertEq(IERC20(token).balanceOf(address(pool)), 10_000 ether / D);
+        assertEq(pool.investedAssetsAmount(), 0 ether / D);
     }
 
     function testRebalanceWhenYieldIsAddressZero() public {
