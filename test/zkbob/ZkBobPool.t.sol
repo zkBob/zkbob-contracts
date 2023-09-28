@@ -1060,44 +1060,6 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         assertGt(claimed, 0);
     }
 
-    function testEmergencyWithdraw() public {
-        if (!isCompounding) {
-            return;
-        }
-
-        address yieldAddress = pool.yieldParams().yield;
-
-        deal(token, user1, 20_000 ether / D);
-        bytes memory data1 = _encodePermitDeposit(int256(10_000 ether / D), 0);
-        _transact(data1);
-
-        // 5_000 in pool and 5_000 in yield
-        pool.rebalance(0, type(uint256).max);
-
-        assertEq(pool.claim(6_000 ether / D), 0);
-
-        pool.updateYieldParams(
-            IZkBobPoolAdmin.YieldParams({
-                yield: yieldAddress,
-                maxInvestedAmount: 50_000 ether / D,
-                buffer: uint96(5_000 ether / D),
-                dust: uint96(0.5 ether / D),
-                interestReceiver: user2,
-                yieldOperator: address(this)
-            })
-        );
-
-        vm.prank(user2);
-        vm.expectRevert("ZkBobCompoundingPool: Claim is an operator-called method");
-        uint256 claimed = pool.claim(0);
-        vm.warp(block.timestamp + 365 days);
-
-        pool.emergencyWithdraw(5_000 ether / D);
-
-        assertEq(pool.investedAssetsAmount(), 0);
-        assertEq(IERC20(token).balanceOf(address(pool)), 10_000 ether / D);
-    }
-
     function testEnergyRedemption() public {
         deal(token, user1, 2_000_000 ether / D);
 

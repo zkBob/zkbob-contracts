@@ -170,37 +170,6 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
         return _claim(minClaimAmount, yieldAddress, interestReceiver, dust);
     }
 
-    /**
-     * @dev Withdraws everything from the yield.
-     * @param targetAmount amount of token to withdraw.
-     * Callable only by the contract owner / proxy admin / yield admin.
-     */
-    function emergencyWithdraw(uint256 targetAmount) external onlyOwner {
-        YieldParams storage params = yieldParams;
-
-        (address yieldAddress, address interestReceiver) = (params.yield, params.interestReceiver);
-
-        if (yieldAddress == address(0)) {
-            return;
-        }
-
-        IERC4626 yieldVault = IERC4626(yieldAddress);
-
-        yieldVault.withdraw(targetAmount, address(this), address(this));
-        uint256 currentInvestedAssetsAmount = investedAssetsAmount;
-
-        if (targetAmount > currentInvestedAssetsAmount) {
-            IERC20(token).transfer(interestReceiver, targetAmount - currentInvestedAssetsAmount);
-            emit Claimed(yieldAddress, targetAmount - currentInvestedAssetsAmount);
-            targetAmount = currentInvestedAssetsAmount;
-        }
-
-        investedAssetsAmount = currentInvestedAssetsAmount - targetAmount;
-
-        params.maxInvestedAmount = 0;
-        emit Rebalance(yieldAddress, targetAmount, 0);
-    }
-
     function _claim(
         uint256 minClaimAmount,
         address yieldAddress,
