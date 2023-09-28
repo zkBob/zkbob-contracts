@@ -150,7 +150,6 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
         return claimed;
     }
 
-
     function _claim(address yieldAddress, address interestReceiver, uint256 dust) internal returns (uint256) {
         uint256 shares = IERC4626(yieldAddress).balanceOf(address(this));
         uint256 lockedAssets = investedAssetsAmount + dust;
