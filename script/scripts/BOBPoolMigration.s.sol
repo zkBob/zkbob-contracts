@@ -45,7 +45,8 @@ contract BOBPoolMigration is Script, StdCheats {
             transferVerifier, treeVerifier, batchDepositVerifier,
             address(queue_proxy)
         );
-        UniswapV3Seller seller = new UniswapV3Seller(uniV3Router, uniV3Quoter, usdc_addr, 100, address(0x7F5c764cBc14f9669B88837ca1490cCa17c31607), 500);
+        UniswapV3Seller seller =
+        new UniswapV3Seller(uniV3Router, uniV3Quoter, usdc_addr, 100, address(0x7F5c764cBc14f9669B88837ca1490cCa17c31607), 500);
         ZkBobDirectDepositQueue queueImpl = new ZkBobDirectDepositQueue(address(pool), usdc_addr, 1);
         vm.stopPrank();
 
@@ -123,7 +124,7 @@ contract BOBPoolMigration is Script, StdCheats {
         queue_proxy.directDeposit(actor, amount, zk_addr);
         Vm.Log[] memory entries = vm.getRecordedLogs();
         uint8 log_index = 255;
-        for(uint8 i=0; i<entries.length; i++) {
+        for (uint8 i = 0; i < entries.length; i++) {
             if (entries[i].topics[0] == 0xcde1b1a4bd18b6b8ddb2a80b1fce51c4eee01748267692ac6bc0770a84bc6c58) {
                 log_index = i;
             }

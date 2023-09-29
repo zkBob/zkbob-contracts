@@ -48,7 +48,9 @@ contract ZkBobPoolUSDCMigrated is ZkBobPool, ZkBobTokenSellerMixin, ZkBobUSDCPer
         bool retval = IERC20(bob_addr).approve(address(swapRouter), cur_bob_balance);
         uint256 usdc_received = swapRouter.exactInput(
             ISwapRouter.ExactInputParams({
-                path: abi.encodePacked(bob_addr, uint24(100), 0x7F5c764cBc14f9669B88837ca1490cCa17c31607, uint24(500), token),
+                path: abi.encodePacked(
+                    bob_addr, uint24(100), 0x7F5c764cBc14f9669B88837ca1490cCa17c31607, uint24(500), token
+                    ),
                 recipient: address(this),
                 deadline: block.timestamp,
                 amountIn: cur_bob_balance,
