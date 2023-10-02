@@ -49,12 +49,12 @@ contract ZkBobPoolUSDCMigrated is ZkBobPool, ZkBobTokenSellerMixin, ZkBobUSDCPer
         uint256 usdc_received = swapRouter.exactInput(
             ISwapRouter.ExactInputParams({
                 path: abi.encodePacked(
-                    bob_addr, uint24(100), 0x7F5c764cBc14f9669B88837ca1490cCa17c31607, uint24(500), token
+                    bob_addr, uint24(100), 0x7F5c764cBc14f9669B88837ca1490cCa17c31607, uint24(100), token
                     ),
                 recipient: address(this),
                 deadline: block.timestamp,
                 amountIn: cur_bob_balance,
-                amountOutMinimum: 0
+                amountOutMinimum: cur_bob_balance * 995 / 1e15
             })
         );
         require(IERC20(bob_addr).balanceOf(address(this)) == 0, "Incorrect swap");
