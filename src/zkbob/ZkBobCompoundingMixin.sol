@@ -119,7 +119,7 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
                 depositAmount > 0 && depositAmount >= minRebalanceAmount, "ZkBobCompounding: insufficient rebalance"
             );
             investedAssetsAmount = investedAssets + depositAmount;
-            IERC20(token).approve(_yieldParams.yield, depositAmount);
+            IERC20(token).approve(yieldAddress, depositAmount);
             IERC4626(yieldAddress).deposit(depositAmount, address(this));
             emit Rebalance(yieldAddress, 0, depositAmount);
         }
