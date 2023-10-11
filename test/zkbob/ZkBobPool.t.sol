@@ -944,7 +944,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         vm.expectRevert("Ownable: caller is not the owner");
         pool.updateYieldParams(yieldParams);
 
-        assertEq(IERC20(token).allowance(address(pool), yieldAddress), type(uint256).max);
+        assertEq(IERC20(token).allowance(address(pool), yieldAddress), 0);
 
         deal(token, user1, 11_000 ether / D);
         bytes memory data1 = _encodePermitDeposit(int256(10_000 ether / D), 0.01 ether / D);
