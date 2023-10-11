@@ -64,14 +64,8 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
             "ZkBobCompounding: zero interest receiver"
         );
 
-        if (_yieldParams.yield != yieldAddress) {
-            if (_yieldParams.yield != address(0)) {
-                IERC20(token).approve(_yieldParams.yield, type(uint256).max);
-            }
-            if (yieldAddress != address(0)) {
-                IERC20(token).approve(yieldAddress, 0);
-                _claim(yieldAddress, yieldParams.interestReceiver, 0);
-            }
+        if (_yieldParams.yield != yieldAddress && yieldAddress != address(0)) {
+            _claim(yieldAddress, yieldParams.interestReceiver, 0);
         }
 
         yieldParams = _yieldParams;
@@ -86,7 +80,7 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
      */
     function rebalance(uint256 minRebalanceAmount, uint256 maxRebalanceAmount) external {
         (address yieldAddress, address operator, uint256 buffer, uint256 maxInvestedAmount) =
-            (yieldParams.yield, yieldParams.yieldOperator, yieldParams.buffer, yieldParams.maxInvestedAmount);
+        (yieldParams.yield, yieldParams.yieldOperator, yieldParams.buffer, yieldParams.maxInvestedAmount);
 
         require(yieldAddress != address(0), "ZkBobCompounding: yield not enabled");
         require(operator == address(0) || operator == msg.sender || _isOwner(), "ZkBobCompounding: not authorized");
@@ -125,6 +119,7 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
                 depositAmount > 0 && depositAmount >= minRebalanceAmount, "ZkBobCompounding: insufficient rebalance"
             );
             investedAssetsAmount = investedAssets + depositAmount;
+            IERC20(token).approve(_yieldParams.yield, depositAmount);
             IERC4626(yieldAddress).deposit(depositAmount, address(this));
             emit Rebalance(yieldAddress, 0, depositAmount);
         }
@@ -138,7 +133,7 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
      */
     function claim(uint256 minClaimAmount) external returns (uint256) {
         (address yieldAddress, address operator, uint256 dust, address interestReceiver) =
-            (yieldParams.yield, yieldParams.yieldOperator, yieldParams.dust, yieldParams.interestReceiver);
+        (yieldParams.yield, yieldParams.yieldOperator, yieldParams.dust, yieldParams.interestReceiver);
 
         require(yieldAddress != address(0), "ZkBobCompounding: yield not enabled");
         require(operator == address(0) || operator == msg.sender || _isOwner(), "ZkBobCompounding: not authorized");
