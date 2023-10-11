@@ -80,7 +80,7 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
      */
     function rebalance(uint256 minRebalanceAmount, uint256 maxRebalanceAmount) external {
         (address yieldAddress, address operator, uint256 buffer, uint256 maxInvestedAmount) =
-        (yieldParams.yield, yieldParams.yieldOperator, yieldParams.buffer, yieldParams.maxInvestedAmount);
+            (yieldParams.yield, yieldParams.yieldOperator, yieldParams.buffer, yieldParams.maxInvestedAmount);
 
         require(yieldAddress != address(0), "ZkBobCompounding: yield not enabled");
         require(operator == address(0) || operator == msg.sender || _isOwner(), "ZkBobCompounding: not authorized");
@@ -133,7 +133,7 @@ abstract contract ZkBobCompoundingMixin is ZkBobPool {
      */
     function claim(uint256 minClaimAmount) external returns (uint256) {
         (address yieldAddress, address operator, uint256 dust, address interestReceiver) =
-        (yieldParams.yield, yieldParams.yieldOperator, yieldParams.dust, yieldParams.interestReceiver);
+            (yieldParams.yield, yieldParams.yieldOperator, yieldParams.dust, yieldParams.interestReceiver);
 
         require(yieldAddress != address(0), "ZkBobCompounding: yield not enabled");
         require(operator == address(0) || operator == msg.sender || _isOwner(), "ZkBobCompounding: not authorized");
