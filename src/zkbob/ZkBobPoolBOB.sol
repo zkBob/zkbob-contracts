@@ -5,12 +5,13 @@ pragma solidity 0.8.15;
 import "./ZkBobPool.sol";
 import "./ZkBobTokenSellerMixin.sol";
 import "./ZkBobSaltedPermitMixin.sol";
+import "./ZkBobNonCompoudingMixin.sol";
 
 /**
  * @title ZkBobPoolBOB
  * Shielded transactions pool for BOB tokens.
  */
-contract ZkBobPoolBOB is ZkBobPool, ZkBobTokenSellerMixin, ZkBobSaltedPermitMixin {
+contract ZkBobPoolBOB is ZkBobPool, ZkBobTokenSellerMixin, ZkBobSaltedPermitMixin, ZkBobNonCompoundingMixin {
     constructor(
         uint256 __pool_id,
         address _token,

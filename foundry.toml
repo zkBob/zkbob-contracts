@@ -6,6 +6,7 @@ fs_permissions = [
     { access = "read", path = "./out" },
     { access = "read", path = "./scripts/vanityaddr/contracts" }
 ]
+auto_detect_remappings = false
 
 [fmt]
 line_length = 120

@@ -188,6 +188,13 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     function _withdrawNative(address _user, uint256 _tokenAmount) internal virtual returns (uint256);
 
     /**
+     * @dev Withdraws given amount of tokens to the provided address.
+     * @param _user token receiver address.
+     * @param _tokenAmount amount to tokens to withdraw.
+     */
+    function _withdrawToken(address _user, uint256 _tokenAmount) internal virtual;
+
+    /**
      * @dev Performs token transfer using a signed permit signature.
      * @param _user token depositor address, should correspond to the signature author.
      * @param _nullifier nullifier and permit signature salt to avoid transaction data manipulation.
@@ -271,7 +278,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             }
 
             if (withdraw_amount > 0) {
-                IERC20(token).safeTransfer(user, withdraw_amount);
+                _withdrawToken(user, withdraw_amount);
             }
 
             if (energy_amount < 0) {
@@ -444,7 +451,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         }
         nullifiers[_nullifier] = poolIndex | uint256(0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddead0000000000000000);
 
-        IERC20(token).safeTransfer(_to, _amount * TOKEN_DENOMINATOR / TOKEN_NUMERATOR);
+        _withdrawToken(_to, _amount * TOKEN_DENOMINATOR / TOKEN_NUMERATOR);
 
         emit ForcedExit(poolIndex, _nullifier, _to, _amount);
     }
@@ -476,7 +483,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         );
         uint256 fee = accumulatedFee[_operator] * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
         require(fee > 0, "ZkBobPool: no fee to withdraw");
-        IERC20(token).safeTransfer(_to, fee);
+        _withdrawToken(_to, fee);
         accumulatedFee[_operator] = 0;
         emit WithdrawFee(_operator, fee);
     }

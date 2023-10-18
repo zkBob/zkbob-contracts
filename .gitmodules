@@ -19,3 +19,6 @@
 	path = lib/base58-solidity
 	url = https://github.com/storyicon/base58-solidity
 	branch = v1.0.2
+[submodule "lib/@aave/aave-vault"]
+	path = lib/@aave/aave-vault
+	url = https://github.com/zkBob/Aave-Vault

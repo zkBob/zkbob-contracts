@@ -5,12 +5,13 @@ pragma solidity 0.8.15;
 import "./ZkBobPool.sol";
 import "./ZkBobTokenSellerMixin.sol";
 import "./ZkBobUSDCPermitMixin.sol";
+import "./ZkBobCompoundingMixin.sol";
 
 /**
  * @title ZkBobPoolUSDC
  * Shielded transactions pool for USDC tokens supporting USDC transfer authorizations
  */
-contract ZkBobPoolUSDC is ZkBobPool, ZkBobTokenSellerMixin, ZkBobUSDCPermitMixin {
+contract ZkBobPoolUSDC is ZkBobPool, ZkBobTokenSellerMixin, ZkBobUSDCPermitMixin, ZkBobCompoundingMixin {
     constructor(
         uint256 __pool_id,
         address _token,

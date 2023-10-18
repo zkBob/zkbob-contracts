@@ -7,6 +7,21 @@ import "../../src/interfaces/IOperatorManager.sol";
 import "../../src/interfaces/IEnergyRedeemer.sol";
 
 interface IZkBobPoolAdmin {
+    struct YieldParams {
+        // ERC4626 vault address (or address(0) if not set)
+        address yield;
+        // expected amount of underlying tokens to be left at the pool after successful rebalance
+        uint96 buffer;
+        // operator address (or address(0) if permissionless)
+        address yieldOperator;
+        // slippage/rounding protection buffer, small part of accumulated interest that is non-claimable
+        uint96 dust;
+        // address to receive accumulated interest during the rebalance
+        address interestReceiver;
+        // maximum amount of underlying tokens that can be invested into vault
+        uint256 maxInvestedAmount;
+    }
+
     function denominator() external pure returns (uint256);
 
     function pool_index() external view returns (uint256);
@@ -85,4 +100,16 @@ interface IZkBobPoolAdmin {
     function direct_deposit_queue() external view returns (address);
 
     function pool_id() external view returns (uint256);
+
+    function investedAssetsAmount() external view returns (uint256);
+
+    function yieldParams() external view returns (YieldParams memory);
+
+    function updateYieldParams(YieldParams memory _yieldParams) external;
+
+    function rebalance(uint256 minRebalanceAmount, uint256 maxRebalanceAmount) external;
+
+    function claim(uint256 minClaimAmount) external returns (uint256);
+
+    function emergencyWithdraw(uint256 targetAmount) external;
 }

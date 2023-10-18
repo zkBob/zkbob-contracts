@@ -1,3 +1,15 @@
-@openzeppelin/contracts/=lib/@openzeppelin/contracts/contracts/
-@gnosis/auction/=lib/@gnosis/auction/contracts/
+@aave/=lib/@aave/
 @base58-solidity/=lib/base58-solidity/contracts/
+@gnosis/=lib/@gnosis/
+@gnosis/auction/=lib/@gnosis/auction/contracts/
+@openzeppelin/interfaces/=lib/@openzeppelin/contracts/contracts/interfaces/
+@openzeppelin/contracts/=lib/@openzeppelin/contracts/contracts
+@uniswap/=lib/@uniswap/
+@aave-v3-core/=lib/@aave/aave-vault/lib/aave-v3-core/contracts
+@aave-v3-periphery/=lib/@aave/aave-vault/lib/aave-v3-periphery/contracts/
+ds-test/=lib/forge-std/lib/ds-test/src/
+erc4626-tests/=lib/@aave/aave-vault/lib/erc4626-tests/
+forge-std/=lib/forge-std/src/
+@openzeppelin-upgradeable/=lib/@aave/aave-vault/lib/openzeppelin-contracts-upgradeable/contracts
+openzeppelin-contracts/=lib/@aave/aave-vault/lib/openzeppelin-contracts/
+solmate/=lib/@aave/aave-vault/lib/solmate/src/
