@@ -364,7 +364,9 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     )
         external
     {
-        require(_amount <= 1 << 63, "ZkBobPool: amount too large");
+        require(
+            _amount > 0 && _amount % TOKEN_NUMERATOR == 0 && _amount <= 1 << 63, "ZkBobPool: incorrect token amount"
+        );
         require(_index < type(uint48).max, "ZkBobPool: index too large");
 
         uint256 root = roots[_index];
