@@ -25,7 +25,7 @@ contract ZkBobSequencer {
     uint256 constant R = 21888242871839275222246405745257275088548364400416034343698204186575808495617; // TODO: import it?
 
     // TODO: make it configurable
-    uint256 constant EXPIRATION_TIME = 1 days;
+    uint256 constant EXPIRATION_TIME = 1 hours;
     uint256 constant PROXY_GRACE_PERIOD = 10 minutes;
 
     struct CommitData {
@@ -43,13 +43,17 @@ contract ZkBobSequencer {
     }
 
     // 1. Verify that commit data is valid
-    //  1) Nullifier is not spent
-    //  2) Index is not too high (this index is used to get used root from the pool)
-    //  3) Transfer proof is correct according to the current pool state
-    //  4) Memo version is ok
+    //  1) msg.sender == proxy that is fixed in the memo
+    //  2) Nullifier is not spent
+    //  3) Index is not too high (this index is used to get used root from the pool)
+    //  4) Transfer proof is correct according to the current pool state
+    //  5) Memo version is ok
     // 2. Save operation in the priority queue (only commit data hash and timestamp)
     // 3. Emit event
     function commit(CommitData calldata commitData) external {
+        (address proxy, , ) = MemoUtils.parseFees(commitData.memo);
+        require(msg.sender == proxy, "ZkBobSequencer: not authorized");
+
         require(pool.nullifiers(commitData.nullifier) == 0, "ZkBobSequencer: nullifier is spent");
         require(uint96(commitData.index) <= pool.pool_index(), "ZkBobSequencer: index is too high");
         require(pool.transfer_verifier().verifyProof(transfer_pub(commitData), commitData.transfer_proof), "ZkBobSequencer: invalid proof");
@@ -57,6 +61,8 @@ contract ZkBobSequencer {
         
         PriorityOperation memory op = PriorityOperation(commitHash(commitData), block.timestamp);
         priorityQueue.pushBack(op);
+
+        // We can also save pending nullifier
 
         emit Commited();
     }
@@ -80,6 +86,7 @@ contract ZkBobSequencer {
         if (block.timestamp <= timestamp + PROXY_GRACE_PERIOD) {
             require(msg.sender == proxy, "ZkBobSequencer: not authorized");
         }
+        // We can introduce some scheme to pick one of the previous prover to aboid race condition
         
         // We check proofs twice with the current implementation.
         // It should be possible to avoid it but we need to modify pool contract.
@@ -93,7 +100,7 @@ contract ZkBobSequencer {
         // If we check that the prover is not malicious then the tx is not valid because of the limits or
         // absence of funds so it can't be proved
         if (success) {
-            // We need to strore fees and add ability to withdraw them
+            // We need to store fees and add ability to withdraw them
             uint256 fee = pool.accumulatedFee(address(this)) - accumulatedFeeBefore;
 
             require(proxy_fee + prover_fee <= fee, "ZkBobSequencer: fee is too low");
