@@ -9,25 +9,6 @@ import {MemoUtils} from "./MemoUtils.sol";
 contract ZkBobSequencer {
     using PriorityQueue for PriorityQueue.Queue;
 
-    event Commited(); // TODO: Fill the data
-    event Proved();
-    event Rejected();
-    event Skipped();
-
-
-    PriorityQueue.Queue priorityQueue;
-    ZkBobPool pool;
-    mapping(address => uint256) accumulatedFees;
-    uint256 lastQueueUpdateTimestamp;
-
-    uint256 constant TRANSFER_DELTA_SIZE = 28;
-    bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000; // TODO: import it?
-    uint256 constant R = 21888242871839275222246405745257275088548364400416034343698204186575808495617; // TODO: import it?
-
-    // TODO: make it configurable
-    uint256 constant EXPIRATION_TIME = 1 hours;
-    uint256 constant PROXY_GRACE_PERIOD = 10 minutes;
-
     struct CommitData {
         uint48 index;
         uint256 out_commit;
@@ -42,15 +23,47 @@ contract ZkBobSequencer {
         uint256[8] tree_proof;
     }
 
+    event Commited(); // TODO: Fill the data
+    event Proved();
+    event Rejected();
+    event Skipped();
+
+    uint256 constant TRANSFER_DELTA_SIZE = 28;
+    bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
+    uint256 constant R = 21888242871839275222246405745257275088548364400416034343698204186575808495617; 
+    // TODO: make it configurable
+    uint256 constant EXPIRATION_TIME = 1 hours;
+    uint256 constant PROXY_GRACE_PERIOD = 10 minutes;
+
+    // Queue of operations
+    PriorityQueue.Queue priorityQueue;
+    
+    // Pool contract, this contract is operator of the pool
+    ZkBobPool pool;
+
+    // Accumulated fees for each prover
+    mapping(address => uint256) accumulatedFees;
+
+    // Last time when queue was updated
+    uint256 lastQueueUpdateTimestamp;
+
+    mapping(uint256 => uint256) pendingNullifiers;
+
     // 1. Verify that commit data is valid
-    //  1) msg.sender == proxy that is fixed in the memo
-    //  2) Nullifier is not spent
-    //  3) Index is not too high (this index is used to get used root from the pool)
-    //  4) Transfer proof is correct according to the current pool state
-    //  5) Memo version is ok
+    //  1) nullifier is not pending
+    //  2) msg.sender == proxy that is fixed in the memo
+    //  3) Nullifier is not spent
+    //  4) Index is not too high (this index is used to get used root from the pool)
+    //  5) Transfer proof is correct according to the current pool state
+    //  6) Memo version is ok
     // 2. Save operation in the priority queue (only commit data hash and timestamp)
-    // 3. Emit event
+    // 3. Save pending nullifier
+    // 4. Emit event
+    // Possible problems here:
+    // 1. Malicious user can front run a prover and the prover spend some gas without any result
     function commit(CommitData calldata commitData) external {
+        require(pendingNullifiers[commitData.nullifier] == 0, "ZkBobSequencer: nullifier is already pending");
+
         (address proxy, , ) = MemoUtils.parseFees(commitData.memo);
         require(msg.sender == proxy, "ZkBobSequencer: not authorized");
 
@@ -62,7 +75,7 @@ contract ZkBobSequencer {
         PriorityOperation memory op = PriorityOperation(commitHash(commitData), block.timestamp);
         priorityQueue.pushBack(op);
 
-        // We can also save pending nullifier
+        pendingNullifiers[commitData.nullifier] = 1;
 
         emit Commited();
     }
@@ -76,6 +89,12 @@ contract ZkBobSequencer {
     // 3. Call pool.transact with the provided data
     //  1) If call is successfull we store fees and emit event
     //  2) If call is not successfull we only emit event. Important: we don't revert
+    // 4. Update lastQueueUpdateTimestamp and delete pending nullifier
+    // Possible problems here:
+    // 1. If the PROXY_GRACE_PERIOD is ended then anyone can prove the operation and race condition is possible
+    //    We can prevent it by implementing some mechanism to pick a prover from the previous ones
+    // 2. Malicious user can commit a bad operation (low fees, problems with compliance, etc.) so there is no prover that will be ready to prove it
+    //    In this case the prioirity queue will be locked until the expiration time
     function prove(CommitData calldata commitData, ProveData calldata proveData) external {
         PriorityOperation memory op = priorityQueue.popFront();
         require(op.commitHash == commitHash(commitData), "ZkBobSequencer: invalid commit hash");
@@ -86,7 +105,6 @@ contract ZkBobSequencer {
         if (block.timestamp <= timestamp + PROXY_GRACE_PERIOD) {
             require(msg.sender == proxy, "ZkBobSequencer: not authorized");
         }
-        // We can introduce some scheme to pick one of the previous prover to aboid race condition
         
         // We check proofs twice with the current implementation.
         // It should be possible to avoid it but we need to modify pool contract.
@@ -94,7 +112,9 @@ contract ZkBobSequencer {
 
         uint256 accumulatedFeeBefore = pool.accumulatedFee(address(this));
         bool success = propogateToPool(commitData, proveData);
+        
         lastQueueUpdateTimestamp = block.timestamp;
+        delete pendingNullifiers[commitData.nullifier];
 
         // We remove the commitment from the queue regardless of the result of the call to pool contract
         // If we check that the prover is not malicious then the tx is not valid because of the limits or
@@ -116,10 +136,16 @@ contract ZkBobSequencer {
     }
 
     // If operation is expired then we can remove it from the queue
-    function skip() external {
+    // Possible problems here:
+    // 1. There is no one who interested in calling this method
+    function skip(CommitData calldata commitData) external {
         PriorityOperation memory op = priorityQueue.popFront();
+        require(op.commitHash == commitHash(commitData), "ZkBobSequencer: invalid commit hash");
         require(op.timestamp + EXPIRATION_TIME < block.timestamp, "ZkBobSequencer: not expired yet");
+        
         lastQueueUpdateTimestamp = block.timestamp;
+        delete pendingNullifiers[commitData.nullifier];
+        
         emit Skipped();
     }
 
