@@ -17,8 +17,8 @@ address constant bobVanityAddr = address(0xB0B195aEFA3650A6908f15CdaC7D92F8a5791
 bytes32 constant bobSalt = bytes32(uint256(285834900769));
 
 uint256 constant forkBlockMainnet = 16200000;
-string constant forkRpcUrlMainnet = "https://rpc.ankr.com/eth";
+string constant forkRpcUrlMainnet = "https://eth.drpc.org";
 uint256 constant forkBlockPolygon = 37000000;
-string constant forkRpcUrlPolygon = "https://rpc.ankr.com/polygon";
+string constant forkRpcUrlPolygon = "https://polygon-rpc.com";
 uint256 constant forkBlockOptimism = 52000000;
 string constant forkRpcUrlOptimism = "https://1rpc.io/op";

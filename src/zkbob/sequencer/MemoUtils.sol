@@ -10,11 +10,12 @@ pragma solidity 0.8.15;
 import "../utils/CustomABIDecoder.sol";
 
 contract MemoUtils is CustomABIDecoder{
-    function parseFees() public pure returns (address proxyAddress, uint256 proxyFee, uint256 proverFee) {
-        proxyAddress = _memo_proxy_address();
-        //TODO
-        proxyFee = 0;
-        proverFee = 0;
+    function parseFees(bytes memory memo) public pure returns (address proxyAddress, uint64 proxyFee, uint64 proverFee) {
+        assembly {
+            proxyAddress := mload(add(memo, 0x16)) // 32 + 2 - 12 = 22
+            proxyFee := mload(add(memo, 0x1e)) // 32 + 2 + 20 - 24 = 30
+            proverFee := mload(add(memo, 0x26)) // 32 + 2 + 20 + 8 - 24 = 38
+        }
     }
 
     function parseTokenDelta(uint256 transferDelta) public pure returns (int64) {

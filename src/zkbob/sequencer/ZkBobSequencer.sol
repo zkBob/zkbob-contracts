@@ -67,7 +67,7 @@ contract ZkBobSequencer is MemoUtils {
     function commit(CommitData calldata commitData) external {
         require(pendingNullifiers[commitData.nullifier] == 0, "ZkBobSequencer: nullifier is already pending");
 
-        (address proxy, , ) = MemoUtils.parseFees();
+        (address proxy, , ) = MemoUtils.parseFees(commitData.memo);
         require(msg.sender == proxy, "ZkBobSequencer: not authorized");
 
         require(_pool.nullifiers(commitData.nullifier) == 0, "ZkBobSequencer: nullifier is spent");
@@ -107,7 +107,7 @@ contract ZkBobSequencer is MemoUtils {
         require(op.commitHash == commitHash(commitData), "ZkBobSequencer: invalid commit hash");
 
         // We need to store proxy address in the memo to prevent front running during commit
-        (address proxy, uint256 proxy_fee, uint256 prover_fee) = MemoUtils.parseFees();
+        (address proxy, uint256 proxy_fee, uint256 prover_fee) = MemoUtils.parseFees(commitData.memo);
         uint256 timestamp = max(op.timestamp, lastQueueUpdateTimestamp);
         if (block.timestamp <= timestamp + PROXY_GRACE_PERIOD) {
             require(msg.sender == proxy, "ZkBobSequencer: not authorized");
