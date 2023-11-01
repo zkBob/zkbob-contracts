@@ -6,9 +6,12 @@ import {PriorityQueue, PriorityOperation} from "./PriorityQueue.sol";
 import {ZkBobPool} from "../ZkBobPool.sol";
 import {MemoUtils} from "./MemoUtils.sol";
 
-contract ZkBobSequencer {
+contract ZkBobSequencer is MemoUtils {
     using PriorityQueue for PriorityQueue.Queue;
 
+  constructor(address pool) {
+        _pool = ZkBobPool(pool);
+    }
     struct CommitData {
         uint48 index;
         uint256 out_commit;
@@ -39,7 +42,7 @@ contract ZkBobSequencer {
     PriorityQueue.Queue priorityQueue;
     
     // Pool contract, this contract is operator of the pool
-    ZkBobPool pool;
+    ZkBobPool _pool;
 
     // Accumulated fees for each prover
     mapping(address => uint256) accumulatedFees;
@@ -64,12 +67,12 @@ contract ZkBobSequencer {
     function commit(CommitData calldata commitData) external {
         require(pendingNullifiers[commitData.nullifier] == 0, "ZkBobSequencer: nullifier is already pending");
 
-        (address proxy, , ) = MemoUtils.parseFees(commitData.memo);
+        (address proxy, , ) = MemoUtils.parseFees();
         require(msg.sender == proxy, "ZkBobSequencer: not authorized");
 
-        require(pool.nullifiers(commitData.nullifier) == 0, "ZkBobSequencer: nullifier is spent");
-        require(uint96(commitData.index) <= pool.pool_index(), "ZkBobSequencer: index is too high");
-        require(pool.transfer_verifier().verifyProof(transfer_pub(commitData), commitData.transfer_proof), "ZkBobSequencer: invalid proof");
+        require(_pool.nullifiers(commitData.nullifier) == 0, "ZkBobSequencer: nullifier is spent");
+        require(uint96(commitData.index) <= _pool.pool_index(), "ZkBobSequencer: index is too high");
+        require(_pool.transfer_verifier().verifyProof(transfer_pub(commitData), commitData.transfer_proof), "ZkBobSequencer: invalid proof");
         require(MemoUtils.parseMessagePrefix(commitData.memo) == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
         
         PriorityOperation memory op = PriorityOperation(commitHash(commitData), block.timestamp);
@@ -80,13 +83,17 @@ contract ZkBobSequencer {
         emit Commited();
     }
 
+    function head() external view returns (PriorityOperation memory) {
+        return priorityQueue.data[priorityQueue.head];
+    }
+
     // 1. Pop first operation from priority queue
     // 2. Verify that:
     //  1) If we are in the grace period then msg.sender can be only proxy, otherwice it can be anyone
     //  2) Provided commitData corresponds to saved commitHash
     //  3) Tree proof is correct according to the current pool state
-    //  If this checks hold then the prover did everything correctly and if the pool.transact will revert we can safely remove this operation from the queue
-    // 3. Call pool.transact with the provided data
+    //  If this checks hold then the prover did everything correctly and if the _pool.transact will revert we can safely remove this operation from the queue
+    // 3. Call _pool.transact with the provided data
     //  1) If call is successfull we store fees and emit event
     //  2) If call is not successfull we only emit event. Important: we don't revert
     // 4. Update lastQueueUpdateTimestamp and delete pending nullifier
@@ -100,7 +107,7 @@ contract ZkBobSequencer {
         require(op.commitHash == commitHash(commitData), "ZkBobSequencer: invalid commit hash");
 
         // We need to store proxy address in the memo to prevent front running during commit
-        (address proxy, uint256 proxy_fee, uint256 prover_fee) = MemoUtils.parseFees(commitData.memo);
+        (address proxy, uint256 proxy_fee, uint256 prover_fee) = MemoUtils.parseFees();
         uint256 timestamp = max(op.timestamp, lastQueueUpdateTimestamp);
         if (block.timestamp <= timestamp + PROXY_GRACE_PERIOD) {
             require(msg.sender == proxy, "ZkBobSequencer: not authorized");
@@ -108,10 +115,10 @@ contract ZkBobSequencer {
         
         // We check proofs twice with the current implementation.
         // It should be possible to avoid it but we need to modify pool contract.
-        require(pool.tree_verifier().verifyProof(tree_pub(commitData, proveData), proveData.tree_proof), "ZkBobSequencer: invalid proof");
+        require(_pool.tree_verifier().verifyProof(tree_pub(commitData, proveData), proveData.tree_proof), "ZkBobSequencer: invalid proof");
 
-        uint256 accumulatedFeeBefore = pool.accumulatedFee(address(this));
-        bool success = propogateToPool(commitData, proveData);
+        uint256 accumulatedFeeBefore = _pool.accumulatedFee(address(this));
+        bool success = propagateToPool(commitData, proveData);
         
         lastQueueUpdateTimestamp = block.timestamp;
         delete pendingNullifiers[commitData.nullifier];
@@ -121,7 +128,7 @@ contract ZkBobSequencer {
         // absence of funds so it can't be proved
         if (success) {
             // We need to store fees and add ability to withdraw them
-            uint256 fee = pool.accumulatedFee(address(this)) - accumulatedFeeBefore;
+            uint256 fee = _pool.accumulatedFee(address(this)) - accumulatedFeeBefore;
 
             require(proxy_fee + prover_fee <= fee, "ZkBobSequencer: fee is too low");
             // msg.sender recieves all the fee because:
@@ -159,15 +166,15 @@ contract ZkBobSequencer {
     }
 
     function transfer_pub(CommitData calldata commitData) internal view returns (uint256[5] memory r) {
-        r[0] = pool.roots(commitData.index);
+        r[0] = _pool.roots(commitData.index);
         r[1] = commitData.nullifier;
         r[2] = commitData.out_commit;
-        r[3] = commitData.transfer_delta + (pool.pool_id() << (TRANSFER_DELTA_SIZE * 8));
+        r[3] = commitData.transfer_delta + (_pool.pool_id() << (TRANSFER_DELTA_SIZE * 8));
         r[4] = uint256(keccak256(commitData.memo)) % R;
     }
 
     function tree_pub(CommitData calldata commitData, ProveData calldata proveData) internal view returns (uint256[3] memory r) {
-        r[0] = pool.roots(pool.pool_index());
+        r[0] = _pool.roots(_pool.pool_index());
         r[1] = proveData.root_after;
         r[2] = commitData.out_commit;
     }
@@ -177,8 +184,8 @@ contract ZkBobSequencer {
         return abi.encode(commitData, proveData);
     }
 
-    function propogateToPool(CommitData calldata commitData, ProveData calldata proveData) internal returns (bool) {
-        // Call pool.transact
+    function propagateToPool(CommitData calldata commitData, ProveData calldata proveData) internal returns (bool) {
+        // Call _pool.transact
         return false;
     }
 

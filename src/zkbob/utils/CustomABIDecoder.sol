@@ -12,6 +12,11 @@ contract CustomABIDecoder {
             r := calldataload(pos)
         }
     }
+    function _loadaddress(uint256 pos) internal pure returns (address r) {
+        assembly {
+            r := calldataload(pos)
+        }
+    }
 
     function _transfer_nullifier() internal pure returns (uint256 r) {
         r = _loaduint256(transfer_nullifier_pos);
@@ -150,19 +155,43 @@ contract CustomABIDecoder {
         }
     }
 
-    uint256 constant memo_fee_pos = memo_data_pos;
-    uint256 constant memo_fee_size = 8;
-    uint256 constant memo_fee_mask = (1 << (memo_fee_size * 8)) - 1;
+    // uint256 constant memo_fee_pos = memo_data_pos;
+    uint256 constant memo_sequencer_data_pos = memo_data_pos;
+    uint256 constant memo_tx_type_size = 2;
+    uint256 constant memo_prover_fee_size = memo_fee_size;
+    uint256 constant memo_proxy_fee_size = memo_fee_size;
+    uint256 constant memo_proxy_address_size = 20;
+    uint256 constant memo_sequencer_data_size = memo_tx_type_size + memo_proxy_address_size + memo_proxy_fee_size + memo_prover_fee_size ;
+    uint256 constant memo_tx_type_pos = memo_data_pos;
+    
+    uint256 constant memo_proxy_address_pos = memo_sequencer_data_pos + memo_tx_type_size;
+    
+    uint256 constant memo_prover_fee_pos = memo_proxy_address_pos + memo_proxy_address_size;
+    
+    uint256 constant memo_proxy_fee_pos = memo_prover_fee_pos + memo_prover_fee_size;
 
     function _memo_fee() internal pure returns (uint256 r) {
-        r = _loaduint256(memo_fee_pos + memo_fee_size - uint256_size) & memo_fee_mask;
+        uint256 proverFee = _loaduint256(
+            memo_prover_fee_pos + memo_fee_size - uint256_size
+        ) & memo_fee_mask;
+        uint256 proxyFee = _loaduint256(
+            memo_proxy_fee_pos + memo_fee_size - uint256_size
+        ) & memo_fee_mask;
+        r = proxyFee + proverFee;
     }
 
     // Withdraw specific data
 
-    uint256 constant memo_native_amount_pos = memo_fee_pos + memo_fee_size;
+    uint256 constant memo_native_amount_pos = memo_sequencer_data_pos + memo_sequencer_data_size;
     uint256 constant memo_native_amount_size = 8;
     uint256 constant memo_native_amount_mask = (1 << (memo_native_amount_size * 8)) - 1;
+
+    uint256 constant memo_fee_size = 8;
+    uint256 constant memo_fee_mask = (1 << (memo_fee_size * 8)) - 1;
+
+    function _memo_proxy_address() internal pure returns (address r) {
+        r = _loadaddress(memo_proxy_address_pos);
+    }
 
     function _memo_native_amount() internal pure returns (uint256 r) {
         r = _loaduint256(memo_native_amount_pos + memo_native_amount_size - uint256_size) & memo_native_amount_mask;
@@ -176,8 +205,9 @@ contract CustomABIDecoder {
     }
 
     // Permittable token deposit specific data
+    //This is mutualy exclusive with native amount i.e. they both take the same position in transactions of respective type
 
-    uint256 constant memo_permit_deadline_pos = memo_fee_pos + memo_fee_size;
+    uint256 constant memo_permit_deadline_pos = memo_sequencer_data_pos + memo_sequencer_data_size;
     uint256 constant memo_permit_deadline_size = 8;
 
     function _memo_permit_deadline() internal pure returns (uint64 r) {
