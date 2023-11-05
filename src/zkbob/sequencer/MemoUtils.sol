@@ -9,6 +9,7 @@ pragma solidity 0.8.15;
 // 30-38 bytes - prover fee
 import "../utils/CustomABIDecoder.sol";
 
+
 contract MemoUtils is CustomABIDecoder{
     function parseFees(bytes memory memo) public pure returns (address proxyAddress, uint64 proxyFee, uint64 proverFee) {
         assembly {

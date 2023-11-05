@@ -22,6 +22,7 @@ import {ZkBobSequencer} from "../../src/zkbob/sequencer/ZkBobSequencer.sol";
 import {MutableOperatorManager} from "../../src/zkbob/manager/MutableOperatorManager.sol";
 import {PriorityOperation} from "../../src/zkbob/sequencer/PriorityQueue.sol";
 import "../shared/Env.t.sol";
+import "forge-std/console2.sol";
 
 abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
     address constant permit2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
@@ -131,15 +132,31 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         );
     }
 
+    function bytesToHexString(bytes memory data) public pure returns (string memory) {
+        bytes memory hexString = new bytes(2 * data.length);
+
+        for (uint256 i = 0; i < data.length; i++) {
+            bytes2 b = bytes2(uint16(uint8(data[i])));
+            bytes1 hi = bytes1(uint8(uint16(b)) / 16);
+            bytes1 lo = bytes1(uint8(uint16(b)) % 16);
+
+            hexString[2 * i] = char(hi);
+            hexString[2 * i + 1] = char(lo);
+        }
+
+        return string(hexString);
+    }
+
+    function char(bytes1 b) internal pure returns (bytes1 c) {
+        if (uint8(b) < 10) {
+            return bytes1(uint8(b) + 0x30);
+        } else {
+            return bytes1(uint8(b) + 0x57);
+        }
+    }
+
     function testCommit() public {
-        //     struct CommitData {
-        //     uint48 index;
-        //     uint256 out_commit;
-        //     uint256 nullifier;
-        //     uint256 transfer_delta;
-        //     bytes memo;
-        //     uint256[8] transfer_proof;
-        // }
+    
 
         bytes memory memo = new bytes(38); //2+8+8+20
 
@@ -154,25 +171,43 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         // 2-22 bytes - proxy address
         // 22-30 bytes - proxy fee
         // 30-38 bytes - prover fee
-        memo = encodeMemo(txType, proxyAddress, proxy_fee, prover_fee);
-     
-        ZkBobSequencer.CommitData memory commitData = ZkBobSequencer.CommitData(
-            0,
-            0,
-            0,
-            0,
-            memo,
-            [uint256(0), 0, 0, 0, 0, 0, 0, 0]
-        );
+        memo = encodeMemo(txType, proxyAddress, proxy_fee, prover_fee);        
+
+        console2.log("memo encoded", bytesToHexString(memo));
+    //     const data = [
+    // selector,
+    // txData.nullifier,
+    // txData.outCommit,
+    // transferIndex,
+    // energyAmount,
+    // tokenAmount,
+    // txData.txType,
+    // memoSize,
+    // memoMessage,
+
+
+    
+        bytes memory data = abi.encodePacked(
+            bytes4(keccak256("commit()")), //selector //0-4
+            uint256(0),//uint256 nullifier //4-36
+            new bytes(32), //outCommit //36-68
+            uint48(0), //uint48  index // 68-74
+            new bytes(14), // energyAmount// 74-88
+            new bytes(8), // tokenAmount// 88-96
+            bytes2(hex"0000"),//uint256 txType//96-98
+            bytes2(uint16(memo.length)),//98-100
+            memo,      //bytes memo // 100+memo.length
+            [uint256(0), 0, 0, 0, 0, 0, 0, 0] ); //transfer proof
+
 
         vm.startPrank(user1);
-        sequencer.commit(commitData);
+        (bool success, bytes memory result)  = address(sequencer).call(data);
+        assertTrue(success);
         vm.stopPrank();
-        // PriorityOperation memory op =  PriorityOperation ();
     }
 
     // TODO:
-    function encodeMemo(uint16 memo, address prover, uint64 proxyFee, uint64 proverFee) internal returns (bytes memory) {
+    function encodeMemo(uint16 memo, address prover, uint64 proxyFee, uint64 proverFee) internal pure returns (bytes memory) {
         return bytes.concat(bytes2(memo), bytes20(prover), bytes8(proxyFee), bytes8(proverFee));
     }
 }
