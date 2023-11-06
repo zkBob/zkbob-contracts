@@ -129,17 +129,17 @@ contract CustomABIDecoder {
     function _memo_fixed_size() internal pure returns (uint256 r) {
         uint256 t = _tx_type();
         if (t == 0 || t == 1) {
-            // fee
-            // 8
-            r = 8;
+            // prover + proxy fee + prover fee
+            // 20 + 8 + 8 = 36
+            r = 36;
         } else if (t == 2) {
-            // fee + native amount + recipient
-            // 8 + 8 + 20
-            r = 36;
+            // prover + proxy fee + prover fee + native amount + recipient
+            // 36 + 8 + 20
+            r = 64;
         } else if (t == 3) {
-            // fee + deadline + address
-            // 8 + 8 + 20
-            r = 36;
+            // prover + proxy fee + prover fee + deadline + address
+            // 36 + 8 + 20
+            r = 64;
         } else {
             revert();
         }
@@ -157,18 +157,17 @@ contract CustomABIDecoder {
 
     // uint256 constant memo_fee_pos = memo_data_pos;
     uint256 constant memo_sequencer_data_pos = memo_data_pos;
-    uint256 constant memo_tx_type_size = 2;
     uint256 constant memo_prover_fee_size = memo_fee_size;
     uint256 constant memo_proxy_fee_size = memo_fee_size;
     uint256 constant memo_proxy_address_size = 20;
-    uint256 constant memo_sequencer_data_size = memo_tx_type_size + memo_proxy_address_size + memo_proxy_fee_size + memo_prover_fee_size ;
+    uint256 constant memo_sequencer_data_size = memo_proxy_address_size + memo_proxy_fee_size + memo_prover_fee_size ;
     uint256 constant memo_tx_type_pos = memo_data_pos;
     
-    uint256 constant memo_proxy_address_pos = memo_sequencer_data_pos + memo_tx_type_size;
+    uint256 constant memo_proxy_address_pos = memo_sequencer_data_pos;
     
-    uint256 constant memo_prover_fee_pos = memo_proxy_address_pos + memo_proxy_address_size;
+    uint256 constant memo_proxy_fee_pos = memo_proxy_address_pos + memo_proxy_address_size;
     
-    uint256 constant memo_proxy_fee_pos = memo_prover_fee_pos + memo_prover_fee_size;
+    uint256 constant memo_prover_fee_pos = memo_proxy_fee_pos + memo_proxy_fee_size;
 
     function _memo_fee() internal pure returns (uint256 r) {
         uint256 proverFee = _loaduint256(

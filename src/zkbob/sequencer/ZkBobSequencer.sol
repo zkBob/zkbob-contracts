@@ -86,16 +86,12 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
             bytes calldata memo
         ) = _parseCommitData();
         
-        console.log(txType);
         require(pendingNullifiers[nullifier] == 0, "ZkBobSequencer: nullifier is already pending");
 
         (address proxy, , ) = MemoUtils.parseFees(memo);
-        console.log(proxy);
-        console.log(msg.sender);
         require(msg.sender == proxy, "ZkBobSequencer: not authorized");
 
         require(_pool.nullifiers(nullifier) == 0, "ZkBobSequencer: nullifier is spent");
-        console.log(index);
         require(uint96(index) <= _pool.pool_index(), "ZkBobSequencer: index is too high");
         require(_pool.transfer_verifier().verifyProof(transfer_pub(index, nullifier, outCommit, transferDelta, memo), transferProof), "ZkBobSequencer: invalid proof");
         require(MemoUtils.parseMessagePrefix(memo) == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
@@ -189,7 +185,6 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
             // We need to store fees and add ability to withdraw them
             uint256 fee = _pool.accumulatedFee(address(this)) -
                 accumulatedFeeBefore;
-
             require(
                 proxy_fee + prover_fee <= fee,
                 "ZkBobSequencer: fee is too low"
@@ -250,29 +245,13 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
     function propagateToPool() internal returns (bool success) {
         address poolAddress = address(_pool);
         bytes4 selector = ZkBobPool.transact.selector;
-        
+        bytes memory data = new bytes(msg.data.length);
         assembly {
-            mstore(0, selector)
-            calldatacopy(4, 4, calldatasize())
-            // Call method of the zkSync contract returns 0 on error
-            let result := call(gas(), poolAddress, 0, 0, calldatasize(), 0, 0)
-            // Get the size of the last return data
-            let size := returndatasize()
-            // Copy the size length of bytes from return data at zero position to pointer position
-            returndatacopy(0, 0, size)
-            // Depending on the result value
-            switch result
-            case 0 {
-                // End execution and revert state changes
-                // revert(0, size)
-                success := false
-            }
-            default {
-                // Return data with length of size at pointers position
-                // return(0, size)
-                success := true
-            }
+            mstore(add(data, 32), selector)
+            let length := sub(calldatasize(), 4)
+            calldatacopy(add(data, 36), 4, length)
         }
+        (success, ) = poolAddress.call(data);
     }
 
     function max(uint256 a, uint256 b) internal pure returns (uint256 maxValue) {

@@ -21,6 +21,8 @@ import {BatchDepositVerifierMock} from "../mocks/BatchDepositVerifierMock.sol";
 import {ZkBobSequencer} from "../../src/zkbob/sequencer/ZkBobSequencer.sol";
 import {MutableOperatorManager} from "../../src/zkbob/manager/MutableOperatorManager.sol";
 import {PriorityOperation} from "../../src/zkbob/sequencer/PriorityQueue.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../shared/Env.t.sol";
 
 abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
@@ -176,11 +178,11 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         return bytes.concat(bytes2(memo), bytes20(prover), bytes8(proxyFee), bytes8(proverFee));
     }
 
-    function testCommitProve() external {
-        (bytes memory commitData, bytes memory proveData) = _encodeTransfer(1, 1, user1);
-        console2.log(bytesToHexString(commitData));
-        console2.log(bytesToHexString(proveData));
+    function testCommitProveDeposit() external {
+        (bytes memory commitData, bytes memory proveData) = _encodeDeposit(3, 1, 1, user1);
+        
         vm.startPrank(user1);
+        IERC20(token).approve(address(pool), 0.5 ether / D);
         (bool success, bytes memory result)  = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
         assertTrue(success);
 
@@ -189,6 +191,32 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
     }
 
     // TODO:
+
+    function _encodeDeposit(int256 _amount, uint64 _proxyFee, uint64 _proverFee, address _prover) internal returns (bytes memory commitData, bytes memory proveData) {
+        bytes32 nullifier = bytes32(_randFR());
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
+        commitData = abi.encodePacked(
+            nullifier,
+            _randFR(),
+            uint48(0),
+            uint112(0),
+            int64(_amount)
+        );
+        for (uint256 i = 0; i < 8; i++) {
+            commitData = abi.encodePacked(commitData, _randFR());
+        }
+
+        proveData = commitData;
+        for (uint256 i = 0; i < 9; i++) {
+            proveData = abi.encodePacked(proveData, _randFR());
+        }
+
+        bytes memory memo = _encodeMemo(_prover, _proxyFee, _proverFee);
+        bytes memory txTypeAndMemo = abi.encodePacked(uint16(0), uint16(memo.length), memo);
+        txTypeAndMemo = abi.encodePacked(txTypeAndMemo, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
+        commitData = abi.encodePacked(commitData, txTypeAndMemo);
+        proveData = abi.encodePacked(proveData, txTypeAndMemo);
+    }
 
     function _encodeTransfer(uint64 _proxyFee, uint64 _proverFee, address _prover) internal returns (bytes memory commitData, bytes memory proveData) {
         commitData = abi.encodePacked(
