@@ -12,9 +12,9 @@ import "../utils/CustomABIDecoder.sol";
 contract MemoUtils is CustomABIDecoder{
     function parseFees(bytes memory memo) public pure returns (address proxyAddress, uint64 proxyFee, uint64 proverFee) {
         assembly {
-            proxyAddress := mload(add(memo, 0x16)) // 32 + 2 - 12 = 22
-            proxyFee := mload(add(memo, 0x1e)) // 32 + 2 + 20 - 24 = 30
-            proverFee := mload(add(memo, 0x26)) // 32 + 2 + 20 + 8 - 24 = 38
+            proxyAddress := mload(add(memo, 0x14)) // 32 - 12 = 20
+            proxyFee := mload(add(memo, 0x1c)) // 32 + 20 - 24 = 28
+            proverFee := mload(add(memo, 0x24)) // 32 + 20 + 8 - 24 = 36
         }
     }
 
