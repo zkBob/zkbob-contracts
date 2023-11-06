@@ -173,16 +173,14 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
     //     // PriorityOperation memory op =  PriorityOperation ();
     // }
 
-    // TODO:
-    function encodeMemo(uint16 memo, address prover, uint64 proxyFee, uint64 proverFee) internal returns (bytes memory) {
-        return bytes.concat(bytes2(memo), bytes20(prover), bytes8(proxyFee), bytes8(proverFee));
-    }
-
     function testCommitProveDeposit() external {
-        (bytes memory commitData, bytes memory proveData) = _encodeDeposit(3, 1, 1, user1);
+        int256 amount = int256(3);
+        uint64 proxyFee = uint64(1);
+        uint64 proverFee = uint64(1);
+        (bytes memory commitData, bytes memory proveData) = _encodeDeposit(amount, proxyFee, proverFee, user1);
         
         vm.startPrank(user1);
-        IERC20(token).approve(address(pool), 0.5 ether / D);
+        IERC20(token).approve(address(pool), 5 * 1_000_000_000);
         (bool success, bytes memory result)  = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
         assertTrue(success);
 
@@ -190,9 +188,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         assertTrue(success);
     }
 
-    // TODO:
-
-    function _encodeDeposit(int256 _amount, uint64 _proxyFee, uint64 _proverFee, address _prover) internal returns (bytes memory commitData, bytes memory proveData) {
+    function _encodeDeposit(int256 _amount, uint64 _proxyFee, uint64 _proverFee, address _prover) internal view returns (bytes memory commitData, bytes memory proveData) {
         bytes32 nullifier = bytes32(_randFR());
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
         commitData = abi.encodePacked(
@@ -218,7 +214,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         proveData = abi.encodePacked(proveData, txTypeAndMemo);
     }
 
-    function _encodeTransfer(uint64 _proxyFee, uint64 _proverFee, address _prover) internal returns (bytes memory commitData, bytes memory proveData) {
+    function _encodeTransfer(uint64 _proxyFee, uint64 _proverFee, address _prover) internal view returns (bytes memory commitData, bytes memory proveData) {
         commitData = abi.encodePacked(
             _randFR(), _randFR(), uint48(0), uint112(0), -int64(_proxyFee + _proverFee)
         );
@@ -237,11 +233,11 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         proveData = abi.encodePacked(proveData, txTypeAndMemo);
     }
 
-    function _encodeMemo(address prover, uint64 proxyFee, uint64 proverFee) internal returns (bytes memory) {
+    function _encodeMemo(address prover, uint64 proxyFee, uint64 proverFee) internal view returns (bytes memory) {
         return abi.encodePacked(bytes20(prover), bytes8(proxyFee), bytes8(proverFee), bytes4(0x01000000), _randFR());
     }
 
-    function _randFR() internal returns (uint256) {
+    function _randFR() internal view returns (uint256) {
         return uint256(keccak256(abi.encode(gasleft())))
             % 21888242871839275222246405745257275088696311157297823662689037894645226208583;
     }
