@@ -5,6 +5,7 @@ pragma solidity ^0.8.13;
 // TODO: figure out the minimum amount of data we need to save 
 struct PriorityOperation {
     bytes32 commitHash;
+    uint256 nullifier;
     uint256 timestamp;
 }
 

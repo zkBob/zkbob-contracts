@@ -15,7 +15,7 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
     uint256 constant TRANSFER_DELTA_SIZE = 28;
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
     // TODO: make it configurable
-    uint256 constant EXPIRATION_TIME = 1 hours;
+    uint256 public constant EXPIRATION_TIME = 1 hours;
     uint256 constant PROXY_GRACE_PERIOD = 10 minutes;
 
     // Queue of operations
@@ -30,7 +30,7 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
     // Last time when queue was updated
     uint256 lastQueueUpdateTimestamp;
 
-    mapping(uint256 => bytes32) pendingNullifiers;
+    mapping(uint256 => bool) pendingNullifiers;
 
     event Commited(); // TODO: Fill the data
     event Proved();
@@ -57,20 +57,19 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
 
         (address proxy, , ) = MemoUtils.parseFees(memo);
         
-        require(pendingNullifiers[nullifier] == 0, "ZkBobSequencer: nullifier is already pending");
+        require(pendingNullifiers[nullifier] == false, "ZkBobSequencer: nullifier is already pending");
         require(_pool.nullifiers(nullifier) == 0, "ZkBobSequencer: nullifier is spent");
         require(msg.sender == proxy, "ZkBobSequencer: not authorized");
         require(uint96(index) <= _pool.pool_index(), "ZkBobSequencer: index is too high");
         require(_pool.transfer_verifier().verifyProof(transfer_pub(index, nullifier, outCommit, transferDelta, memo), transferProof), "ZkBobSequencer: invalid proof");
-        console.log(uint32(MemoUtils.parseMessagePrefix(memo, txType)));
         require(MemoUtils.parseMessagePrefix(memo, txType) == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
         
         // TODO: special case for deposits, we need to claim fee here
 
         bytes32 hash = commitHash(nullifier, outCommit, transferDelta, transferProof, memo);
-        PriorityOperation memory op = PriorityOperation(hash, block.timestamp);
+        PriorityOperation memory op = PriorityOperation(hash, nullifier, block.timestamp);
         priorityQueue.pushBack(op);
-        pendingNullifiers[nullifier] = hash;
+        pendingNullifiers[nullifier] = true;
 
         emit Commited();
     }
@@ -91,13 +90,12 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
     // 2. Malicious user can commit a bad operation (low fees, problems with compliance, etc.) so there is no prover that will be ready to prove it
     //    In this case the prioirity queue will be locked until the expiration time
     function prove() external {
-        PriorityOperation memory op = priorityQueue.popFront();
+        PriorityOperation memory op = popFirstUnexpiredOperation();
 
         uint256 nullifier = _transfer_nullifier();
         uint48 index = _transfer_index();
         bytes calldata memo = _memo_data();
         uint256[8] calldata transferProof = _transfer_proof();
-        
 
         require(
             op.commitHash == commitHash(nullifier, _transfer_out_commit(), _transfer_delta(), transferProof, memo),
@@ -150,21 +148,6 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         }
     }
 
-    // If operation is expired then we can remove it from the queue
-    // Possible problems here:
-    // 1. There is no one who interested in calling this method
-    function skip(uint256 nullifier) external {
-        PriorityOperation memory op = priorityQueue.popFront();
-        
-        require(op.commitHash == pendingNullifiers[nullifier], "ZkBobSequencer: invalid nullifier");
-        require(op.timestamp + EXPIRATION_TIME < block.timestamp, "ZkBobSequencer: not expired yet");
-        
-        lastQueueUpdateTimestamp = block.timestamp;
-        delete pendingNullifiers[nullifier];
-        
-        emit Skipped();
-    }
-
     function withdrawFees() external {
         require(accumulatedFees[msg.sender] > 0, "ZkBobSequencer: no fees to withdraw");
         accumulatedFees[msg.sender] = 0;
@@ -178,6 +161,19 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
 
     function _pool_id() override internal view returns (uint256){
         return _pool.pool_id();
+    }
+
+    function popFirstUnexpiredOperation() internal returns (PriorityOperation memory) {
+        PriorityOperation memory op = priorityQueue.popFront();
+        uint256 timestamp = max(op.timestamp, lastQueueUpdateTimestamp);
+        while (timestamp + EXPIRATION_TIME < block.timestamp) {
+            delete pendingNullifiers[op.nullifier];
+            // TODO: is is correct?
+            lastQueueUpdateTimestamp = op.timestamp + EXPIRATION_TIME;
+            op = priorityQueue.popFront();
+            timestamp = max(op.timestamp, lastQueueUpdateTimestamp);
+        }
+        return op;
     }
     
     function commitHash(
