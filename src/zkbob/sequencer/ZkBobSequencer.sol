@@ -183,6 +183,7 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         uint256[8] calldata transfer_proof,
         bytes calldata memo
     ) internal pure returns (bytes32) {
+        // TODO: check that it is enough
         return keccak256(abi.encodePacked(nullifier, out_commit, transfer_delta, transfer_proof, memo));
     }
 
@@ -205,6 +206,7 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         bytes4 selector = ZkBobPool.transact.selector;
         bytes memory data = new bytes(msg.data.length);
         assembly {
+            // TODO: check it
             mstore(add(data, 32), selector)
             let length := sub(calldatasize(), 4)
             calldatacopy(add(data, 36), 4, length)
@@ -219,7 +221,19 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         }
     }
 
-    function head() external view returns (PriorityOperation memory) {
-        return priorityQueue.data[priorityQueue.head];
+    function pendingOperation() external view returns (PriorityOperation memory op) {
+        require(!priorityQueue.isEmpty(), "ZkBobSequencer: queue is empty");
+        
+        uint256 head = priorityQueue.getFirstUnprocessedPriorityTx();
+        uint256 tail = priorityQueue.getTotalPriorityTxs();
+        bool found = false;
+        for (uint256 i = head; i <= tail; i++) {
+            if (op.timestamp + EXPIRATION_TIME >= block.timestamp) {
+                op = priorityQueue.get(i);
+                found = true;
+                break;
+            }
+        }
+        require(found, "ZkBobSequencer: no pending operations");
     }
 }

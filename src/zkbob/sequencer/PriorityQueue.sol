@@ -63,6 +63,11 @@ library PriorityQueue {
         return _queue.data[_queue.head];
     }
 
+    function get(Queue storage _queue, uint256 _index) internal view returns (PriorityOperation memory) {
+        require(_index >= _queue.head && _index <= _queue.head && !_queue.isEmpty(), "D");
+        return _queue.data[_index];
+    }
+
     /// @notice Remove the first unprocessed priority operation from the queue
     /// @return priorityOperation that was popped from the priority queue
     function popFront(Queue storage _queue) internal returns (PriorityOperation memory priorityOperation) {

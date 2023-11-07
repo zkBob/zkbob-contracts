@@ -124,14 +124,8 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
     }
 
     function testEmptyQueue() public {
-        PriorityOperation memory op = sequencer.head();
-
-        bytes32 commitHash = op.commitHash;
-
-        assertEq(
-            commitHash,
-            hex"0000000000000000000000000000000000000000000000000000000000000000"
-        );
+        vm.expectRevert();
+        sequencer.pendingOperation();
     }
 
     function testCommitProveDeposit() external {
