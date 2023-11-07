@@ -25,7 +25,7 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
     ZkBobPool _pool;
 
     // Accumulated fees for each prover
-    mapping(address => uint256) accumulatedFees;
+    mapping(address => uint256) public accumulatedFees;
 
     // Last time when queue was updated
     uint256 lastQueueUpdateTimestamp;
@@ -137,10 +137,8 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
                 proxy_fee + prover_fee == fee,
                 "ZkBobSequencer: fee is not correct"
             );
-            // msg.sender recieves all the fee because:
-            // 1. If block.timestamp <= timestamp + PROXY_GRACE_PERIOD then msg.sender == prover == proxy
-            // 2. If block.timestamp > timestamp + PROXY_GRACE_PERIOD then we punish the proxy and send all the fee to the prover
-            accumulatedFees[msg.sender] += proxy_fee + prover_fee;
+            accumulatedFees[proxy] += proxy_fee;
+            accumulatedFees[msg.sender] += prover_fee;
 
             emit Proved();
         } else {

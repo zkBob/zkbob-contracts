@@ -53,6 +53,9 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
     MutableOperatorManager operatorManager;
     ZkBobAccounting accounting;
 
+    address prover1 = makeAddr("prover1");
+    address prover2 = makeAddr("prover2");
+
     function setUp() public {
         vm.createSelectFork(forkRpcUrl, forkBlock);
 
@@ -129,69 +132,114 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
     }
 
     function testCommitProveDeposit() external {
-        int256 amount = int256(3);
+        deposit(int256(3), uint64(1), uint64(2), prover1);
+    }
+
+    function testCommitProveTransfer() external {
+        deposit(int256(5), uint64(1), uint64(2), prover1);
+
         uint64 proxyFee = uint64(1);
         uint64 proverFee = uint64(1);
-        (bytes memory commitData, bytes memory proveData) = _encodeDeposit(amount, proxyFee, proverFee, user1);
+        (bytes memory commitData, bytes memory proveData) = _encodeTransfer(proxyFee, proverFee, prover1);
         
-        vm.startPrank(user1);
-        IERC20(token).approve(address(pool), 5 * 1_000_000_000);
-        (bool success, bytes memory result)  = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
+        startHoax(prover1);
+        (bool success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
         assertTrue(success);
 
-        (success, result)  = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
+        uint256 feeBefore = sequencer.accumulatedFees(prover1);
+        (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
+        uint256 feeAfter = sequencer.accumulatedFees(prover1);
+
         assertTrue(success);
+        assertTrue(feeAfter == feeBefore + proxyFee + proverFee);
+
+        vm.stopPrank();
     }
 
     function testAnyoneCanSubmitTreeProofAfterGracePeriod() external {
         int256 amount = int256(3);
         uint64 proxyFee = uint64(1);
-        uint64 proverFee = uint64(1);
-        (bytes memory commitData, bytes memory proveData) = _encodeDeposit(amount, proxyFee, proverFee, user1);
+        uint64 proverFee = uint64(2);
+        (bytes memory commitData, bytes memory proveData) = _encodeDeposit(amount, proxyFee, proverFee, prover1);
 
         vm.prank(user1);
-        IERC20(token).approve(address(pool), 5 * 1_000_000_000);
+        IERC20(token).approve(address(pool), (uint256(amount) + proxyFee + proverFee) * 1_000_000_000);
 
-        vm.prank(user1);
+        hoax(prover1);
         (bool success, )  = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
         assertTrue(success);
 
         vm.warp(block.timestamp + sequencer.PROXY_GRACE_PERIOD() + 1);
 
-        vm.prank(user2);    
+
+        uint256 prover1FeeBefore = sequencer.accumulatedFees(prover1);
+        uint256 prover2FeeBefore = sequencer.accumulatedFees(prover2);
+        hoax(prover2);    
         (success, )  = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
+        uint256 prover1FeeAfter = sequencer.accumulatedFees(prover1);
+        uint256 prover2FeeAfter = sequencer.accumulatedFees(prover2);
+
         assertTrue(success);
+        assertTrue(prover1FeeAfter == prover1FeeBefore + proxyFee);
+        assertTrue(prover2FeeAfter == prover2FeeBefore + proverFee);
     }
 
     function testCanSkipExpiredOperation() external {
         int256 amount = int256(3);
         uint64 proxyFee = uint64(1);
-        uint64 proverFee = uint64(1);
-        (bytes memory firstCommitData, bytes memory firstProveData) = _encodeDeposit(amount, proxyFee, proverFee, user1);
-        (bytes memory secondCommitData, bytes memory secondProveData) = _encodeDeposit(amount, proxyFee, proverFee, user2);
+        uint64 proverFee = uint64(2);
+        (bytes memory firstCommitData, bytes memory firstProveData) = _encodeDeposit(amount, proxyFee, proverFee, prover1);
+        (bytes memory secondCommitData, bytes memory secondProveData) = _encodeDeposit(amount, proxyFee, proverFee, prover2);
         
         vm.prank(user1);
-        IERC20(token).approve(address(pool), 5 * 1_000_000_000);
-        vm.prank(user2);
-        IERC20(token).approve(address(pool), 5 * 1_000_000_000);
+        IERC20(token).approve(address(pool), (uint256(amount) + proxyFee + proverFee) * 1_000_000_000);
         
-        vm.prank(user1);
+        hoax(prover1);
         (bool success, )  = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, firstCommitData));
         assertTrue(success);
 
-        vm.prank(user2);    
+        hoax(prover2);    
         (success, )  = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, secondCommitData));
         assertTrue(success);
 
         vm.warp(block.timestamp + sequencer.EXPIRATION_TIME() + 1);
 
-        vm.prank(user1);
+        uint256 prover1FeeBefore = sequencer.accumulatedFees(prover1);
+        uint256 prover2FeeBefore = sequencer.accumulatedFees(prover2);
+
+        hoax(prover1);
         (success, )  = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, firstProveData));
         assertFalse(success);
 
-        vm.prank(user2);    
+        hoax(prover2);    
         (success, )  = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, secondProveData));
         assertTrue(success);
+
+        uint256 prover1FeeAfter = sequencer.accumulatedFees(prover1);
+        uint256 prover2FeeAfter = sequencer.accumulatedFees(prover2);
+
+        assertTrue(prover1FeeAfter == prover1FeeBefore);
+        assertTrue(prover2FeeAfter == prover2FeeBefore + proxyFee + proverFee);
+    }
+
+    function deposit(int256 amount, uint64 proxyFee, uint64 proverFee, address prover) internal {
+        (bytes memory commitData, bytes memory proveData) = _encodeDeposit(amount, proxyFee, proverFee, prover);
+        
+        vm.prank(user1);
+        IERC20(token).approve(address(pool), (uint256(amount) + proxyFee + proverFee) * 1_000_000_000);
+        
+        startHoax(prover);
+        (bool success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
+        assertTrue(success);
+
+        uint256 feeBefore = sequencer.accumulatedFees(prover);
+        (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
+        uint256 feeAfter = sequencer.accumulatedFees(prover);
+        
+        assertTrue(success);
+        assertTrue(feeAfter == feeBefore + proxyFee + proverFee);
+
+        vm.stopPrank();
     }
 
     function _encodeDeposit(int256 _amount, uint64 _proxyFee, uint64 _proverFee, address _prover) internal view returns (bytes memory commitData, bytes memory proveData) {
