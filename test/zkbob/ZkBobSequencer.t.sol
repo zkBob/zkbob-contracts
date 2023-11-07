@@ -149,7 +149,27 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         assertTrue(success);
     }
 
-    function testSkipExpiredOperation() external {
+    function testAnyoneCanSubmitTreeProofAfterGracePeriod() external {
+        int256 amount = int256(3);
+        uint64 proxyFee = uint64(1);
+        uint64 proverFee = uint64(1);
+        (bytes memory commitData, bytes memory proveData) = _encodeDeposit(amount, proxyFee, proverFee, user1);
+
+        vm.prank(user1);
+        IERC20(token).approve(address(pool), 5 * 1_000_000_000);
+
+        vm.prank(user1);
+        (bool success, )  = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
+        assertTrue(success);
+
+        vm.warp(block.timestamp + sequencer.PROXY_GRACE_PERIOD() + 1);
+
+        vm.prank(user2);    
+        (success, )  = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
+        assertTrue(success);
+    }
+
+    function testCanSkipExpiredOperation() external {
         int256 amount = int256(3);
         uint64 proxyFee = uint64(1);
         uint64 proverFee = uint64(1);

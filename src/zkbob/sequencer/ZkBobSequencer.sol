@@ -16,7 +16,7 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
     // TODO: make it configurable
     uint256 public constant EXPIRATION_TIME = 1 hours;
-    uint256 constant PROXY_GRACE_PERIOD = 10 minutes;
+    uint256 public constant PROXY_GRACE_PERIOD = 10 minutes;
 
     // Queue of operations
     PriorityQueue.Queue priorityQueue;
