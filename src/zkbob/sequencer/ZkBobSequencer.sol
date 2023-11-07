@@ -12,29 +12,6 @@ import "forge-std/console.sol";
 contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
     using PriorityQueue for PriorityQueue.Queue;
 
-    constructor(address pool) {
-        _pool = ZkBobPool(pool);
-    }
-
-    struct CommitData {
-        uint48 index;
-        uint256 out_commit;
-        uint256 nullifier;
-        uint256 transfer_delta;
-        bytes memo;
-        uint256[8] transfer_proof;
-    }
-
-    struct ProveData {
-        uint256 root_after;
-        uint256[8] tree_proof;
-    }
-
-    event Commited(); // TODO: Fill the data
-    event Proved();
-    event Rejected();
-    event Skipped();
-
     uint256 constant TRANSFER_DELTA_SIZE = 28;
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
     // TODO: make it configurable
@@ -53,25 +30,17 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
     // Last time when queue was updated
     uint256 lastQueueUpdateTimestamp;
 
-    mapping(uint256 => uint256) pendingNullifiers;
+    mapping(uint256 => bytes32) pendingNullifiers;
 
-    function _root() override internal view  returns (uint256){
-        return _pool.roots(_pool.pool_index());
-    }
-    function _pool_id() override internal view returns (uint256){
-        return _pool.pool_id();
+    event Commited(); // TODO: Fill the data
+    event Proved();
+    event Rejected();
+    event Skipped();
+
+    constructor(address pool) {
+        _pool = ZkBobPool(pool);
     }
 
-    // 1. Verify that commit data is valid
-    //  1) nullifier is not pending
-    //  2) msg.sender == proxy that is fixed in the memo
-    //  3) Nullifier is not spent
-    //  4) Index is not too high (this index is used to get used root from the pool)
-    //  5) Transfer proof is correct according to the current pool state
-    //  6) Memo version is ok
-    // 2. Save operation in the priority queue (only commit data hash and timestamp)
-    // 3. Save pending nullifier
-    // 4. Emit event
     // Possible problems here:
     // 1. Malicious user can front run a prover and the prover spend some gas without any result
     function commit() external {
@@ -80,41 +49,30 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
             uint256 outCommit,
             uint48 index,
             uint256 transferDelta,
-            int64 tokenAmount,
+            ,
             uint256[8] calldata transferProof,
             uint16 txType,
             bytes calldata memo
         ) = _parseCommitData();
-        
-        require(pendingNullifiers[nullifier] == 0, "ZkBobSequencer: nullifier is already pending");
 
         (address proxy, , ) = MemoUtils.parseFees(memo);
-        require(msg.sender == proxy, "ZkBobSequencer: not authorized");
-
+        
+        require(pendingNullifiers[nullifier] == 0, "ZkBobSequencer: nullifier is already pending");
         require(_pool.nullifiers(nullifier) == 0, "ZkBobSequencer: nullifier is spent");
+        require(msg.sender == proxy, "ZkBobSequencer: not authorized");
         require(uint96(index) <= _pool.pool_index(), "ZkBobSequencer: index is too high");
         require(_pool.transfer_verifier().verifyProof(transfer_pub(index, nullifier, outCommit, transferDelta, memo), transferProof), "ZkBobSequencer: invalid proof");
-        require(MemoUtils.parseMessagePrefix(memo) == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
+        console.log(uint32(MemoUtils.parseMessagePrefix(memo, txType)));
+        require(MemoUtils.parseMessagePrefix(memo, txType) == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
         
+        // TODO: special case for deposits, we need to claim fee here
 
-        CommitData memory commitData = CommitData(
-            index,
-            outCommit,
-            nullifier,
-            transferDelta,
-            memo,
-            transferProof
-        );
-        PriorityOperation memory op = PriorityOperation(commitHash(commitData), block.timestamp);
+        bytes32 hash = commitHash(nullifier, outCommit, transferDelta, transferProof, memo);
+        PriorityOperation memory op = PriorityOperation(hash, block.timestamp);
         priorityQueue.pushBack(op);
-
-        pendingNullifiers[nullifier] = 1;
+        pendingNullifiers[nullifier] = hash;
 
         emit Commited();
-    }
-
-    function head() external view returns (PriorityOperation memory) {
-        return priorityQueue.data[priorityQueue.head];
     }
 
     // 1. Pop first operation from priority queue
@@ -137,23 +95,15 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
 
         uint256 nullifier = _transfer_nullifier();
         uint48 index = _transfer_index();
-        bytes memory memo = _memo_data();
-        uint256[8] memory transferProof = _transfer_proof();
-        CommitData memory commitData = CommitData(
-            index,
-            _transfer_out_commit(),
-            nullifier,
-            _transfer_delta(),
-            memo,
-            transferProof
-        );
+        bytes calldata memo = _memo_data();
+        uint256[8] calldata transferProof = _transfer_proof();
+        
 
         require(
-            op.commitHash == commitHash(commitData),
+            op.commitHash == commitHash(nullifier, _transfer_out_commit(), _transfer_delta(), transferProof, memo),
             "ZkBobSequencer: invalid commit hash"
         );
 
-        // We need to store proxy address in the memo to prevent front running during commit
         (address proxy, uint256 proxy_fee, uint256 prover_fee) = MemoUtils.parseFees(memo);
         uint256 timestamp = max(op.timestamp, lastQueueUpdateTimestamp);
         if (block.timestamp <= timestamp + PROXY_GRACE_PERIOD) {
@@ -172,11 +122,11 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
             "ZkBobSequencer: invalid proof"
         );
 
+        lastQueueUpdateTimestamp = block.timestamp;
+        delete pendingNullifiers[nullifier];
+
         uint256 accumulatedFeeBefore = _pool.accumulatedFee(address(this));
         bool success = propagateToPool();
-
-        lastQueueUpdateTimestamp = block.timestamp;
-        delete pendingNullifiers[commitData.nullifier];
 
         // We remove the commitment from the queue regardless of the result of the call to pool contract
         // If we check that the prover is not malicious then the tx is not valid because of the limits or
@@ -186,8 +136,8 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
             uint256 fee = _pool.accumulatedFee(address(this)) -
                 accumulatedFeeBefore;
             require(
-                proxy_fee + prover_fee <= fee,
-                "ZkBobSequencer: fee is too low"
+                proxy_fee + prover_fee == fee,
+                "ZkBobSequencer: fee is not correct"
             );
             // msg.sender recieves all the fee because:
             // 1. If block.timestamp <= timestamp + PROXY_GRACE_PERIOD then msg.sender == prover == proxy
@@ -203,43 +153,55 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
     // If operation is expired then we can remove it from the queue
     // Possible problems here:
     // 1. There is no one who interested in calling this method
-    function skip(CommitData calldata commitData) external {
+    function skip(uint256 nullifier) external {
         PriorityOperation memory op = priorityQueue.popFront();
-        require(op.commitHash == commitHash(commitData), "ZkBobSequencer: invalid commit hash");
+        
+        require(op.commitHash == pendingNullifiers[nullifier], "ZkBobSequencer: invalid nullifier");
         require(op.timestamp + EXPIRATION_TIME < block.timestamp, "ZkBobSequencer: not expired yet");
         
         lastQueueUpdateTimestamp = block.timestamp;
-        delete pendingNullifiers[commitData.nullifier];
+        delete pendingNullifiers[nullifier];
         
         emit Skipped();
     }
 
     function withdrawFees() external {
+        require(accumulatedFees[msg.sender] > 0, "ZkBobSequencer: no fees to withdraw");
+        accumulatedFees[msg.sender] = 0;
+
         // TODO
     }
 
-
-    function commitHash(CommitData memory commitData) internal pure returns (bytes32) {
-        return keccak256(abi.encode(commitData));
+    function _root() override internal view  returns (uint256){
+        return _pool.roots(_pool.pool_index());
     }
 
-    function transfer_pub(uint48 index, uint256 nullifier, uint256 outCommit, uint256 transferDelta, bytes calldata memo) internal view returns (uint256[5] memory r) {
+    function _pool_id() override internal view returns (uint256){
+        return _pool.pool_id();
+    }
+    
+    function commitHash(
+        uint256 nullifier,
+        uint256 out_commit,
+        uint256 transfer_delta,
+        uint256[8] calldata transfer_proof,
+        bytes calldata memo
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(nullifier, out_commit, transfer_delta, transfer_proof, memo));
+    }
+
+    function transfer_pub(
+        uint48 index, 
+        uint256 nullifier, 
+        uint256 outCommit, 
+        uint256 transferDelta, 
+        bytes calldata memo
+    ) internal view returns (uint256[5] memory r) {
         r[0] = _pool.roots(index);
         r[1] = nullifier;
         r[2] = outCommit;
         r[3] = transferDelta + (_pool.pool_id() << (TRANSFER_DELTA_SIZE * 8));
         r[4] = uint256(keccak256(memo)) % R;
-    }
-
-    function tree_pub(CommitData calldata commitData, ProveData calldata proveData) internal view returns (uint256[3] memory r) {
-        r[0] = _pool.roots(_pool.pool_index());
-        r[1] = proveData.root_after;
-        r[2] = commitData.out_commit;
-    }
-
-    function preparePoolTx(CommitData calldata commitData, ProveData calldata proveData) internal pure returns (bytes memory) {
-        // TODO: fix it
-        return abi.encode(commitData, proveData);
     }
 
     function propagateToPool() internal returns (bool success) {
@@ -259,5 +221,9 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         if (b > a) {
             maxValue = b;
         }
+    }
+
+    function head() external view returns (PriorityOperation memory) {
+        return priorityQueue.data[priorityQueue.head];
     }
 }

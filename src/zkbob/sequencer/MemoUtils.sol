@@ -18,15 +18,30 @@ contract MemoUtils is CustomABIDecoder{
         }
     }
 
-    function parseTokenDelta(uint256 transferDelta) public pure returns (int64) {
-        return int64(uint64(transferDelta >> 192));
+    function parseMessagePrefix(bytes memory memo, uint16 txType) public pure returns (bytes4 prefix) {
+        uint256 offset = _memo_fixed_size(txType);
+        assembly {
+            offset := sub(offset, 28)
+            prefix := mload(add(memo, offset))
+        }
+        prefix = prefix & 0x0000ffff;
     }
 
-    function parseTxType(bytes memory memo) public pure returns (uint16) {
-        // TODO
-    }
-
-    function parseMessagePrefix(bytes memory memo) public pure returns (bytes4) {
-        // TODO
+    function _memo_fixed_size(uint16 txType) internal pure returns (uint256 r) {
+        if (txType == 0 || txType == 1) {
+            // prover + proxy fee + prover fee
+            // 20 + 8 + 8 = 36
+            r = 36;
+        } else if (txType == 2) {
+            // prover + proxy fee + prover fee + native amount + recipient
+            // 36 + 8 + 20
+            r = 64;
+        } else if (txType == 3) {
+            // prover + proxy fee + prover fee + deadline + address
+            // 36 + 8 + 20
+            r = 64;
+        } else {
+            revert();
+        }
     }
 }
