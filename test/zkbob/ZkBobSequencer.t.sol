@@ -296,12 +296,12 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         assertTrue(prover2BalanceAfter == prover2BalanceBefore + prover2FeeBefore * denominator);
     }
 
-    function testPermitDepositCommit() external {
+    function testPermitDepositCommitAndProve() external {
         uint256 amount = uint256(38);
         uint64 proxyFee = uint64(66);
         uint64 proverFee = uint64(77);
 
-        (bytes memory commitData, ) = _encodePermitDeposit(
+        (bytes memory commitData, bytes memory proveData) = _encodePermitDeposit(
             amount,
             user1,
             proxyFee,
@@ -315,6 +315,11 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         );
 
         assertTrue(success);
+
+        (success, ) = address(sequencer).call(
+            (abi.encodePacked(ZkBobSequencer.prove.selector, proveData))
+        );
+
     }
 
     function deposit(int256 amount, uint64 proxyFee, uint64 proverFee, address prover) internal {
