@@ -481,6 +481,20 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         emit WithdrawFee(_operator, fee);
     }
 
+    function withdrawFeePartial(address _operator, address _to, uint256 _fee) external {
+        require(
+            _operator == msg.sender || operatorManager.isOperatorFeeReceiver(_operator, msg.sender),
+            "ZkBobPool: not authorized"
+        );
+
+        uint256 fee = _fee * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
+        uint256 totalFee = accumulatedFee[_operator] * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
+        require(fee > 0 && fee <= totalFee, "ZkBobPool: no fee to withdraw");
+        IERC20(token).safeTransfer(_to, fee);
+        accumulatedFee[_operator] = accumulatedFee[_operator] - _fee;
+        emit WithdrawFee(_operator, fee);
+    }
+
     /**
      * @dev Calculates forced exit operation hash.
      * @param _operator operator address.

@@ -222,11 +222,41 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         assertTrue(prover2FeeAfter == prover2FeeBefore + proxyFee + proverFee);
     }
 
+    function testCanWithdrawFees() external {
+        deposit(int256(1), uint64(12), uint64(27), prover1);
+        deposit(int256(1), uint64(3), uint64(7), prover2);
+
+        uint256 prover1FeeBefore = sequencer.accumulatedFees(prover1);
+        uint256 prover1BalanceBefore = IERC20(token).balanceOf(prover1);
+        uint256 prover2FeeBefore = sequencer.accumulatedFees(prover2);
+        uint256 prover2BalanceBefore = IERC20(token).balanceOf(prover2);
+
+        assertTrue(prover1FeeBefore == uint64(39));
+        assertTrue(prover2FeeBefore == uint64(10));
+        
+        hoax(prover1);
+        sequencer.withdrawFees();
+
+        hoax(prover2);
+        sequencer.withdrawFees();
+
+        uint256 prover1FeeAfter = sequencer.accumulatedFees(prover1);
+        uint256 prover1BalanceAfter = IERC20(token).balanceOf(prover1);
+        uint256 prover2FeeAfter = sequencer.accumulatedFees(prover2);
+        uint256 prover2BalanceAfter = IERC20(token).balanceOf(prover2);
+
+        assertTrue(prover1FeeAfter == 0);
+        assertTrue(prover1BalanceAfter == prover1BalanceBefore + prover1FeeBefore * denominator);
+
+        assertTrue(prover2FeeAfter == 0);
+        assertTrue(prover2BalanceAfter == prover2BalanceBefore + prover2FeeBefore * denominator);
+    }
+
     function deposit(int256 amount, uint64 proxyFee, uint64 proverFee, address prover) internal {
         (bytes memory commitData, bytes memory proveData) = _encodeDeposit(amount, proxyFee, proverFee, prover);
         
         vm.prank(user1);
-        IERC20(token).approve(address(pool), (uint256(amount) + proxyFee + proverFee) * 1_000_000_000);
+        IERC20(token).approve(address(pool), (uint256(amount) + proxyFee + proverFee) * denominator);
         
         startHoax(prover);
         (bool success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));

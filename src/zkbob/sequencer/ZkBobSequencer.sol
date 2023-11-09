@@ -147,10 +147,10 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
     }
 
     function withdrawFees() external {
-        require(accumulatedFees[msg.sender] > 0, "ZkBobSequencer: no fees to withdraw");
+        uint256 fee = accumulatedFees[msg.sender];
+        require(fee > 0, "ZkBobSequencer: no fees to withdraw");
         accumulatedFees[msg.sender] = 0;
-
-        // TODO
+        _pool.withdrawFeePartial(address(this), msg.sender, fee);
     }
 
     function _root() override internal view  returns (uint256){
