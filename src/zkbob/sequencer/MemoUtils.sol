@@ -20,16 +20,13 @@ contract MemoUtils is CustomABIDecoder{
     }
 
     function parseMessagePrefix(bytes memory memo, uint16 txType) public pure returns (bytes4 prefix) {
-        console2.log("parseMessagePrefix:memo", bytesToHexString(memo));
         uint256 offset = _memo_fixed_size(txType) + 32;
-        console2.log("_memo_fixed_size", offset);
         bytes calldata prefix_bytes;
         assembly {
             prefix := mload(add(memo, offset))
             prefix_bytes.offset := add(memo, offset)
             prefix_bytes.length := 32
         }
-        console2.log("prefix", bytesToHexString(prefix_bytes));
         prefix = prefix & 0x0000ffff;
     }
 

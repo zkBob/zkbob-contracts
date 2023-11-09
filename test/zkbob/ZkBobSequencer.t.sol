@@ -509,8 +509,6 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             memo // 76
         );
 
-        console2.log("commitData1", bytesToHexString(commitData));
-
         commitData = _encodePermits(
             commitData,
             proxyPermitDigest, //64
