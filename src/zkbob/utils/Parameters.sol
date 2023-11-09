@@ -37,4 +37,8 @@ abstract contract Parameters is CustomABIDecoder {
         (bytes32 r, bytes32 vs) = _sign_r_vs();
         return (uint8((uint256(vs) >> 255) + 27), r, vs & S_MASK);
     }
+    function _permittable_signature_proxy_fee() internal pure returns (uint8, bytes32, bytes32) {
+        (bytes32 r, bytes32 vs) = _sign_r_vs_proxy();
+        return (uint8((uint256(vs) >> 255) + 27), r, vs & S_MASK);
+    }
 }
