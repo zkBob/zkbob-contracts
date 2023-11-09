@@ -7,6 +7,8 @@ import {ZkBobPool} from "../ZkBobPool.sol";
 import {MemoUtils} from "./MemoUtils.sol";
 import {CustomABIDecoder} from "../utils/CustomABIDecoder.sol";
 import {Parameters} from "../utils/Parameters.sol";
+
+import {IUSDCPermit} from "../../interfaces/IUSDCPermit.sol";
 import "forge-std/console.sol";
 
 contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
@@ -32,15 +34,34 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
 
     mapping(uint256 => bool) pendingNullifiers;
 
+    uint256 immutable TOKEN_DENOMINATOR;
+
+    uint256 internal constant TOKEN_NUMERATOR = 1;
+
     event Commited(); // TODO: Fill the data
     event Proved();
     event Rejected();
     event Skipped();
 
-    constructor(address pool) {
+    constructor(address pool, uint256 _denominator) {
         _pool = ZkBobPool(pool);
+        TOKEN_DENOMINATOR = _denominator;
     }
 
+    function _transferProxyFeeByPermit(address _user, uint256 _nullifier, int256 _tokenAmount) internal {
+        (uint8 v, bytes32 r, bytes32 s) = _permittable_signature_proxy_fee();
+        IUSDCPermit(address(_pool.token())).transferWithAuthorization(
+            _user,
+            address(this),
+            uint256(_tokenAmount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR,
+            0,
+            _memo_permit_deadline(),
+            bytes32(_nullifier),
+            v,
+            r,
+            s
+        );
+    }
     // Possible problems here:
     // 1. Malicious user can front run a prover and the prover spend some gas without any result
     function commit() external {

@@ -2,6 +2,8 @@
 
 pragma solidity 0.8.15;
 
+import "forge-std/console2.sol";
+
 contract CustomABIDecoder {
     uint256 constant transfer_nullifier_pos = 4;
     uint256 constant transfer_nullifier_size = 32;
@@ -26,7 +28,14 @@ contract CustomABIDecoder {
     uint256 constant transfer_out_commit_size = 32;
 
     function _transfer_out_commit() internal pure returns (uint256 r) {
+        
         r = _loaduint256(transfer_out_commit_pos);
+        uint offset = transfer_out_commit_pos;
+        bytes calldata r_bytes;
+        assembly {
+            r_bytes.offset := offset
+            r_bytes.length := 32
+        }
     }
 
     uint256 constant transfer_index_pos = transfer_out_commit_pos + transfer_out_commit_size;
@@ -112,6 +121,14 @@ contract CustomABIDecoder {
 
     function _sign_r_vs() internal pure returns (bytes32 r, bytes32 vs) {
         uint256 offset = _sign_r_vs_pos();
+        assembly {
+            r := calldataload(offset)
+            vs := calldataload(add(offset, 32))
+        }
+    }
+
+    function _sign_r_vs_proxy() internal pure returns (bytes32 r, bytes32 vs) {
+        uint256 offset = _sign_r_vs_pos()+64;
         assembly {
             r := calldataload(offset)
             vs := calldataload(add(offset, 32))
@@ -248,6 +265,31 @@ contract CustomABIDecoder {
         assembly {
             memo.offset := offset
             memo.length := memoLength
+        }
+    }
+
+    function bytesToHexString(
+        bytes memory data
+    ) public pure returns (string memory) {
+        bytes memory hexString = new bytes(2 * data.length);
+
+        for (uint256 i = 0; i < data.length; i++) {
+            bytes2 b = bytes2(uint16(uint8(data[i])));
+            bytes1 hi = bytes1(uint8(uint16(b)) / 16);
+            bytes1 lo = bytes1(uint8(uint16(b)) % 16);
+
+            hexString[2 * i] = char(hi);
+            hexString[2 * i + 1] = char(lo);
+        }
+
+        return string(hexString);
+    }
+
+    function char(bytes1 b) internal pure returns (bytes1 c) {
+        if (uint8(b) < 10) {
+            return bytes1(uint8(b) + 0x30);
+        } else {
+            return bytes1(uint8(b) + 0x57);
         }
     }
 }

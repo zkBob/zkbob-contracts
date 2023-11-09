@@ -8,6 +8,7 @@ pragma solidity 0.8.15;
 // 22-30 bytes - proxy fee
 // 30-38 bytes - prover fee
 import "../utils/CustomABIDecoder.sol";
+import "forge-std/console2.sol";
 
 contract MemoUtils is CustomABIDecoder{
     function parseFees(bytes memory memo) public pure returns (address proxyAddress, uint64 proxyFee, uint64 proverFee) {
@@ -19,11 +20,16 @@ contract MemoUtils is CustomABIDecoder{
     }
 
     function parseMessagePrefix(bytes memory memo, uint16 txType) public pure returns (bytes4 prefix) {
-        uint256 offset = _memo_fixed_size(txType);
+        console2.log("parseMessagePrefix:memo", bytesToHexString(memo));
+        uint256 offset = _memo_fixed_size(txType) + 32;
+        console2.log("_memo_fixed_size", offset);
+        bytes calldata prefix_bytes;
         assembly {
-            offset := sub(offset, 28)
             prefix := mload(add(memo, offset))
+            prefix_bytes.offset := add(memo, offset)
+            prefix_bytes.length := 32
         }
+        console2.log("prefix", bytesToHexString(prefix_bytes));
         prefix = prefix & 0x0000ffff;
     }
 
