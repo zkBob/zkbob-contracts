@@ -21,13 +21,20 @@ contract MemoUtils is CustomABIDecoder{
 
     function parseMessagePrefix(bytes memory memo, uint16 txType) public pure returns (bytes4 prefix) {
         uint256 offset = _memo_fixed_size(txType) + 32;
-        bytes calldata prefix_bytes;
         assembly {
             prefix := mload(add(memo, offset))
-            prefix_bytes.offset := add(memo, offset)
-            prefix_bytes.length := 32
         }
         prefix = prefix & 0x0000ffff;
+    }
+
+    function _parsePermitData(bytes memory memo) internal pure returns (uint64 expiry, address holder) {
+
+        uint256 offset; 
+        assembly {
+            offset := add(memo, 0x20)
+            expiry := mload(add(offset, 0xc)) //  36 - 32 + 8 = 12
+            holder := mload(add(offset, 0x20)) // 44-32+20 = 42
+        }
     }
 
     function _memo_fixed_size(uint16 txType) internal pure returns (uint256 r) {

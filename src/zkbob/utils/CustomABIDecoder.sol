@@ -127,12 +127,26 @@ contract CustomABIDecoder {
         }
     }
 
-    function _sign_r_vs_proxy() internal pure returns (bytes32 r, bytes32 vs) {
-        uint256 offset = _sign_r_vs_pos()+64;
+    function _sign_r_vs_proxy() internal view returns (bytes32 r, bytes32 vs) {
+
+        uint256 offset = tree_root_after_pos + tx_type_size;
+        uint256 memoLength = _loaduint256(offset + memo_data_size_size - uint256_size) & memo_data_size_mask;
+        offset = offset + memo_data_size_size + memoLength;
+        console2.log("signature pos", offset);
+        bytes calldata r_bytes;
+        bytes calldata vs_bytes;
         assembly {
             r := calldataload(offset)
             vs := calldataload(add(offset, 32))
+            r_bytes.offset := offset
+            r_bytes.length := 32
+            
+            vs_bytes.offset := add(offset,32)
+            vs_bytes.length := 32
+
         }
+        console2.log("sig r", bytesToHexString(bytes(r_bytes)));
+        console2.log("sig vs", bytesToHexString(bytes(vs_bytes)));
     }
 
     uint256 constant transfer_delta_size =
@@ -237,7 +251,7 @@ contract CustomABIDecoder {
         r = address(uint160(_loaduint256(memo_permit_holder_pos + memo_permit_holder_size - uint256_size)));
     }
 
-    function _parseCommitData() internal pure returns (
+    function _parseCommitData() internal view returns (
         uint256 nullifier,
         uint256 outCommit,
         uint48 transferIndex,

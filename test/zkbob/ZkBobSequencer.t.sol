@@ -165,8 +165,8 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         queue.setDirectDepositFee(uint64(0.1 ether / D));
         queue.setDirectDepositTimeout(1 days);
 
-        deal(token, user1, 1 ether / D);
-        deal(token, user2, 1 ether / D);
+        deal(token, user1, 10 ether / D);
+        deal(token, user2, 10 ether / D);
         deal(token, user3, 0);
     }
 
@@ -296,25 +296,35 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         assertTrue(prover2BalanceAfter == prover2BalanceBefore + prover2FeeBefore * denominator);
     }
 
+    //user1 is the dapp user, user2 is the chosen prover
     function testPermitDepositCommitAndProve() external {
-        uint256 amount = uint256(38);
-        uint64 proxyFee = uint64(66);
-        uint64 proverFee = uint64(77);
+        uint256 amount = uint256(1 ether);
+        uint64 proxyFee = uint64(10_000_000);
+        uint64 proverFee = uint64(30_000_000);
+
+        uint256 proxyAccFeesBefore = pool.accumulatedFee(user2);
+
+        IERC20 tokenContract = IERC20(token);
+
+        uint256 sequencerBalanceBefore = tokenContract.balanceOf(address(this));
+
+        uint256 userBalanceBefore = tokenContract.balanceOf(user1);
 
         (bytes memory commitData, bytes memory proveData) = _encodePermitDeposit(
             amount,
-            user1,
+            user2,
             proxyFee,
             proverFee
         );
 
-        vm.prank(user1);
+        vm.prank(user2);
 
+        
         (bool success, ) = address(sequencer).call(
             (abi.encodePacked(ZkBobSequencer.commit.selector, commitData))
         );
 
-        assertTrue(success);
+        assertEq(sequencerBalanceBefore + proxyFee, tokenContract.balanceOf(address(this)));
 
         (success, ) = address(sequencer).call(
             (abi.encodePacked(ZkBobSequencer.prove.selector, proveData))
@@ -426,7 +436,9 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         }
 
         uint256 expiry = block.timestamp + 1 hours;
-        bytes32 nullifier = bytes32(_randFR());
+        console2.log("expiry encoded", expiry);
+        // bytes32 nullifier = bytes32(_randFR());
+        bytes32 nullifier = 0x0000000000000000000000000000000000000000000000000000000000000000;
 
         bytes32 proverPermitDigest;
         bytes32 proxyPermitDigest;
@@ -519,6 +531,9 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             proxyPermitDigest, //64
             proverPermitDigest //64
         );
+
+        console2.log("commitData", bytesToHexString(commitData));
+
         proveData = _encodePermits(
             proveData,
             proxyPermitDigest,
@@ -537,6 +552,38 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             "TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
         );
 
+
+    function testSig()external{
+        uint64 expiry = 1671415261;
+        uint64 proxyFee = uint64(10_000_000);
+        bytes32 nullifier =  0x0000000000000000000000000000000000000000000000000000000000000000;
+
+        bytes32 proxyPermitDigest = _digestSaltedPermit(
+                user1,
+                user2,
+                proxyFee,
+                expiry,
+                nullifier
+            );
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            pk1,
+            proxyPermitDigest
+        );
+
+        bytes memory encodedSig = _encodePermitSignature(v,r,s);
+
+        vm.prank(user2);
+        IERC20Permit(pool.token()).receiveWithSaltedPermit(
+            user1,
+            uint256(proxyFee),
+            expiry,
+            bytes32(nullifier),
+            v,
+            r,
+            s
+        );
+    }
     function _digestSaltedPermit(
         address _holder,
         address _spender,

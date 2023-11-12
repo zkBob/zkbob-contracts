@@ -8,8 +8,8 @@ import {MemoUtils} from "./MemoUtils.sol";
 import {CustomABIDecoder} from "../utils/CustomABIDecoder.sol";
 import {Parameters} from "../utils/Parameters.sol";
 
-import {IUSDCPermit} from "../../interfaces/IUSDCPermit.sol";
-import "forge-std/console.sol";
+import {IERC20Permit} from "../../interfaces/IERC20Permit.sol";
+import "forge-std/console2.sol";
 
 contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
     using PriorityQueue for PriorityQueue.Queue;
@@ -48,14 +48,16 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         TOKEN_DENOMINATOR = _denominator;
     }
 
-    function _transferProxyFeeByPermit(address _user, uint256 _nullifier, int256 _tokenAmount) internal {
+    function _transferFromByPermit(bytes memory _memo, uint256 _nullifier, int256 _tokenAmount) internal {
+
+        (uint64 expiry, address _user) = _parsePermitData(_memo);
+
+        console2.log("expiry decoded", expiry);
         (uint8 v, bytes32 r, bytes32 s) = _permittable_signature_proxy_fee();
-        IUSDCPermit(address(_pool.token())).transferWithAuthorization(
+        IERC20Permit(_pool.token()).receiveWithSaltedPermit(
             _user,
-            address(this),
             uint256(_tokenAmount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR,
-            0,
-            _memo_permit_deadline(),
+            expiry,
             bytes32(_nullifier),
             v,
             r,
@@ -76,7 +78,7 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
             bytes calldata memo
         ) = _parseCommitData();
 
-        (address proxy, , ) = MemoUtils.parseFees(memo);
+        (address proxy, uint64 proxyFee, ) = MemoUtils.parseFees(memo);
         
         require(pendingNullifiers[nullifier] == false, "ZkBobSequencer: nullifier is already pending");
         require(_pool.nullifiers(nullifier) == 0, "ZkBobSequencer: nullifier is spent");
@@ -85,7 +87,10 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         require(_pool.transfer_verifier().verifyProof(transfer_pub(index, nullifier, outCommit, transferDelta, memo), transferProof), "ZkBobSequencer: invalid proof");
         require(MemoUtils.parseMessagePrefix(memo, txType) == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
         
-        // TODO: special case for deposits, we need to claim fee here
+        //For permit based deposit we take the Proxy fee in advance
+        if(txType == uint16(3)) {
+            _transferFromByPermit(memo, nullifier, int64(proxyFee));   
+        }
 
         bytes32 hash = commitHash(nullifier, outCommit, transferDelta, transferProof, memo);
         PriorityOperation memory op = PriorityOperation(hash, nullifier, block.timestamp);
