@@ -573,8 +573,9 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
 
         bytes memory encodedSig = _encodePermitSignature(v,r,s);
 
+        address poolToken = pool.token();
         vm.prank(user2);
-        IERC20Permit(pool.token()).receiveWithSaltedPermit(
+        IERC20Permit(poolToken).receiveWithSaltedPermit(
             user1,
             uint256(proxyFee),
             expiry,
