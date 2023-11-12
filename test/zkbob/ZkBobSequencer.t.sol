@@ -436,7 +436,6 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         }
 
         uint256 expiry = block.timestamp + 1 hours;
-        console2.log("expiry encoded", expiry);
         // bytes32 nullifier = bytes32(_randFR());
         bytes32 nullifier = 0x0000000000000000000000000000000000000000000000000000000000000000;
 
@@ -450,6 +449,8 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
                 expiry,
                 nullifier
             );
+
+        console2.log("digest", bytes32ToHexString(proxyPermitDigest));
             proverPermitDigest = _digestSaltedPermit(
                 user1,
                 address(pool),
@@ -560,7 +561,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
 
         bytes32 proxyPermitDigest = _digestSaltedPermit(
                 user1,
-                user2,
+                address(sequencer),
                 proxyFee,
                 expiry,
                 nullifier
@@ -573,8 +574,10 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
 
         bytes memory encodedSig = _encodePermitSignature(v,r,s);
 
+        console2.log("encodedSig",bytesToHexString(encodedSig));
+        console2.log("digest", bytes32ToHexString(proxyPermitDigest));
         address poolToken = pool.token();
-        vm.prank(user2);
+        vm.prank(address(sequencer));
         IERC20Permit(poolToken).receiveWithSaltedPermit(
             user1,
             uint256(proxyFee),
@@ -716,6 +719,23 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
 
     function bytesToHexString(
         bytes memory data
+    ) public pure returns (string memory) {
+        bytes memory hexString = new bytes(2 * data.length);
+
+        for (uint256 i = 0; i < data.length; i++) {
+            bytes2 b = bytes2(uint16(uint8(data[i])));
+            bytes1 hi = bytes1(uint8(uint16(b)) / 16);
+            bytes1 lo = bytes1(uint8(uint16(b)) % 16);
+
+            hexString[2 * i] = char(hi);
+            hexString[2 * i + 1] = char(lo);
+        }
+
+        return string(hexString);
+    }
+
+    function bytes32ToHexString(
+        bytes32 data
     ) public pure returns (string memory) {
         bytes memory hexString = new bytes(2 * data.length);
 
