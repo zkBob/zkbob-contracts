@@ -335,7 +335,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         vm.stopPrank();
     }
 
-    function testDirectDeposits() public {
+    function testCommitProveDirectDeposits() public {
         _setUpDD();
 
         vm.startPrank(user1);
@@ -353,6 +353,49 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         sequencer.commitDirectDeposits(indices, outCommitment, batchProof);
 
         sequencer.proveDirectDeposit(_randFR(), indices, outCommitment, batchProof, _randProof());
+    }
+
+    function testCantCommitAlreadyCommitedDirectDeposits() public {
+        _setUpDD();
+
+        vm.startPrank(user1);
+        _directDeposit(1 ether / D, user2, zkAddress);
+        _directDeposit(2 ether / D, user2, zkAddress);
+        _directDeposit(3 ether / D, user2, zkAddress);
+        _directDeposit(4 ether / D, user2, zkAddress);
+        vm.stopPrank();
+
+        uint256[] memory firstBatchIndices = new uint256[](3);
+        firstBatchIndices[0] = 0;
+        firstBatchIndices[1] = 1;
+        firstBatchIndices[2] = 2;
+        uint256 firstBatchCommitment = _randFR();
+        uint256[8] memory firstBatchProof = _randProof();
+
+        vm.prank(prover1);
+        sequencer.commitDirectDeposits(firstBatchIndices, firstBatchCommitment, firstBatchProof);
+
+        uint256[] memory secondBatchIndices = new uint256[](2);
+        secondBatchIndices[0] = 2;
+        secondBatchIndices[1] = 3;
+        uint256 secondBatchCommitment = _randFR();
+        uint256[8] memory secondBatchProof = _randProof();
+
+        vm.prank(prover2);
+        vm.expectRevert();
+        sequencer.commitDirectDeposits(secondBatchIndices, secondBatchCommitment, secondBatchProof);
+
+        sequencer.proveDirectDeposit(_randFR(), firstBatchIndices, firstBatchCommitment, firstBatchProof, _randProof());
+
+        uint256[] memory thirdBatchIndices = new uint256[](1);
+        thirdBatchIndices[0] = 3;
+        uint256 thirdBatchCommitment = _randFR();
+        uint256[8] memory thirdBatchProof = _randProof();
+
+        vm.prank(prover2);
+        sequencer.commitDirectDeposits(thirdBatchIndices, thirdBatchCommitment, thirdBatchProof);
+
+        sequencer.proveDirectDeposit(_randFR(), thirdBatchIndices, thirdBatchCommitment, thirdBatchProof, _randProof());
     }
 
     function deposit(int256 amount, uint64 proxyFee, uint64 proverFee, address prover) internal {
