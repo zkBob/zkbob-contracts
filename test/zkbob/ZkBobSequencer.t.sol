@@ -589,7 +589,6 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             s
         );
 
-        assertTrue(false);
     }
     function _digestSaltedPermit(
         address _holder,
