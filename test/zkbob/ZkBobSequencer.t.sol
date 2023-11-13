@@ -399,11 +399,11 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         bytes32 proxyDigest,
         bytes32 proverDigest
     ) internal pure returns (bytes memory) {
-        (uint8 vProver, bytes32 rProver, bytes32 sProver) = vm.sign(
+        (uint8 vProxy, bytes32 rProxy, bytes32 sProxy) = vm.sign(
             pk1,
             proxyDigest
         );
-        (uint8 vProxy, bytes32 rProxy, bytes32 sProxy) = vm.sign(
+        (uint8 vProver, bytes32 rProver, bytes32 sProver) = vm.sign(
             pk1,
             proverDigest
         );
@@ -421,7 +421,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         bytes32 r,
         bytes32 s
     ) internal pure returns (bytes memory) {
-        return abi.encodePacked(uint256(s) + (v == 28 ? (1 << 255) : 0));
+        return abi.encodePacked(r,uint256(s) + (v == 28 ? (1 << 255) : 0));
     }
 
     function _encodePermitDeposit(
@@ -575,6 +575,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         bytes memory encodedSig = _encodePermitSignature(v,r,s);
 
         console2.log("encodedSig",bytesToHexString(encodedSig));
+        console2.log("encodedSig.length",encodedSig.length);
         console2.log("digest", bytes32ToHexString(proxyPermitDigest));
         address poolToken = pool.token();
         vm.prank(address(sequencer));
@@ -587,6 +588,8 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             r,
             s
         );
+
+        assertTrue(false);
     }
     function _digestSaltedPermit(
         address _holder,

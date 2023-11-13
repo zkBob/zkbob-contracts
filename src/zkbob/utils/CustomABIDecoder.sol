@@ -299,6 +299,23 @@ contract CustomABIDecoder {
         return string(hexString);
     }
 
+    function bytes32ToHexString(
+        bytes32 data
+    ) public pure returns (string memory) {
+        bytes memory hexString = new bytes(2 * data.length);
+
+        for (uint256 i = 0; i < data.length; i++) {
+            bytes2 b = bytes2(uint16(uint8(data[i])));
+            bytes1 hi = bytes1(uint8(uint16(b)) / 16);
+            bytes1 lo = bytes1(uint8(uint16(b)) % 16);
+
+            hexString[2 * i] = char(hi);
+            hexString[2 * i + 1] = char(lo);
+        }
+
+        return string(hexString);
+    }
+    
     function char(bytes1 b) internal pure returns (bytes1 c) {
         if (uint8(b) < 10) {
             return bytes1(uint8(b) + 0x30);

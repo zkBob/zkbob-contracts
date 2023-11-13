@@ -52,11 +52,18 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
 
         (uint64 expiry, address _user) = _parsePermitData(_memo);
 
-        console2.log("expiry decoded", expiry);
+        
         (uint8 v, bytes32 r, bytes32 s) = _permittable_signature_proxy_fee();
+
+        console2.log("decoded r", bytes32ToHexString(r));
+        console2.log("decoded s", bytes32ToHexString(s));
+        console2.log("decoded v", v);
+        // console2.log("decoded nullifier", bytes32ToHexString(_nullifier));
+        console2.log("decoded holder", _user);
+        console2.log("decoded _tokenAmount", _tokenAmount);
         IERC20Permit(_pool.token()).receiveWithSaltedPermit(
             _user,
-            uint256(_tokenAmount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR,
+            uint256(_tokenAmount),
             expiry,
             bytes32(_nullifier),
             v,
