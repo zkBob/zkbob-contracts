@@ -300,7 +300,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
 
     //user1 is the dapp user, user2 is the chosen prover
     function testPermitDepositCommitAndProve() external {
-        uint256 amount = uint256(10_000_000_000);
+        uint256 amount = uint256(9_960_000_000);
         uint64 proxyFee = uint64(10_000_000);
         uint64 proverFee = uint64(30_000_000);
 
@@ -308,7 +308,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
 
         IERC20 tokenContract = IERC20(token);
 
-        uint256 sequencerBalanceBefore = tokenContract.balanceOf(address(this));
+        uint256 prover1BalanceBefore = sequencer.accumulatedFees(prover1);
 
         uint256 userBalanceBefore = tokenContract.balanceOf(user1);
 
@@ -326,11 +326,15 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             (abi.encodePacked(ZkBobSequencer.commit.selector, commitData))
         );
 
-        assertEq(sequencerBalanceBefore + proxyFee, tokenContract.balanceOf(address(this)));
+        // assertEq(sequencerBalanceBefore + proxyFee, tokenContract.balanceOf(address(this)));
 
         (success, ) = address(sequencer).call(
             (abi.encodePacked(ZkBobSequencer.prove.selector, proveData))
         );
+
+        assertTrue(success);
+
+        assertEq(proverFee+ proxyFee, sequencer.accumulatedFees(prover1) - prover1BalanceBefore);
 
         vm.stopPrank();
     }
@@ -477,8 +481,8 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         return
             abi.encodePacked(
                 data,
-                _encodePermitSignature(vProxy, rProxy, sProxy), //64
-                _encodePermitSignature(vProver, rProver, sProver) //64
+                _encodePermitSignature(vProver, rProver, sProver), //64
+                _encodePermitSignature(vProxy, rProxy, sProxy) //64
             );
     }
 
@@ -508,19 +512,23 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         bytes32 proverPermitDigest;
         bytes32 proxyPermitDigest;
         if (permitType == PermitType.BOBPermit) {
-            proxyPermitDigest = _digestSaltedPermit(
+            uint256 nonce = IERC20Permit(token).nonces(user1);
+
+            proxyPermitDigest = _digestSaltedPermitWithNonce(
                 user1,
                 address(sequencer),
-                _proxyFee * 1000_000_000, // TODO: fix it
+                _proxyFee * denominator, 
+                nonce,
                 expiry,
                 nullifier
             );
 
-        console2.log("digest", bytes32ToHexString(proxyPermitDigest));
-            proverPermitDigest = _digestSaltedPermit(
+        
+            proverPermitDigest = _digestSaltedPermitWithNonce(
                 user1,
                 address(pool),
-                uint256(_amount + uint256(_proverFee)) * 1000_000_000, // TODO: fix it
+                uint256(_amount + uint256(_proverFee)) * denominator, 
+                ++ nonce,
                 expiry,
                 nullifier
             );
@@ -562,7 +570,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             _randFR(), //32 out_commit
             uint48(0), //index 6
             uint112(0), //energy 14
-            uint64(_amount + _proverFee) //token amount 8
+            uint64(_amount) //token amount 8
         );
         for (uint256 i = 0; i < 8; i++) {
             commitData = abi.encodePacked(commitData, new bytes(32)); //tx proof(8)*32 = 256
@@ -606,16 +614,12 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             proverPermitDigest //64
         );
 
-        console2.log("commitData", bytesToHexString(commitData));
-        
-
         proveData = _encodePermits(
             proveData,
             proxyPermitDigest,
             proverPermitDigest
         );
 
-        console2.log("proveData", bytesToHexString(proveData));
     }
 
     bytes32 constant TOKEN_PERMISSIONS_TYPEHASH =
@@ -649,11 +653,8 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         );
 
         bytes memory encodedSig = _encodePermitSignature(v,r,s);
-
-        console2.log("encodedSig",bytesToHexString(encodedSig));
-        console2.log("encodedSig.length",encodedSig.length);
-        console2.log("digest", bytes32ToHexString(proxyPermitDigest));
         address poolToken = pool.token();
+        console.log("user1 balance", IERC20(poolToken).balanceOf(user1));
         vm.prank(address(sequencer));
         IERC20Permit(poolToken).receiveWithSaltedPermit(
             user1,
@@ -684,6 +685,31 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
                         _spender,
                         _value,
                         nonce,
+                        _expiry,
+                        _salt
+                    )
+                )
+            );
+    }
+
+    function _digestSaltedPermitWithNonce(
+        address _holder,
+        address _spender,
+        uint256 _value,
+        uint256 _nonce,
+        uint256 _expiry,
+        bytes32 _salt
+    ) internal view returns (bytes32) {
+        return
+            ECDSA.toTypedDataHash(
+                IERC20Permit(token).DOMAIN_SEPARATOR(),
+                keccak256(
+                    abi.encode(
+                        IERC20Permit(token).SALTED_PERMIT_TYPEHASH(),
+                        _holder,
+                        _spender,
+                        _value,
+                        _nonce,
                         _expiry,
                         _salt
                     )

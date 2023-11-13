@@ -55,7 +55,7 @@ contract CustomABIDecoder {
     uint256 constant transfer_token_amount_pos = transfer_energy_amount_pos + transfer_energy_amount_size;
     uint256 constant transfer_token_amount_size = 8;
 
-    function _transfer_token_amount() internal pure returns (int64 r) {
+    function _transfer_token_amount() internal view returns (int64 r) {
         r = int64(uint64(_loaduint256(transfer_token_amount_pos + transfer_token_amount_size - uint256_size)));
     }
 
@@ -127,26 +127,14 @@ contract CustomABIDecoder {
         }
     }
 
-    function _sign_r_vs_proxy() internal view returns (bytes32 r, bytes32 vs) {
-
+    function _sign_r_vs_proxy() internal pure returns (bytes32 r, bytes32 vs) {
         uint256 offset = tree_root_after_pos + tx_type_size;
         uint256 memoLength = _loaduint256(offset + memo_data_size_size - uint256_size) & memo_data_size_mask;
-        offset = offset + memo_data_size_size + memoLength;
-        console2.log("signature pos", offset);
-        bytes calldata r_bytes;
-        bytes calldata vs_bytes;
+        offset = offset + memo_data_size_size + memoLength + sign_r_vs_size;
         assembly {
             r := calldataload(offset)
             vs := calldataload(add(offset, 32))
-            r_bytes.offset := offset
-            r_bytes.length := 32
-            
-            vs_bytes.offset := add(offset,32)
-            vs_bytes.length := 32
-
         }
-        console2.log("sig r", bytesToHexString(bytes(r_bytes)));
-        console2.log("sig vs", bytesToHexString(bytes(vs_bytes)));
     }
 
     uint256 constant transfer_delta_size =
@@ -201,13 +189,9 @@ contract CustomABIDecoder {
     uint256 constant memo_prover_fee_pos = memo_proxy_fee_pos + memo_proxy_fee_size;
 
     function _memo_fee() internal pure returns (uint256 r) {
-        uint256 proverFee = _loaduint256(
+        r =  _loaduint256(
             memo_prover_fee_pos + memo_fee_size - uint256_size
         ) & memo_fee_mask;
-        uint256 proxyFee = _loaduint256(
-            memo_proxy_fee_pos + memo_fee_size - uint256_size
-        ) & memo_fee_mask;
-        r = proxyFee + proverFee;
     }
 
     // Withdraw specific data

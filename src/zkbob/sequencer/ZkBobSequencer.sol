@@ -48,6 +48,8 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
     event Rejected();
     event Skipped();
 
+    uint16 public constant PERMIT_DEPOSIT = uint16(3);
+
     constructor(address pool, uint256 _denominator) {
         _pool = ZkBobPool(pool);
         TOKEN_DENOMINATOR = _denominator;
@@ -60,12 +62,6 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         
         (uint8 v, bytes32 r, bytes32 s) = _permittable_signature_proxy_fee();
 
-        console2.log("decoded r", bytes32ToHexString(r));
-        console2.log("decoded s", bytes32ToHexString(s));
-        console2.log("decoded v", v);
-        // console2.log("decoded nullifier", bytes32ToHexString(_nullifier));
-        console2.log("decoded holder", _user);
-        console2.log("decoded _tokenAmount", _tokenAmount);
         IERC20Permit(_pool.token()).receiveWithSaltedPermit(
             _user,
             uint256(_tokenAmount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR,
@@ -100,7 +96,7 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         require(MemoUtils.parseMessagePrefix(memo, txType) == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
         
         //For permit based deposit we take the Proxy fee in advance
-        if(txType == uint16(3)) {
+        if(txType == PERMIT_DEPOSIT) {
             _transferFromByPermit(memo, nullifier, int64(proxyFee));   
         }
 
@@ -169,10 +165,16 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         // absence of funds so it can't be proved
         if (success) {
             // We need to store fees and add ability to withdraw them
-            uint256 fee = _pool.accumulatedFee(address(this)) -
+            uint256 accruedFee = _pool.accumulatedFee(address(this)) -
                 accumulatedFeeBefore;
-            require(
-                proxy_fee + prover_fee == fee,
+                
+
+            uint256 totalFee = prover_fee;
+            if(_tx_type() != PERMIT_DEPOSIT) {
+                totalFee+=proxy_fee;
+            }
+                require(
+                totalFee == accruedFee,
                 "ZkBobSequencer: fee is not correct"
             );
             accumulatedFees[proxy] += proxy_fee;
