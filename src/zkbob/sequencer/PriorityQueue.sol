@@ -6,6 +6,7 @@ pragma solidity ^0.8.13;
 struct PriorityOperation {
     bytes32 commitHash;
     uint256 nullifier;
+    uint256[] directDeposits;
     uint256 timestamp;
 }
 

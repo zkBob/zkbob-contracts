@@ -100,6 +100,42 @@ contract ZkBobDirectDepositQueue is IZkBobDirectDeposits, IZkBobDirectDepositQue
         return directDeposits[_index];
     }
 
+    function validateBatch(
+        uint256[] calldata _indices,
+        uint256 _out_commit
+    ) 
+        external
+        view
+        returns (uint256 hashsum)
+    {
+        uint256 count = _indices.length;
+        require(count > 0, "ZkBobDirectDepositQueue: empty deposit list");
+        require(count <= MAX_NUMBER_OF_DIRECT_DEPOSITS, "ZkBobDirectDepositQueue: too many deposits");
+
+        bytes memory input = new bytes(32 + (10 + 32 + 8) * MAX_NUMBER_OF_DIRECT_DEPOSITS);
+        assembly {
+            mstore(add(input, 32), _out_commit)
+        }
+        
+        for (uint256 i = 0; i < count; ++i) {
+            uint256 index = _indices[i];
+            DirectDeposit storage dd = directDeposits[index];
+            (bytes32 pk, bytes10 diversifier, uint64 deposit, , DirectDepositStatus status) =
+                (dd.pk, dd.diversifier, dd.deposit, dd.fee, dd.status);
+            require(status == DirectDepositStatus.Pending, "ZkBobDirectDepositQueue: direct deposit not pending");
+
+            assembly {
+                // bytes10(dd.diversifier) ++ bytes32(dd.pk) ++ bytes8(dd.deposit)
+                let offset := mul(i, 50)
+                mstore(add(input, add(64, offset)), diversifier)
+                mstore(add(input, add(82, offset)), deposit)
+                mstore(add(input, add(74, offset)), pk)
+            }
+        }
+
+        hashsum = uint256(keccak256(input)) % R;
+    }
+
     /// @inheritdoc IZkBobDirectDepositQueue
     function collect(
         uint256[] calldata _indices,

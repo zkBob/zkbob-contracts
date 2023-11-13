@@ -7,12 +7,16 @@ import {ZkBobPool} from "../ZkBobPool.sol";
 import {MemoUtils} from "./MemoUtils.sol";
 import {CustomABIDecoder} from "../utils/CustomABIDecoder.sol";
 import {Parameters} from "../utils/Parameters.sol";
+import {ZkBobDirectDepositQueue} from "../ZkBobDirectDepositQueue.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {IERC20Permit} from "../../interfaces/IERC20Permit.sol";
 import "forge-std/console2.sol";
 
 contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
     using PriorityQueue for PriorityQueue.Queue;
+    using SafeERC20 for IERC20;
 
     uint256 constant TRANSFER_DELTA_SIZE = 28;
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
@@ -32,7 +36,8 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
     // Last time when queue was updated
     uint256 lastQueueUpdateTimestamp;
 
-    mapping(uint256 => bool) pendingNullifiers;
+    mapping(uint256 => bool) public pendingNullifiers;
+    mapping(uint256 => bool) public pendingDirectDeposits;
 
     uint256 immutable TOKEN_DENOMINATOR;
 
@@ -100,7 +105,7 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         }
 
         bytes32 hash = commitHash(nullifier, outCommit, transferDelta, transferProof, memo);
-        PriorityOperation memory op = PriorityOperation(hash, nullifier, block.timestamp);
+        PriorityOperation memory op = PriorityOperation(hash, nullifier, new uint256[](0), block.timestamp);
         priorityQueue.pushBack(op);
         pendingNullifiers[nullifier] = true;
 
@@ -157,7 +162,7 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         delete pendingNullifiers[nullifier];
 
         uint256 accumulatedFeeBefore = _pool.accumulatedFee(address(this));
-        bool success = propagateToPool();
+        bool success = propagateToPool(ZkBobPool.transact.selector);
 
         // We remove the commitment from the queue regardless of the result of the call to pool contract
         // If we check that the prover is not malicious then the tx is not valid because of the limits or
@@ -179,11 +184,89 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         }
     }
 
+    function commitDirectDeposits(
+        uint256[] calldata _indices,
+        uint256 _out_commit,
+        uint256[8] memory _batch_deposit_proof
+    )
+        external
+    {
+        // TODO: access control to prevent race condition
+        
+        uint256 hashsum = _pool.direct_deposit_queue().validateBatch(_indices, _out_commit);
+        for (uint256 i = 0; i < _indices.length; i++) {
+            require(pendingDirectDeposits[_indices[i]] == false, "ZkBobSequencer: direct deposit is already in the queue");
+        }
+
+        // verify that _out_commit corresponds to zero output account + 16 chosen notes + 111 empty notes
+        require(
+            _pool.batch_deposit_verifier().verifyProof([hashsum], _batch_deposit_proof), "ZkBobSequencer: bad batch deposit proof"
+        );
+
+        // Save pending indices
+        for (uint256 i = 0; i < _indices.length; i++) {
+            pendingDirectDeposits[_indices[i]] = true;
+        }
+
+        // Save operation in priority queue
+        bytes32 hash = commitDirectDepositHash(_indices, _out_commit, _batch_deposit_proof);
+        PriorityOperation memory op = PriorityOperation(hash, uint256(0), _indices, block.timestamp);
+        priorityQueue.pushBack(op);
+    }
+
+    function proveDirectDeposit(
+        uint256 _root_after,
+        uint256[] calldata _indices,
+        uint256 _out_commit,
+        uint256[8] memory _batch_deposit_proof,
+        uint256[8] memory _tree_proof
+    ) external {
+        PriorityOperation memory op = popFirstUnexpiredOperation();
+
+        require(
+            op.commitHash == commitDirectDepositHash(_indices, _out_commit, _batch_deposit_proof),
+            "ZkBobSequencer: invalid commit hash"
+        );
+
+        // TODO: Access control to prevent race condition
+
+        // We need to check that the proof is valid to prevent the case when the prover is malicious
+        uint256[3] memory tree_pub = [_pool.roots(_pool.pool_index()), _root_after, _out_commit];
+        require(_pool.tree_verifier().verifyProof(tree_pub, _tree_proof), "ZkBobSequencer: bad tree proof");
+
+        lastQueueUpdateTimestamp = block.timestamp;
+        for (uint256 i = 0; i < op.directDeposits.length; i++) {
+            delete pendingDirectDeposits[op.directDeposits[i]];
+        }
+
+        uint256 accumulatedFeeBefore = _pool.accumulatedFee(address(this));
+        bool success = propagateToPool(ZkBobPool.appendDirectDeposits.selector);
+
+        if (success) {
+            uint256 fee = _pool.accumulatedFee(address(this)) - accumulatedFeeBefore;
+            accumulatedFees[msg.sender] += fee;
+            emit Proved();
+        } else {
+            emit Rejected();
+        }
+    }
+
     function withdrawFees() external {
         uint256 fee = accumulatedFees[msg.sender];
         require(fee > 0, "ZkBobSequencer: no fees to withdraw");
+        
+        fee = fee * _pool.TOKEN_DENOMINATOR() / _pool.TOKEN_NUMERATOR();
+        address token = _pool.token();
+        uint256 balance = IERC20(token).balanceOf(address(this));
+        // TODO: it is not fair since some prover will pay for the gas more than others
+        if (fee > balance) {
+            _pool.withdrawFee(address(this), address(this));
+        }
+        balance = IERC20(token).balanceOf(address(this));
+        require(fee <= balance, "ZkBobSequencer: fee exceeds balance");
+
         accumulatedFees[msg.sender] = 0;
-        _pool.withdrawFeePartial(address(this), msg.sender, fee);
+        IERC20(token).safeTransfer(msg.sender, fee);
     }
 
     function _root() override internal view  returns (uint256){
@@ -199,7 +282,10 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         uint256 timestamp = max(op.timestamp, lastQueueUpdateTimestamp);
         while (timestamp + EXPIRATION_TIME < block.timestamp) {
             delete pendingNullifiers[op.nullifier];
-            // TODO: is is correct?
+            for (uint256 i = 0; i < op.directDeposits.length; i++) {
+                delete pendingDirectDeposits[op.directDeposits[i]];
+            }
+            // TODO: is it correct?
             lastQueueUpdateTimestamp = op.timestamp + EXPIRATION_TIME;
             op = priorityQueue.popFront();
             timestamp = max(op.timestamp, lastQueueUpdateTimestamp);
@@ -215,7 +301,17 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         bytes calldata memo
     ) internal pure returns (bytes32) {
         // TODO: check that it is enough
+        // Add some prefix?
         return keccak256(abi.encodePacked(nullifier, out_commit, transfer_delta, transfer_proof, memo));
+    }
+
+    function commitDirectDepositHash(
+        uint256[] calldata _indices,
+        uint256 _out_commit,
+        uint256[8] memory _batch_deposit_proof
+    ) internal pure returns (bytes32) {
+        // Add some prefix?
+        return keccak256(abi.encodePacked(_indices, _out_commit, _batch_deposit_proof));
     }
 
     function transfer_pub(
@@ -232,9 +328,8 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         r[4] = uint256(keccak256(memo)) % R;
     }
 
-    function propagateToPool() internal returns (bool success) {
+    function propagateToPool(bytes4 selector) internal returns (bool success) {
         address poolAddress = address(_pool);
-        bytes4 selector = ZkBobPool.transact.selector;
         bytes memory data = new bytes(msg.data.length);
         assembly {
             // TODO: check it

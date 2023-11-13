@@ -25,11 +25,13 @@ import {MutableOperatorManager} from "../../src/zkbob/manager/MutableOperatorMan
 import {PriorityOperation} from "../../src/zkbob/sequencer/PriorityQueue.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC677} from "../../src/interfaces/IERC677.sol";
 import "../shared/Env.t.sol";
 
 import "forge-std/console2.sol";
 
 abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
+    bytes constant zkAddress = "QsnTijXekjRm9hKcq5kLNPsa6P4HtMRrc3RxVx3jsLHeo2AiysYxVJP86mriHfN";
     address constant permit2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     uint256 constant initialRoot =
         11469701942666298368112882412133877458305516134926649826543144744382391691533;
@@ -331,6 +333,26 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         );
 
         vm.stopPrank();
+    }
+
+    function testDirectDeposits() public {
+        _setUpDD();
+
+        vm.startPrank(user1);
+        _directDeposit(10 ether / D, user2, zkAddress);
+        _directDeposit(5 ether / D, user2, zkAddress);
+        vm.stopPrank();
+
+        uint256[] memory indices = new uint256[](2);
+        indices[0] = 0;
+        indices[1] = 1;
+        uint256 outCommitment = _randFR();
+        
+        vm.startPrank(prover1);
+        uint256[8] memory batchProof = _randProof();
+        sequencer.commitDirectDeposits(indices, outCommitment, batchProof);
+
+        sequencer.proveDirectDeposit(_randFR(), indices, outCommitment, batchProof, _randProof());
     }
 
     function deposit(int256 amount, uint64 proxyFee, uint64 proverFee, address prover) internal {
@@ -724,10 +746,47 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             );
     }
 
+    function _setUpDD() internal {
+        deal(user1, 100 ether / D);
+        deal(user2, 100 ether / D);
+        deal(address(token), user1, 100 ether / D);
+        deal(address(token), user2, 100 ether / D);
+
+        accounting.setLimits(
+            1,
+            2_000_000 ether / D / denominator,
+            200_000 ether / D / denominator,
+            200_000 ether / D / denominator,
+            20_000 ether / D / denominator,
+            20_000 ether / D / denominator,
+            25 ether / D / denominator,
+            10 ether / D / denominator
+        );
+        address[] memory users = new address[](1);
+        users[0] = user1;
+        accounting.setUsersTier(1, users);
+
+        queue.setDirectDepositFee(uint64(0.1 ether / D / pool.denominator()));
+    }
+
+    function _directDeposit(uint256 amount, address fallbackUser, bytes memory _zkAddress) internal {
+        if (poolType == PoolType.ETH) {
+            ZkBobDirectDepositQueueETH(address(queue)).directNativeDeposit{value: amount}(fallbackUser, _zkAddress);
+        } else if (poolType == PoolType.BOB) {
+            IERC677(token).transferAndCall(address(queue), amount, abi.encode(fallbackUser, _zkAddress));
+        } else {
+            queue.directDeposit(fallbackUser, amount, _zkAddress);
+        }
+    }
+
     function _randFR() internal view returns (uint256) {
         return
             uint256(keccak256(abi.encode(gasleft()))) %
             21888242871839275222246405745257275088696311157297823662689037894645226208583;
+    }
+
+    function _randProof() internal returns (uint256[8] memory) {
+        return [_randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR()];
     }
 
     function bytesToHexString(

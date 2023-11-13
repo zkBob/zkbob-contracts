@@ -19,4 +19,12 @@ interface IZkBobDirectDepositQueue {
     )
         external
         returns (uint256 total, uint256 totalFee, uint256 hashsum, bytes memory message);
+
+    function validateBatch(
+        uint256[] calldata _indices,
+        uint256 _out_commit
+    ) 
+        external
+        view
+        returns (uint256 hashsum);
 }
