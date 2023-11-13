@@ -63,7 +63,7 @@ contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
         console2.log("decoded _tokenAmount", _tokenAmount);
         IERC20Permit(_pool.token()).receiveWithSaltedPermit(
             _user,
-            uint256(_tokenAmount),
+            uint256(_tokenAmount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR,
             expiry,
             bytes32(_nullifier),
             v,

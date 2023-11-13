@@ -298,7 +298,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
 
     //user1 is the dapp user, user2 is the chosen prover
     function testPermitDepositCommitAndProve() external {
-        uint256 amount = uint256(1 ether);
+        uint256 amount = uint256(10_000_000_000);
         uint64 proxyFee = uint64(10_000_000);
         uint64 proverFee = uint64(30_000_000);
 
@@ -312,12 +312,12 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
 
         (bytes memory commitData, bytes memory proveData) = _encodePermitDeposit(
             amount,
-            user2,
+            prover1,
             proxyFee,
             proverFee
         );
 
-        vm.prank(user2);
+        vm.startPrank(prover1);
 
         
         (bool success, ) = address(sequencer).call(
@@ -330,6 +330,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             (abi.encodePacked(ZkBobSequencer.prove.selector, proveData))
         );
 
+        vm.stopPrank();
     }
 
     function deposit(int256 amount, uint64 proxyFee, uint64 proverFee, address prover) internal {
@@ -445,7 +446,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             proxyPermitDigest = _digestSaltedPermit(
                 user1,
                 address(sequencer),
-                _proxyFee,
+                _proxyFee * 1000_000_000, // TODO: fix it
                 expiry,
                 nullifier
             );
@@ -454,7 +455,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             proverPermitDigest = _digestSaltedPermit(
                 user1,
                 address(pool),
-                uint256(_amount + uint256(_proverFee)),
+                uint256(_amount + uint256(_proverFee)) * 1000_000_000, // TODO: fix it
                 expiry,
                 nullifier
             );
@@ -495,8 +496,8 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             nullifier, //32 nullifier
             _randFR(), //32 out_commit
             uint48(0), //index 6
-            uint112(4269), //energy 14
-            uint64(_amount / uint256(denominator)) //token amount 8
+            uint112(0), //energy 14
+            uint64(_amount + _proverFee) //token amount 8
         );
         for (uint256 i = 0; i < 8; i++) {
             commitData = abi.encodePacked(commitData, new bytes(32)); //tx proof(8)*32 = 256
@@ -504,7 +505,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
 
         proveData = commitData;
 
-        for (uint256 i = 0; i < 8; i++) {
+        for (uint256 i = 0; i < 9; i++) {
             proveData = abi.encodePacked(proveData, _randFR()); //tx proof(8)*8 + root(1)*8 + tree proof(8)*8 = 136
         }
 
@@ -527,6 +528,13 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             memo // 76
         );
 
+        proveData = abi.encodePacked(
+            proveData,
+            uint16(3), // 4 txType PermittableDeposit
+            uint16(memo.length), // length 2 bytes , value = 64+ 12 +32 =12
+            memo // 76
+        );
+
         commitData = _encodePermits(
             commitData,
             proxyPermitDigest, //64
@@ -534,12 +542,15 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         );
 
         console2.log("commitData", bytesToHexString(commitData));
+        
 
         proveData = _encodePermits(
             proveData,
             proxyPermitDigest,
             proverPermitDigest
         );
+
+        console2.log("proveData", bytesToHexString(proveData));
     }
 
     bytes32 constant TOKEN_PERMISSIONS_TYPEHASH =
