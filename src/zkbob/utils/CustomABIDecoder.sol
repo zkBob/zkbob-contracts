@@ -189,9 +189,17 @@ contract CustomABIDecoder {
     uint256 constant memo_prover_fee_pos = memo_proxy_fee_pos + memo_proxy_fee_size;
 
     function _memo_fee() internal pure returns (uint256 r) {
+        uint256 t = _tx_type();
         r =  _loaduint256(
             memo_prover_fee_pos + memo_fee_size - uint256_size
         ) & memo_fee_mask;
+        // TODO: should we claim proxy fee in the sequencer contract for tx type == 0 as welll?
+        if (t == 0 || t == 1 || t == 2) {
+            uint256 proxyFee = _loaduint256(
+                memo_proxy_fee_pos + memo_fee_size - uint256_size
+            ) & memo_fee_mask;
+            r += proxyFee;
+        }
     }
 
     // Withdraw specific data
