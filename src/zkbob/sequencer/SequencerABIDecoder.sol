@@ -3,6 +3,7 @@
 pragma solidity 0.8.15;
 
 import {Parameters} from "../utils/Parameters.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 abstract contract SequencerABIDecoder is Parameters {
     function _parseCommitCalldata() internal pure returns (
@@ -82,5 +83,17 @@ abstract contract SequencerABIDecoder is Parameters {
             expiry := calldataload(add(memo.offset, 0xc))
             holder := calldataload(add(memo.offset, 0x20))
         }
+    }
+
+    function _commitDepositSpender() internal pure returns (address depositSpender) {
+        (uint256 memoPos, uint256 memoSize) = _commit_memo_pos_and_size();
+        uint256 offset = memoPos + memoSize;
+        bytes32 r; 
+        bytes32 vs;
+        assembly {
+            r := calldataload(offset)
+            vs := calldataload(add(offset, 32))
+        }
+        return ECDSA.recover(ECDSA.toEthSignedMessageHash(bytes32(_transfer_nullifier())), r, vs);
     }
 }

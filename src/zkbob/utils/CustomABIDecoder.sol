@@ -174,8 +174,8 @@ contract CustomABIDecoder {
         r =  _loaduint256(
             memo_prover_fee_pos + memo_prover_fee_size - uint256_size
         ) & memo_fee_mask;
-        // TODO: should we claim proxy fee in the sequencer contract for tx type == 0 as welll?
-        if (t == 0 || t == 1 || t == 2) {
+        // In the case of deposit, the proxy fee is claimed by the sequencer contract
+        if (t == 1 || t == 2) {
             uint256 proxyFee = _loaduint256(
                 memo_proxy_fee_pos + memo_proxy_fee_size - uint256_size
             ) & memo_fee_mask;

@@ -45,6 +45,7 @@ contract ZkBobSequencer is SequencerABIDecoder {
     event Rejected();
     event Skipped();
 
+    uint16 public constant DEPOSIT = uint16(0);
     uint16 public constant PERMIT_DEPOSIT = uint16(3);
 
     constructor(address pool, uint256 _denominator) {
@@ -52,23 +53,6 @@ contract ZkBobSequencer is SequencerABIDecoder {
         TOKEN_DENOMINATOR = _denominator;
     }
 
-    function _transferFromByPermit(bytes calldata _memo, uint256 _nullifier, int256 _tokenAmount) internal {
-
-        (uint64 expiry, address _user) = _parsePermitData(_memo);
-
-        
-        (uint8 v, bytes32 r, bytes32 s) = _permittable_signature_proxy_fee();
-
-        IERC20Permit(_pool.token()).receiveWithSaltedPermit(
-            _user,
-            uint256(_tokenAmount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR,
-            expiry,
-            bytes32(_nullifier),
-            v,
-            r,
-            s
-        );
-    }
     // Possible problems here:
     // 1. Malicious user can front run a prover and the prover spend some gas without any result
     function commit() external {
@@ -92,10 +76,7 @@ contract ZkBobSequencer is SequencerABIDecoder {
         require(_pool.transfer_verifier().verifyProof(transfer_pub(index, nullifier, outCommit, transferDelta, memo), transferProof), "ZkBobSequencer: invalid proof");
         require(_parseMessagePrefix(memo, txType) == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
         
-        //For permit based deposit we take the Proxy fee in advance
-        if(txType == PERMIT_DEPOSIT) {
-            _transferFromByPermit(memo, nullifier, int64(proxyFee));   
-        }
+        claimDepositProxyFee(txType, memo, nullifier, int64(proxyFee));
 
         bytes32 hash = commitHash(nullifier, outCommit, transferDelta, transferProof, memo);
         PriorityOperation memory op = PriorityOperation(hash, nullifier, new uint256[](0), block.timestamp);
@@ -167,14 +148,14 @@ contract ZkBobSequencer is SequencerABIDecoder {
                 
 
             uint256 totalFee = prover_fee;
-            if(_tx_type() != PERMIT_DEPOSIT) {
-                totalFee+=proxy_fee;
+            if(_tx_type() != PERMIT_DEPOSIT && _tx_type() != DEPOSIT) {
+                totalFee += proxy_fee;
+                accumulatedFees[proxy] += proxy_fee;
             }
-                require(
+            require(
                 totalFee == accruedFee,
                 "ZkBobSequencer: fee is not correct"
             );
-            accumulatedFees[proxy] += proxy_fee;
             accumulatedFees[msg.sender] += prover_fee;
 
             emit Proved();
@@ -268,6 +249,16 @@ contract ZkBobSequencer is SequencerABIDecoder {
         IERC20(token).safeTransfer(msg.sender, fee);
     }
 
+    function claimDepositProxyFee(uint16 _txType, bytes calldata _memo, uint256 _nullifier, int256 _fee) internal {
+        if (_txType == PERMIT_DEPOSIT) {
+            _transferFromByPermit(_memo, _nullifier, _fee);   
+            accumulatedFees[msg.sender] += uint256(_fee);
+        } else if (_txType == DEPOSIT) {
+            IERC20(_pool.token()).safeTransferFrom(_commitDepositSpender(), address(this), uint256(_fee) * _pool.TOKEN_DENOMINATOR() / _pool.TOKEN_NUMERATOR());
+            accumulatedFees[msg.sender] += uint256(_fee);
+        }
+    }
+
     function _root() override internal view  returns (uint256){
         return _pool.roots(_pool.pool_index());
     }
@@ -290,6 +281,20 @@ contract ZkBobSequencer is SequencerABIDecoder {
             timestamp = max(op.timestamp, lastQueueUpdateTimestamp);
         }
         return op;
+    }
+
+    function _transferFromByPermit(bytes calldata _memo, uint256 _nullifier, int256 _tokenAmount) internal {
+        (uint64 expiry, address _user) = _parsePermitData(_memo);
+        (uint8 v, bytes32 r, bytes32 s) = _permittable_signature_proxy_fee();
+        IERC20Permit(_pool.token()).receiveWithSaltedPermit(
+            _user,
+            uint256(_tokenAmount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR,
+            expiry,
+            bytes32(_nullifier),
+            v,
+            r,
+            s
+        );
     }
     
     function commitHash(
