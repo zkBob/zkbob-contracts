@@ -420,6 +420,79 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         vm.stopPrank();
     }
 
+    function testWithdrawalCommitAndProve() external {
+
+            uint256 _amount = uint256(9_960_000_000);
+            uint64 _proxyFee = uint64(10_000_000);
+            uint64 _proverFee = uint64(30_000_000);
+
+            deposit(int256(_amount), _proxyFee, _proverFee, prover1);
+
+            
+            (bytes memory commitData, bytes memory proveData) = _encodeWithdrawal(_amount, _proxyFee, _proverFee, prover1, user1);
+            vm.prank(prover1);
+            (bool success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
+
+            assert(success);
+
+            (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
+
+            assert(success);
+            
+        }
+
+    function _encodeWithdrawal( uint256 _amount,
+        uint64 _proxyFee,
+        uint64 _proverFee,
+        address _prover,
+        address receiver) internal view  returns (bytes memory commitData, bytes memory proveData) {
+
+            bytes32 nullifier = bytes32(_randFR());
+            commitData = abi.encodePacked(nullifier);
+            
+            commitData = abi.encodePacked(
+            // ZkBobSequencer.commit.selector, //4
+            nullifier, //32 nullifier
+            new bytes(32), //32 out_commit
+            uint48(0), //index 6
+            uint112(0), //energy 14
+            int64(-int256((_amount)))//token amount 8
+        );//96
+        for (uint256 i = 0; i < 8; i++) {
+            commitData = abi.encodePacked(commitData, new bytes(32)); //tx proof(8)*32 = 256
+        }
+
+        proveData = commitData;
+
+        for (uint256 i = 0; i < 9; i++) {
+            proveData = abi.encodePacked(proveData, _randFR()); //tx proof(8)*8 + root(1)*8 + tree proof(8)*8 = 136
+        }
+        
+        bytes memory memo = abi.encodePacked( //100 byte
+            // fixed size 20+8+8+8+20 = 64
+            bytes20(_prover), //20
+            _proxyFee, //8
+            _proverFee, //8
+            int64(0), // native amount, 8 bytes
+            receiver, // receiver 20 bytes
+            // message = 20+8 = 28 bytes
+            bytes4(0x01000000), // 1 item
+            _randFR() //32 //out account mock
+        ); 
+        console2.log("memo", bytesToHexString(memo));
+
+        commitData = abi.encodePacked(
+            commitData,
+            uint16(2), //withdrawal,
+            uint16(memo.length),
+            memo);
+
+        proveData = abi.encodePacked(
+            proveData,
+            uint16(2), //withdrawal,
+            memo.length,
+            memo);
+        }
     function _encodeDeposit(
         int256 _amount,
         uint64 _proxyFee,
