@@ -4,7 +4,6 @@ pragma solidity 0.8.15;
 
 import {PriorityQueue, PriorityOperation} from "./PriorityQueue.sol";
 import {ZkBobPool} from "../ZkBobPool.sol";
-import {MemoUtils} from "./MemoUtils.sol";
 import {SequencerABIDecoder} from "./SequencerABIDecoder.sol";
 import {ZkBobDirectDepositQueue} from "../ZkBobDirectDepositQueue.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -12,7 +11,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 
 import {IERC20Permit} from "../../interfaces/IERC20Permit.sol";
 
-contract ZkBobSequencer is SequencerABIDecoder, MemoUtils {
+contract ZkBobSequencer is SequencerABIDecoder {
     using PriorityQueue for PriorityQueue.Queue;
     using SafeERC20 for IERC20;
 
@@ -53,7 +52,7 @@ contract ZkBobSequencer is SequencerABIDecoder, MemoUtils {
         TOKEN_DENOMINATOR = _denominator;
     }
 
-    function _transferFromByPermit(bytes memory _memo, uint256 _nullifier, int256 _tokenAmount) internal {
+    function _transferFromByPermit(bytes calldata _memo, uint256 _nullifier, int256 _tokenAmount) internal {
 
         (uint64 expiry, address _user) = _parsePermitData(_memo);
 
@@ -82,16 +81,16 @@ contract ZkBobSequencer is SequencerABIDecoder, MemoUtils {
             uint256[8] calldata transferProof,
             uint16 txType,
             bytes calldata memo
-        ) = _parseCommitData();
+        ) = _parseCommitCalldata();
 
-        (address proxy, uint64 proxyFee, ) = MemoUtils.parseFees(memo);
+        (address proxy, uint64 proxyFee, ) = _parseProverAndFees(memo);
         
         require(pendingNullifiers[nullifier] == false, "ZkBobSequencer: nullifier is already pending");
         require(_pool.nullifiers(nullifier) == 0, "ZkBobSequencer: nullifier is spent");
         require(msg.sender == proxy, "ZkBobSequencer: not authorized");
         require(uint96(index) <= _pool.pool_index(), "ZkBobSequencer: index is too high");
         require(_pool.transfer_verifier().verifyProof(transfer_pub(index, nullifier, outCommit, transferDelta, memo), transferProof), "ZkBobSequencer: invalid proof");
-        require(MemoUtils.parseMessagePrefix(memo, txType) == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
+        require(_parseMessagePrefix(memo, txType) == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
         
         //For permit based deposit we take the Proxy fee in advance
         if(txType == PERMIT_DEPOSIT) {
@@ -134,7 +133,7 @@ contract ZkBobSequencer is SequencerABIDecoder, MemoUtils {
             "ZkBobSequencer: invalid commit hash"
         );
 
-        (address proxy, uint256 proxy_fee, uint256 prover_fee) = MemoUtils.parseFees(memo);
+        (address proxy, uint256 proxy_fee, uint256 prover_fee) = _parseProverAndFees(memo);
         uint256 timestamp = max(op.timestamp, lastQueueUpdateTimestamp);
         if (block.timestamp <= timestamp + PROXY_GRACE_PERIOD) {
             require(msg.sender == proxy, "ZkBobSequencer: not authorized");
