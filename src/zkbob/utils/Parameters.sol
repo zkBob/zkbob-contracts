@@ -20,7 +20,7 @@ abstract contract Parameters is CustomABIDecoder {
         r[4] = uint256(keccak256(_memo_data())) % R;
     }
 
-    function _tree_pub(uint256 _root_before) internal view returns (uint256[3] memory r) {
+    function _tree_pub(uint256 _root_before) internal pure returns (uint256[3] memory r) {
         r[0] = _root_before;
         r[1] = _tree_root_after();
         r[2] = _transfer_out_commit();
@@ -35,10 +35,6 @@ abstract contract Parameters is CustomABIDecoder {
     // NOTE only valid in the context of permittable token deposit (tx_type=3)
     function _permittable_deposit_signature() internal pure returns (uint8, bytes32, bytes32) {
         (bytes32 r, bytes32 vs) = _sign_r_vs();
-        return (uint8((uint256(vs) >> 255) + 27), r, vs & S_MASK);
-    }
-    function _permittable_signature_proxy_fee() internal view returns (uint8, bytes32, bytes32) {
-        (bytes32 r, bytes32 vs) = _sign_r_vs_proxy();
         return (uint8((uint256(vs) >> 255) + 27), r, vs & S_MASK);
     }
 }

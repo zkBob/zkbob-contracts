@@ -5,16 +5,14 @@ pragma solidity 0.8.15;
 import {PriorityQueue, PriorityOperation} from "./PriorityQueue.sol";
 import {ZkBobPool} from "../ZkBobPool.sol";
 import {MemoUtils} from "./MemoUtils.sol";
-import {CustomABIDecoder} from "../utils/CustomABIDecoder.sol";
-import {Parameters} from "../utils/Parameters.sol";
+import {SequencerABIDecoder} from "./SequencerABIDecoder.sol";
 import {ZkBobDirectDepositQueue} from "../ZkBobDirectDepositQueue.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {IERC20Permit} from "../../interfaces/IERC20Permit.sol";
-import "forge-std/console2.sol";
 
-contract ZkBobSequencer is CustomABIDecoder, Parameters, MemoUtils {
+contract ZkBobSequencer is SequencerABIDecoder, MemoUtils {
     using PriorityQueue for PriorityQueue.Queue;
     using SafeERC20 for IERC20;
 
