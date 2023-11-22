@@ -156,7 +156,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             0
         );
         pool.setAccounting(accounting);
-        sequencer = new ZkBobSequencer(address(pool));
+        sequencer = new ZkBobSequencer(address(pool), 1 hours, 10 minutes);
         operatorManager = new MutableOperatorManager(
             address(sequencer),
             address(sequencer),
@@ -218,7 +218,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         assertTrue(success);
         assertEq(pool.accumulatedFee(prover1), prover1FeeBefore + proxyFee);
 
-        vm.warp(block.timestamp + sequencer.PROXY_GRACE_PERIOD() + 1);
+        vm.warp(block.timestamp + sequencer.gracePeriod() + 1);
 
         hoax(prover2, prover2);    
         (success, )  = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
@@ -247,7 +247,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, secondCommitData));
         assertTrue(success);
 
-        vm.warp(block.timestamp + sequencer.EXPIRATION_TIME() + 1);
+        vm.warp(block.timestamp + sequencer.expirationTime() + 1);
 
         hoax(prover1, prover1);
         (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, firstProveData));
