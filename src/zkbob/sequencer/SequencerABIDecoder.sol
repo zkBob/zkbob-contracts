@@ -11,7 +11,6 @@ abstract contract SequencerABIDecoder is Parameters {
         uint256 outCommit,
         uint48 transferIndex,
         uint256 transferDelta,
-        int64 tokenAmount,
         uint256[8] calldata transferProof,
         uint16 txType,
         bytes calldata memo
@@ -20,7 +19,6 @@ abstract contract SequencerABIDecoder is Parameters {
         outCommit = _transfer_out_commit();
         transferIndex = _transfer_index();
         transferDelta = _transfer_delta();
-        tokenAmount = _transfer_token_amount();
         transferProof = _transfer_proof();
 
         // TODO: add comment
@@ -55,19 +53,22 @@ abstract contract SequencerABIDecoder is Parameters {
         return (uint8((uint256(vs) >> 255) + 27), r, vs & S_MASK);
     }
 
-    function _parseProverAndFees(bytes calldata memo) internal pure returns (address proxyAddress, uint64 proxyFee, uint64 proverFee) {
+    function _parseProver(bytes calldata memo) internal pure returns (address proxyAddress) {
         uint256 offset;
         assembly {
             offset := memo.offset
         }
         
         proxyAddress = address(uint160(_loaduint256(offset + memo_proxy_address_size - uint256_size)));
-        offset = offset + memo_proxy_address_size;
+    }
 
+    function _parseProxyFee(bytes calldata memo) internal pure returns (uint64 proxyFee) {
+        uint256 offset;
+        assembly {
+            offset := memo.offset
+        }
+        offset = offset + memo_proxy_address_size;
         proxyFee = uint64(_loaduint256(offset + memo_proxy_fee_size - uint256_size));
-        offset = offset + memo_proxy_fee_size;
-        
-        proverFee = uint64(_loaduint256(offset + memo_prover_fee_size - uint256_size));
     }
 
     function _parseMessagePrefix(bytes calldata memo, uint16 txType) internal pure returns (bytes4 prefix) {

@@ -193,7 +193,15 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      * @param _nullifier nullifier and permit signature salt to avoid transaction data manipulation.
      * @param _tokenAmount amount to tokens to deposit.
      */
-    function _transferFromByPermit(address _user, uint256 _nullifier, int256 _tokenAmount) internal virtual;
+    function _transferFromByPermit(
+        address _user, 
+        uint256 _nullifier, 
+        int256 _tokenAmount,
+        uint64 _deadline,
+        uint8 _v, 
+        bytes32 _r, 
+        bytes32 _s
+    ) internal virtual;
 
     /**
      * @dev Perform a zkBob pool transaction.
@@ -280,13 +288,15 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         } else if (txType == 3) {
             // Permittable token deposit
             require(transfer_token_delta > 0 && energy_amount == 0, "ZkBobPool: incorrect deposit amounts");
-            _transferFromByPermit(user, nullifier, token_amount);
+            (uint8 v, bytes32 r, bytes32 s) = _permittable_deposit_signature();
+            uint64 deadline = _memo_permit_deadline();
+            _transferFromByPermit(user, nullifier, token_amount, deadline, v, r, s);
         } else {
             revert("ZkBobPool: Incorrect transaction type");
         }
 
         if (fee > 0) {
-            accumulatedFee[msg.sender] += fee;
+            accumulatedFee[tx.origin] += fee;
         }
     }
 
@@ -333,7 +343,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         pool_index = poolIndex;
 
         if (totalFee > 0) {
-            accumulatedFee[msg.sender] += totalFee;
+            accumulatedFee[tx.origin] += totalFee;
         }
 
         emit Message(poolIndex, _all_messages_hash, message);
@@ -463,6 +473,29 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         }
     }
 
+    function claimFeeUsingPermit(
+        address _spender, 
+        uint256 _nullifier, 
+        int256 _fee,
+        uint64 _deadline,
+        uint8 _v, 
+        bytes32 _r, 
+        bytes32 _s
+    ) external onlyOperator {
+        _transferFromByPermit(_spender, _nullifier, _fee, _deadline, _v, _r, _s);
+        accumulatedFee[tx.origin] += uint256(_fee);
+    }
+
+    function claimFee(
+        address _spender, 
+        int256 _fee
+    ) external onlyOperator {
+        IERC20(token).safeTransferFrom(
+            _spender, address(this), uint256(_fee) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR
+        );
+        accumulatedFee[tx.origin] += uint256(_fee);
+    }
+
     /**
      * @dev Withdraws accumulated fee on behalf of an operator.
      * Callable only by the operator itself, or by a pre-configured operator fee receiver address.
@@ -471,7 +504,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      */
     function withdrawFee(address _operator, address _to) external {
         require(
-            _operator == msg.sender || operatorManager.isOperatorFeeReceiver(_operator, msg.sender),
+            _operator == msg.sender /*|| operatorManager.isOperatorFeeReceiver(_operator, msg.sender)*/,
             "ZkBobPool: not authorized"
         );
         uint256 fee = accumulatedFee[_operator] * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;

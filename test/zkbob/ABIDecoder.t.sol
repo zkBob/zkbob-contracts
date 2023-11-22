@@ -32,7 +32,6 @@ contract DummyParser is SequencerABIDecoder {
             outCommit,
             ,// transferIndex,
             transferDelta,
-            ,// tokenAmount,
             ,//trasgerProof
             ,// txType,
             memo

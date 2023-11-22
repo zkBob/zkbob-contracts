@@ -17,15 +17,21 @@ abstract contract ZkBobPermit2Mixin is ZkBobPool {
     }
 
     // @inheritdoc ZkBobPool
-    function _transferFromByPermit(address _user, uint256 _nullifier, int256 _tokenAmount) internal override {
-        (uint8 v, bytes32 r, bytes32 s) = _permittable_deposit_signature();
-
+    function _transferFromByPermit(
+        address _user, 
+        uint256 _nullifier, 
+        int256 _tokenAmount,
+        uint64 _deadline,
+        uint8 _v, 
+        bytes32 _r, 
+        bytes32 _s
+    ) internal override {
         bytes memory depositSignature = new bytes(65);
 
         assembly {
-            mstore(add(depositSignature, 0x20), r)
-            mstore(add(depositSignature, 0x40), s)
-            mstore8(add(depositSignature, 0x60), v)
+            mstore(add(depositSignature, 0x20), _r)
+            mstore(add(depositSignature, 0x40), _s)
+            mstore8(add(depositSignature, 0x60), _v)
         }
 
         permit2.permitTransferFrom(
@@ -35,7 +41,7 @@ abstract contract ZkBobPermit2Mixin is ZkBobPool {
                     amount: uint256(_tokenAmount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR
                 }),
                 nonce: _nullifier,
-                deadline: uint256(_memo_permit_deadline())
+                deadline: uint256(_deadline)
             }),
             IPermit2.SignatureTransferDetails({
                 to: address(this),

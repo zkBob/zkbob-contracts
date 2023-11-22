@@ -17,6 +17,8 @@ contract ZkBobSequencer is SequencerABIDecoder {
 
     uint256 constant TRANSFER_DELTA_SIZE = 28;
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
+    uint16 public constant DEPOSIT = uint16(0);
+    uint16 public constant PERMIT_DEPOSIT = uint16(3);
     // TODO: make it configurable
     uint256 public constant EXPIRATION_TIME = 1 hours;
     uint256 public constant PROXY_GRACE_PERIOD = 10 minutes;
@@ -27,30 +29,19 @@ contract ZkBobSequencer is SequencerABIDecoder {
     // Pool contract, this contract is operator of the pool
     ZkBobPool _pool;
 
-    // Accumulated fees for each prover
-    mapping(address => uint256) public accumulatedFees;
-
     // Last time when queue was updated
     uint256 lastQueueUpdateTimestamp;
 
     mapping(uint256 => bool) public pendingNullifiers;
     mapping(uint256 => bool) public pendingDirectDeposits;
 
-    uint256 immutable TOKEN_DENOMINATOR;
-
-    uint256 internal constant TOKEN_NUMERATOR = 1;
-
     event Commited(); // TODO: Fill the data
     event Proved();
     event Rejected();
     event Skipped();
 
-    uint16 public constant DEPOSIT = uint16(0);
-    uint16 public constant PERMIT_DEPOSIT = uint16(3);
-
-    constructor(address pool, uint256 _denominator) {
+    constructor(address pool) {
         _pool = ZkBobPool(pool);
-        TOKEN_DENOMINATOR = _denominator;
     }
 
     // Possible problems here:
@@ -61,22 +52,19 @@ contract ZkBobSequencer is SequencerABIDecoder {
             uint256 outCommit,
             uint48 index,
             uint256 transferDelta,
-            ,
             uint256[8] calldata transferProof,
             uint16 txType,
             bytes calldata memo
         ) = _parseCommitCalldata();
-
-        (address proxy, uint64 proxyFee, ) = _parseProverAndFees(memo);
         
         require(pendingNullifiers[nullifier] == false, "ZkBobSequencer: nullifier is already pending");
         require(_pool.nullifiers(nullifier) == 0, "ZkBobSequencer: nullifier is spent");
-        require(msg.sender == proxy, "ZkBobSequencer: not authorized");
+        require(msg.sender == _parseProver(memo), "ZkBobSequencer: not authorized");
         require(uint96(index) <= _pool.pool_index(), "ZkBobSequencer: index is too high");
         require(_pool.transfer_verifier().verifyProof(transfer_pub(index, nullifier, outCommit, transferDelta, memo), transferProof), "ZkBobSequencer: invalid proof");
         require(_parseMessagePrefix(memo, txType) == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
         
-        claimDepositProxyFee(txType, memo, nullifier, int64(proxyFee));
+        claimDepositProxyFee(txType, memo, nullifier);
 
         bytes32 hash = commitHash(nullifier, outCommit, transferDelta, transferProof, memo);
         PriorityOperation memory op = PriorityOperation(hash, nullifier, new uint256[](0), block.timestamp);
@@ -86,16 +74,6 @@ contract ZkBobSequencer is SequencerABIDecoder {
         emit Commited();
     }
 
-    // 1. Pop first operation from priority queue
-    // 2. Verify that:
-    //  1) If we are in the grace period then msg.sender can be only proxy, otherwice it can be anyone
-    //  2) Provided commitData corresponds to saved commitHash
-    //  3) Tree proof is correct according to the current pool state
-    //  If this checks hold then the prover did everything correctly and if the _pool.transact will revert we can safely remove this operation from the queue
-    // 3. Call _pool.transact with the provided data
-    //  1) If call is successfull we store fees and emit event
-    //  2) If call is not successfull we only emit event. Important: we don't revert
-    // 4. Update lastQueueUpdateTimestamp and delete pending nullifier
     // Possible problems here:
     // 1. If the PROXY_GRACE_PERIOD is ended then anyone can prove the operation and race condition is possible
     //    We can prevent it by implementing some mechanism to pick a prover from the previous ones
@@ -114,10 +92,10 @@ contract ZkBobSequencer is SequencerABIDecoder {
             "ZkBobSequencer: invalid commit hash"
         );
 
-        (address proxy, uint256 proxy_fee, uint256 prover_fee) = _parseProverAndFees(memo);
+        address prover = _parseProver(memo);
         uint256 timestamp = max(op.timestamp, lastQueueUpdateTimestamp);
         if (block.timestamp <= timestamp + PROXY_GRACE_PERIOD) {
-            require(msg.sender == proxy, "ZkBobSequencer: not authorized");
+            require(msg.sender == prover, "ZkBobSequencer: not authorized");
         }
 
         uint256[8] memory treeProof = _tree_proof();
@@ -135,29 +113,12 @@ contract ZkBobSequencer is SequencerABIDecoder {
         lastQueueUpdateTimestamp = block.timestamp;
         delete pendingNullifiers[nullifier];
 
-        uint256 accumulatedFeeBefore = _pool.accumulatedFee(address(this));
         bool success = propagateToPool(ZkBobPool.transact.selector);
 
         // We remove the commitment from the queue regardless of the result of the call to pool contract
         // If we check that the prover is not malicious then the tx is not valid because of the limits or
         // absence of funds so it can't be proved
         if (success) {
-            // We need to store fees and add ability to withdraw them
-            uint256 accruedFee = _pool.accumulatedFee(address(this)) -
-                accumulatedFeeBefore;
-                
-
-            uint256 totalFee = prover_fee;
-            if(_tx_type() != PERMIT_DEPOSIT && _tx_type() != DEPOSIT) {
-                totalFee += proxy_fee;
-                accumulatedFees[proxy] += proxy_fee;
-            }
-            require(
-                totalFee == accruedFee,
-                "ZkBobSequencer: fee is not correct"
-            );
-            accumulatedFees[msg.sender] += prover_fee;
-
             emit Proved();
         } else {
             emit Rejected();
@@ -219,43 +180,31 @@ contract ZkBobSequencer is SequencerABIDecoder {
             delete pendingDirectDeposits[op.directDeposits[i]];
         }
 
-        uint256 accumulatedFeeBefore = _pool.accumulatedFee(address(this));
         bool success = propagateToPool(ZkBobPool.appendDirectDeposits.selector);
 
         if (success) {
-            uint256 fee = _pool.accumulatedFee(address(this)) - accumulatedFeeBefore;
-            accumulatedFees[msg.sender] += fee;
             emit Proved();
         } else {
             emit Rejected();
         }
     }
 
-    function withdrawFees() external {
-        uint256 fee = accumulatedFees[msg.sender];
-        require(fee > 0, "ZkBobSequencer: no fees to withdraw");
-        
-        fee = fee * _pool.TOKEN_DENOMINATOR() / _pool.TOKEN_NUMERATOR();
-        address token = _pool.token();
-        uint256 balance = IERC20(token).balanceOf(address(this));
-        // TODO: it is not fair since some prover will pay for the gas more than others
-        if (fee > balance) {
-            _pool.withdrawFee(address(this), address(this));
-        }
-        balance = IERC20(token).balanceOf(address(this));
-        require(fee <= balance, "ZkBobSequencer: fee exceeds balance");
-
-        accumulatedFees[msg.sender] = 0;
-        IERC20(token).safeTransfer(msg.sender, fee);
-    }
-
-    function claimDepositProxyFee(uint16 _txType, bytes calldata _memo, uint256 _nullifier, int256 _fee) internal {
-        if (_txType == PERMIT_DEPOSIT) {
-            _transferFromByPermit(_memo, _nullifier, _fee);   
-            accumulatedFees[msg.sender] += uint256(_fee);
-        } else if (_txType == DEPOSIT) {
-            IERC20(_pool.token()).safeTransferFrom(_commitDepositSpender(), address(this), uint256(_fee) * _pool.TOKEN_DENOMINATOR() / _pool.TOKEN_NUMERATOR());
-            accumulatedFees[msg.sender] += uint256(_fee);
+    function claimDepositProxyFee(uint16 _txType, bytes calldata _memo, uint256 _nullifier) internal {
+        int256 fee = int64(_parseProxyFee(_memo));
+        if (_txType == DEPOSIT) {
+            _pool.claimFee(_commitDepositSpender(), fee);
+        } else if (_txType == PERMIT_DEPOSIT) {
+            (uint64 expiry, address _user) = _parsePermitData(_memo);
+            (uint8 v, bytes32 r, bytes32 s) = _permittable_signature_proxy_fee();
+            _pool.claimFeeUsingPermit(
+                _user,
+                _nullifier,
+                fee,
+                expiry,
+                v,
+                r,
+                s
+            );
         }
     }
 
@@ -281,20 +230,6 @@ contract ZkBobSequencer is SequencerABIDecoder {
             timestamp = max(op.timestamp, lastQueueUpdateTimestamp);
         }
         return op;
-    }
-
-    function _transferFromByPermit(bytes calldata _memo, uint256 _nullifier, int256 _tokenAmount) internal {
-        (uint64 expiry, address _user) = _parsePermitData(_memo);
-        (uint8 v, bytes32 r, bytes32 s) = _permittable_signature_proxy_fee();
-        IERC20Permit(_pool.token()).receiveWithSaltedPermit(
-            _user,
-            uint256(_tokenAmount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR,
-            expiry,
-            bytes32(_nullifier),
-            v,
-            r,
-            s
-        );
     }
     
     function commitHash(
@@ -333,15 +268,7 @@ contract ZkBobSequencer is SequencerABIDecoder {
     }
 
     function propagateToPool(bytes4 selector) internal returns (bool success) {
-        address poolAddress = address(_pool);
-        bytes memory data = new bytes(msg.data.length);
-        assembly {
-            // TODO: check it
-            mstore(add(data, 32), selector)
-            let length := sub(calldatasize(), 4)
-            calldatacopy(add(data, 36), 4, length)
-        }
-        (success, ) = poolAddress.call(data);
+        (success, ) = address(_pool).call(abi.encodePacked(selector, msg.data[4:]));
     }
 
     function max(uint256 a, uint256 b) internal pure returns (uint256 maxValue) {

@@ -156,7 +156,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             0
         );
         pool.setAccounting(accounting);
-        sequencer = new ZkBobSequencer(address(pool), denominator);
+        sequencer = new ZkBobSequencer(address(pool));
         operatorManager = new MutableOperatorManager(
             address(sequencer),
             address(sequencer),
@@ -188,13 +188,13 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         uint64 proverFee = uint64(1);
         (bytes memory commitData, bytes memory proveData) = _encodeTransfer(proxyFee, proverFee, prover1);
         
-        startHoax(prover1);
+        startHoax(prover1, prover1);
         (bool success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
         assertTrue(success);
 
-        uint256 feeBefore = sequencer.accumulatedFees(prover1);
+        uint256 feeBefore = pool.accumulatedFee(prover1);
         (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
-        uint256 feeAfter = sequencer.accumulatedFees(prover1);
+        uint256 feeAfter = pool.accumulatedFee(prover1);
 
         assertTrue(success);
         assertTrue(feeAfter == feeBefore + proxyFee + proverFee);
@@ -210,21 +210,21 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
 
         approve(user1, amount, proxyFee, proverFee);
 
-        uint256 prover1FeeBefore = sequencer.accumulatedFees(prover1);
-        uint256 prover2FeeBefore = sequencer.accumulatedFees(prover2);
+        uint256 prover1FeeBefore = pool.accumulatedFee(prover1);
+        uint256 prover2FeeBefore = pool.accumulatedFee(prover2);
 
-        hoax(prover1);
+        hoax(prover1, prover1);
         (bool success, )  = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
         assertTrue(success);
-        assertEq(sequencer.accumulatedFees(prover1), prover1FeeBefore + proxyFee);
+        assertEq(pool.accumulatedFee(prover1), prover1FeeBefore + proxyFee);
 
         vm.warp(block.timestamp + sequencer.PROXY_GRACE_PERIOD() + 1);
 
-        hoax(prover2);    
+        hoax(prover2, prover2);    
         (success, )  = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
         assertTrue(success);
-        assertEq(sequencer.accumulatedFees(prover1), prover1FeeBefore + proxyFee);
-        assertEq(sequencer.accumulatedFees(prover2), prover2FeeBefore + proverFee);
+        assertEq(pool.accumulatedFee(prover1), prover1FeeBefore + proxyFee);
+        assertEq(pool.accumulatedFee(prover2), prover2FeeBefore + proverFee);
     }
 
     function testCanSkipExpiredOperation() external {
@@ -236,52 +236,52 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         
         approve(user1, amount, proxyFee * 2, proverFee);
 
-        uint256 prover1FeeBefore = sequencer.accumulatedFees(prover1);
-        uint256 prover2FeeBefore = sequencer.accumulatedFees(prover2);
+        uint256 prover1FeeBefore = pool.accumulatedFee(prover1);
+        uint256 prover2FeeBefore = pool.accumulatedFee(prover2);
         
-        hoax(prover1);
+        hoax(prover1, prover1);
         (bool success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, firstCommitData));
         assertTrue(success);
 
-        hoax(prover2);    
+        hoax(prover2, prover2);    
         (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, secondCommitData));
         assertTrue(success);
 
         vm.warp(block.timestamp + sequencer.EXPIRATION_TIME() + 1);
 
-        hoax(prover1);
+        hoax(prover1, prover1);
         (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, firstProveData));
         assertFalse(success);
 
-        hoax(prover2);    
+        hoax(prover2, prover2);    
         (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, secondProveData));
         assertTrue(success);
 
-        assertEq(sequencer.accumulatedFees(prover1), prover1FeeBefore + proxyFee);
-        assertEq(sequencer.accumulatedFees(prover2), prover2FeeBefore + proxyFee + proverFee);
+        assertEq(pool.accumulatedFee(prover1), prover1FeeBefore + proxyFee);
+        assertEq(pool.accumulatedFee(prover2), prover2FeeBefore + proxyFee + proverFee);
     }
 
     function testCanWithdrawFees() external {
         deposit(int256(1), uint64(12), uint64(27), prover1);
         deposit(int256(1), uint64(3), uint64(7), prover2);
 
-        uint256 prover1FeeBefore = sequencer.accumulatedFees(prover1);
+        uint256 prover1FeeBefore = pool.accumulatedFee(prover1);
         uint256 prover1BalanceBefore = IERC20(token).balanceOf(prover1);
-        uint256 prover2FeeBefore = sequencer.accumulatedFees(prover2);
+        uint256 prover2FeeBefore = pool.accumulatedFee(prover2);
         uint256 prover2BalanceBefore = IERC20(token).balanceOf(prover2);
 
         assertEq(prover1FeeBefore, uint64(39));
         assertEq(prover2FeeBefore, uint64(10));
         
         hoax(prover1);
-        sequencer.withdrawFees();
+        pool.withdrawFee(prover1, prover1);
 
         hoax(prover2);
-        sequencer.withdrawFees();
+        pool.withdrawFee(prover2, prover2);
 
-        uint256 prover1FeeAfter = sequencer.accumulatedFees(prover1);
+        uint256 prover1FeeAfter = pool.accumulatedFee(prover1);
         uint256 prover1BalanceAfter = IERC20(token).balanceOf(prover1);
-        uint256 prover2FeeAfter = sequencer.accumulatedFees(prover2);
+        uint256 prover2FeeAfter = pool.accumulatedFee(prover2);
         uint256 prover2BalanceAfter = IERC20(token).balanceOf(prover2);
 
         assertEq(prover1FeeAfter, 0);
@@ -297,13 +297,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         uint64 proxyFee = uint64(10_000_000);
         uint64 proverFee = uint64(30_000_000);
 
-        uint256 proxyAccFeesBefore = pool.accumulatedFee(user2);
-
-        IERC20 tokenContract = IERC20(token);
-
-        uint256 prover1BalanceBefore = sequencer.accumulatedFees(prover1);
-
-        uint256 userBalanceBefore = tokenContract.balanceOf(user1);
+        uint256 prover1BalanceBefore = pool.accumulatedFee(prover1);
 
         (bytes memory commitData, bytes memory proveData) = _encodePermitDeposit(
             amount,
@@ -312,22 +306,18 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             proverFee
         );
 
-        vm.startPrank(prover1);
-
+        vm.startPrank(prover1, prover1);
         
         (bool success, ) = address(sequencer).call(
             (abi.encodePacked(ZkBobSequencer.commit.selector, commitData))
         );
-
-        // assertEq(sequencerBalanceBefore + proxyFee, tokenContract.balanceOf(address(this)));
 
         (success, ) = address(sequencer).call(
             (abi.encodePacked(ZkBobSequencer.prove.selector, proveData))
         );
 
         assertTrue(success);
-
-        assertEq(proverFee+ proxyFee, sequencer.accumulatedFees(prover1) - prover1BalanceBefore);
+        assertEq(proverFee + proxyFee, pool.accumulatedFee(prover1) - prover1BalanceBefore);
 
         vm.stopPrank();
     }
@@ -397,8 +387,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
 
     function approve(address user, int256 amount, uint64 proxyFee, uint64 proverFee) internal {
         vm.startPrank(user);
-        IERC20(token).approve(address(sequencer), proxyFee * denominator);
-        IERC20(token).approve(address(pool), (uint256(amount) + proverFee) * denominator);
+        IERC20(token).approve(address(pool), (uint256(amount) + proxyFee + proverFee) * denominator);
         vm.stopPrank();
     }
 
@@ -407,15 +396,15 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         
         approve(user1, amount, proxyFee, proverFee);
         
-        uint256 feeBefore = sequencer.accumulatedFees(prover);
-        startHoax(prover);
+        uint256 feeBefore = pool.accumulatedFee(prover);
+        startHoax(prover, prover);
         (bool success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
         assertTrue(success);
-        assertEq(sequencer.accumulatedFees(prover), feeBefore + proxyFee);
+        assertEq(pool.accumulatedFee(prover), feeBefore + proxyFee);
         
         (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
         assertTrue(success);
-        assertEq(sequencer.accumulatedFees(prover), feeBefore + proxyFee + proverFee);
+        assertEq(pool.accumulatedFee(prover), feeBefore + proxyFee + proverFee);
 
         vm.stopPrank();
     }
@@ -589,7 +578,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
 
             proxyPermitDigest = _digestSaltedPermitWithNonce(
                 user1,
-                address(sequencer),
+                address(pool),
                 _proxyFee * denominator, 
                 nonce,
                 expiry,
@@ -608,7 +597,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         } else if (permitType == PermitType.Permit2) {
             proxyPermitDigest = _digestPermit2(
                 user1,
-                address(sequencer),
+                address(pool),
                 _proxyFee,
                 expiry,
                 nullifier
@@ -623,7 +612,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         } else if (permitType == PermitType.USDCPermit) {
             proxyPermitDigest = _digestUSDCPermit(
                 user1,
-                address(sequencer),
+                address(pool),
                 _proxyFee,
                 expiry,
                 nullifier
