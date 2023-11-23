@@ -8,8 +8,11 @@ import {SequencerABIDecoder} from "./SequencerABIDecoder.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20Permit} from "../../interfaces/IERC20Permit.sol";
+import {EIP1967Admin} from "../../proxy/EIP1967Admin.sol";
+import {Ownable} from "../../utils/Ownable.sol";
 
-contract ZkBobSequencer is SequencerABIDecoder {
+
+contract ZkBobSequencer is SequencerABIDecoder, EIP1967Admin, Ownable {
     using PriorityQueue for PriorityQueue.Queue;
     using SafeERC20 for IERC20;
 
@@ -26,12 +29,15 @@ contract ZkBobSequencer is SequencerABIDecoder {
     // Last time when queue was updated
     uint256 lastQueueUpdateTimestamp;
 
+    // Pending state
     mapping(uint256 => bool) public pendingNullifiers;
     mapping(uint256 => bool) public pendingDirectDeposits;
 
     uint64 public expirationTime;
-    
     uint64 public gracePeriod;
+
+    mapping(address => bool) public authorizedProvers;
+    bool public isProverWhitelistEnabled;
 
     event Commited(); // TODO: Fill the data
     event DirectDepositCommited();
@@ -39,15 +45,40 @@ contract ZkBobSequencer is SequencerABIDecoder {
     event Rejected();
     event Skipped();
 
-    constructor(address _pool, uint64 _expirationTime, uint64 _gracePeriod) {
+    modifier onlyAuthorizedProver() {
+        require(isProverWhitelistEnabled == false || authorizedProvers[msg.sender] == true, "ZkBobSequencer: not authorized");
+        _;
+    }
+
+    constructor(address _pool, uint64 _expirationTime, uint64 _gracePeriod, bool _isProverWhitelistEnabled) {
         pool = ZkBobPool(_pool);
         expirationTime = _expirationTime;
         gracePeriod = _gracePeriod;
+        isProverWhitelistEnabled = _isProverWhitelistEnabled;
+    }
+
+    function setExpirationTime(uint64 _expirationTime) external onlyOwner {
+        expirationTime = _expirationTime;
+    }
+
+    function setGracePeriod(uint64 _gracePeriod) external onlyOwner {
+        gracePeriod = _gracePeriod;
+    }
+
+    function setProverWhitelistEnabled(bool _isProverWhitelistEnabled) external onlyOwner {
+        isProverWhitelistEnabled = _isProverWhitelistEnabled;
+    }
+
+    function setAuthorizedProvers(address[] memory _provers, bool[] memory _isAuthorized) external onlyOwner {
+        require(_provers.length == _isAuthorized.length, "ZkBobSequencer: invalid input");
+        for (uint256 i = 0; i < _provers.length; i++) {
+            authorizedProvers[_provers[i]] = _isAuthorized[i];
+        }
     }
 
     // Possible problems here:
     // 1. Malicious user can front run a prover and the prover spend some gas without any result
-    function commit() external {
+    function commit() external onlyAuthorizedProver {
         (
             uint256 nullifier,
             uint256 outCommit,
@@ -78,7 +109,7 @@ contract ZkBobSequencer is SequencerABIDecoder {
     // Possible problems here:
     // 1. Malicious user can commit a bad operation (low fees, problems with compliance, etc.) so there is no prover that will be ready to prove it
     //    In this case the prioirity queue will be locked until the expiration time
-    function prove() external {
+    function prove() onlyAuthorizedProver external {
         PriorityOperation memory op = _popFirstUnexpiredOperation();
 
         uint256 nullifier = _transfer_nullifier();
@@ -93,9 +124,7 @@ contract ZkBobSequencer is SequencerABIDecoder {
 
         address prover = _parseProver(memo);
         uint256 timestamp = _max(op.timestamp, lastQueueUpdateTimestamp);
-        if (block.timestamp <= timestamp + gracePeriod) {
-            require(msg.sender == prover, "ZkBobSequencer: not authorized");
-        }
+        require(msg.sender == prover || block.timestamp > timestamp + gracePeriod, "ZkBobSequencer: not authorized");
 
         uint256[8] memory treeProof = _tree_proof();
 
@@ -129,7 +158,7 @@ contract ZkBobSequencer is SequencerABIDecoder {
         uint256 _out_commit,
         uint256[8] memory _batch_deposit_proof
     )
-        external
+        external onlyAuthorizedProver
     {
         // TODO: access control to prevent race condition
         
@@ -162,7 +191,7 @@ contract ZkBobSequencer is SequencerABIDecoder {
         uint256 _out_commit,
         uint256[8] memory _batch_deposit_proof,
         uint256[8] memory _tree_proof
-    ) external {
+    ) external onlyAuthorizedProver {
         PriorityOperation memory op = _popFirstUnexpiredOperation();
 
         require(
@@ -231,6 +260,7 @@ contract ZkBobSequencer is SequencerABIDecoder {
             op = priorityQueue.popFront();
             timestamp = _max(op.timestamp, lastQueueUpdateTimestamp);
         }
+        require(op.commitHash != bytes32(0), "ZkBobSequencer: no pending operations");
         return op;
     }
     

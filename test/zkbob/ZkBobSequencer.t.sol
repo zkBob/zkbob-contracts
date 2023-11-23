@@ -156,7 +156,16 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             0
         );
         pool.setAccounting(accounting);
-        sequencer = new ZkBobSequencer(address(pool), 1 hours, 10 minutes);
+        
+        sequencer = new ZkBobSequencer(address(pool), 1 hours, 10 minutes, true);
+        address[] memory authorizedProvers = new address[](2);
+        authorizedProvers[0] = prover1;
+        authorizedProvers[1] = prover2;
+        bool[] memory authorized = new bool[](2);
+        authorized[0] = true;
+        authorized[1] = true;
+        sequencer.setAuthorizedProvers(authorizedProvers, authorized);
+        
         operatorManager = new MutableOperatorManager(
             address(sequencer),
             address(sequencer),
@@ -372,6 +381,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         vm.expectRevert();
         sequencer.commitDirectDeposits(secondBatchIndices, secondBatchCommitment, secondBatchProof);
 
+        vm.prank(prover2);
         sequencer.proveDirectDeposit(_randFR(), firstBatchIndices, firstBatchCommitment, firstBatchProof, _randProof());
 
         uint256[] memory thirdBatchIndices = new uint256[](1);
@@ -382,7 +392,107 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         vm.prank(prover2);
         sequencer.commitDirectDeposits(thirdBatchIndices, thirdBatchCommitment, thirdBatchProof);
 
+        vm.prank(prover2);
         sequencer.proveDirectDeposit(_randFR(), thirdBatchIndices, thirdBatchCommitment, thirdBatchProof, _randProof());
+    }
+
+    function testUnauthorizedProverCantCommit() external {
+        int256 amount = int256(9_960_000_000);
+        uint64 proxyFee = uint64(10_000_000);
+        uint64 proverFee = uint64(30_000_000);
+        address unauthorizedProver = makeAddr("unauthorizedProver");
+
+        (bytes memory commitData, ) = _encodeDeposit(amount, proxyFee, proverFee, unauthorizedProver);
+        approve(user1, amount, proxyFee, proverFee);
+        
+        hoax(unauthorizedProver, unauthorizedProver);
+        (bool success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
+        assertFalse(success);
+
+        sequencer.setProverWhitelistEnabled(false);
+
+        hoax(unauthorizedProver, unauthorizedProver);
+        (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
+        assertTrue(success);
+    }
+
+    function testUnauthorizedProverCantProve() external {
+        int256 amount = int256(9_960_000_000);
+        uint64 proxyFee = uint64(10_000_000);
+        uint64 proverFee = uint64(30_000_000);
+        address unauthorizedProver = makeAddr("unauthorizedProver");
+
+        (bytes memory commitData, bytes memory proveData) = _encodeDeposit(amount, proxyFee, proverFee, prover1);
+        approve(user1, amount, proxyFee, proverFee);
+        hoax(prover1, prover1);
+        (bool success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
+        assertTrue(success);
+
+        // Skip time to allow different prover to submit tree proof
+        vm.warp(block.timestamp + sequencer.gracePeriod() + 1);
+
+        hoax(unauthorizedProver, unauthorizedProver);
+        (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
+        assertFalse(success);
+
+        sequencer.setProverWhitelistEnabled(false);
+
+        hoax(unauthorizedProver, unauthorizedProver);
+        (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
+        assertTrue(success);
+    }
+
+    function testUnauthorizedProverCantCommitDirectDeposits() external {
+        _setUpDD();
+        address unauthorizedProver = makeAddr("unauthorizedProver");
+
+        uint256[] memory indices = new uint256[](2);
+        indices[0] = 0;
+        indices[1] = 1;
+        uint256 outCommitment = _randFR();
+        uint256[8] memory batchProof = _randProof();
+
+        vm.startPrank(user1);
+        _directDeposit(10 ether / D, user2, zkAddress);
+        _directDeposit(5 ether / D, user2, zkAddress);
+        vm.stopPrank();
+
+        hoax(unauthorizedProver, unauthorizedProver);
+        vm.expectRevert();
+        sequencer.commitDirectDeposits(indices, outCommitment, batchProof);
+
+        sequencer.setProverWhitelistEnabled(false);
+
+        hoax(unauthorizedProver, unauthorizedProver);
+        sequencer.commitDirectDeposits(indices, outCommitment, batchProof);
+    }
+
+    function testUnauthorizedProverCantProveDirectDeposits() external {
+        _setUpDD();
+        address unauthorizedProver = makeAddr("unauthorizedProver");
+
+        uint256[] memory indices = new uint256[](2);
+        indices[0] = 0;
+        indices[1] = 1;
+        uint256 outCommitment = _randFR();
+        uint256[8] memory batchProof = _randProof();
+
+        vm.startPrank(user1);
+        _directDeposit(10 ether / D, user2, zkAddress);
+        _directDeposit(5 ether / D, user2, zkAddress);
+        vm.stopPrank();
+
+        hoax(prover1, prover1);
+        sequencer.commitDirectDeposits(indices, outCommitment, batchProof);
+
+        hoax(unauthorizedProver, unauthorizedProver);
+        vm.expectRevert();
+        sequencer.proveDirectDeposit(_randFR(), indices, outCommitment, batchProof, _randProof());
+
+        sequencer.setProverWhitelistEnabled(false);
+
+        hoax(unauthorizedProver, unauthorizedProver);
+        sequencer.proveDirectDeposit(_randFR(), indices, outCommitment, batchProof, _randProof());
     }
 
     function approve(address user, int256 amount, uint64 proxyFee, uint64 proverFee) internal {
@@ -411,24 +521,24 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
 
     function testWithdrawalCommitAndProve() external {
 
-            uint256 _amount = uint256(9_960_000_000);
-            uint64 _proxyFee = uint64(10_000_000);
-            uint64 _proverFee = uint64(30_000_000);
+        uint256 _amount = uint256(9_960_000_000);
+        uint64 _proxyFee = uint64(10_000_000);
+        uint64 _proverFee = uint64(30_000_000);
 
-            deposit(int256(_amount), _proxyFee, _proverFee, prover1);
+        deposit(int256(_amount), _proxyFee, _proverFee, prover1);
 
-            
-            (bytes memory commitData, bytes memory proveData) = _encodeWithdrawal(_amount, _proxyFee, _proverFee, prover1, user1);
-            vm.prank(prover1);
-            (bool success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
+        
+        (bytes memory commitData, bytes memory proveData) = _encodeWithdrawal(_amount, _proxyFee, _proverFee, prover1, user1);
+        vm.prank(prover1);
+        (bool success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
 
-            assert(success);
+        assert(success);
 
-            (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
+        (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
 
-            assert(success);
-            
-        }
+        assert(success);
+        
+    }
 
     function _encodeWithdrawal( uint256 _amount,
         uint64 _proxyFee,
