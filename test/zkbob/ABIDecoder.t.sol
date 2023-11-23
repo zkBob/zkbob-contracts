@@ -19,23 +19,14 @@ contract DummyParser is SequencerABIDecoder {
         returns (
             uint256 nullifier,
             uint256 outCommit,
-            // uint48 transferIndex,
+            uint48 transferIndex,
             uint256 transferDelta,
-            // int64 tokenAmount,
-            // uint256[8] calldata transferProof,
-            // uint16 txType,
+            uint256[8] calldata transferProof,
+            uint16 txType,
             bytes calldata memo
         )
     {
-        (
-            nullifier,
-            outCommit,
-            ,// transferIndex,
-            transferDelta,
-            ,//trasgerProof
-            ,// txType,
-            memo
-        ) = _parseCommitCalldata();
+        return _parseCommitCalldata();
     }
 }
 uint256 constant transfer_delta_mask = (1 << (28 * 8)) - 1;
@@ -153,7 +144,6 @@ contract ABIDecoder is Test {
             ,// uint256 parsed_outCommit,
             ,// uint48 parsed_transferIndex,
             ,// uint256 parsed_transferDelta,
-            ,// int64 parsed_tokenAmount,
             ,// uint256[8] memory transferProof,
             ,// uint16 parsed_txType,
             bytes memory parsed_memo
@@ -164,7 +154,6 @@ contract ABIDecoder is Test {
                     uint256,
                     uint48,
                     uint256,
-                    int64,
                     uint256[8],
                     uint16,
                     bytes
