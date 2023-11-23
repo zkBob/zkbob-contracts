@@ -10,7 +10,6 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IERC20Permit} from "../../interfaces/IERC20Permit.sol";
 import {EIP1967Admin} from "../../proxy/EIP1967Admin.sol";
 import {Ownable} from "../../utils/Ownable.sol";
-import {console2} from "forge-std/console2.sol";
 
 contract ZkBobSequencer is SequencerABIDecoder, EIP1967Admin, Ownable {
     using PriorityQueue for PriorityQueue.Queue;
@@ -130,9 +129,6 @@ contract ZkBobSequencer is SequencerABIDecoder, EIP1967Admin, Ownable {
 
         (bool success, string memory revertReason) = _propagateToPool(ZkBobPool.transact.selector);
 
-        // We remove the commitment from the queue regardless of the result of the call to pool contract
-        // If we check that the prover is not malicious then the tx is not valid because of the limits or
-        // absence of funds so it can't be proved
         if (success) {
             emit Proved();
         } else {
@@ -175,6 +171,16 @@ contract ZkBobSequencer is SequencerABIDecoder, EIP1967Admin, Ownable {
         emit DirectDepositCommited();
     }
 
+    /**
+     * @dev This function verifies that a direct deposit batch is the current pending operation and
+     * propagates the call to the pool contract. The signature of this function must be the same 
+     * as the signature of the `ZkBobPool.appendDirectDeposits` function.
+     * @param _root_after new merkle tree root after append.
+     * @param _indices list of indices for queued pending deposits.
+     * @param _out_commit out commitment for output notes serialized from direct deposits.
+     * @param _batch_deposit_proof snark proof for batch deposit verifier.
+     * @param _tree_proof snark proof for tree update verifier.
+     */
     function proveDirectDeposit(
         uint256 _root_after,
         uint256[] calldata _indices,
@@ -197,7 +203,6 @@ contract ZkBobSequencer is SequencerABIDecoder, EIP1967Admin, Ownable {
         }
 
         (bool success, string memory revertReason) = _propagateToPool(ZkBobPool.appendDirectDeposits.selector);
-
         if (success) {
             emit Proved();
         } else {
@@ -206,6 +211,20 @@ contract ZkBobSequencer is SequencerABIDecoder, EIP1967Admin, Ownable {
             _revertIfEquals(revertReason, "ZkBobPool: bad tree proof");
             emit Rejected();
         }
+    }
+
+    function pendingOperation() external view returns (PriorityOperation memory op) {
+        require(!priorityQueue.isEmpty(), "ZkBobSequencer: queue is empty");
+        
+        uint256 head = priorityQueue.getFirstUnprocessedPriorityTx();
+        uint256 tail = priorityQueue.getTotalPriorityTxs();
+        for (uint256 i = head; i <= tail; i++) {
+            if (op.timestamp + expirationTime >= block.timestamp) {
+                op = priorityQueue.get(i);
+                break;
+            }
+        }
+        require(op.commitHash != bytes32(0), "ZkBobSequencer: no pending operations");
     }
 
     function _claimDepositProxyFee(uint16 _txType, bytes calldata _memo, uint256 _nullifier) internal {
@@ -309,19 +328,5 @@ contract ZkBobSequencer is SequencerABIDecoder, EIP1967Admin, Ownable {
 
     function _revertIfEquals(string memory reason, string memory revertReason) internal pure {
         require(keccak256(abi.encodePacked((reason))) != keccak256(abi.encodePacked((revertReason))), revertReason);
-    }
-
-    function pendingOperation() external view returns (PriorityOperation memory op) {
-        require(!priorityQueue.isEmpty(), "ZkBobSequencer: queue is empty");
-        
-        uint256 head = priorityQueue.getFirstUnprocessedPriorityTx();
-        uint256 tail = priorityQueue.getTotalPriorityTxs();
-        for (uint256 i = head; i <= tail; i++) {
-            if (op.timestamp + expirationTime >= block.timestamp) {
-                op = priorityQueue.get(i);
-                break;
-            }
-        }
-        require(op.commitHash != bytes32(0), "ZkBobSequencer: no pending operations");
     }
 }

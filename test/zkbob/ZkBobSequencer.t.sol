@@ -577,6 +577,7 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
 
         assert(success);
 
+        vm.prank(prover1);
         (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
 
         assert(success);
@@ -587,16 +588,16 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         uint64 _proxyFee,
         uint64 _proverFee,
         address _prover,
-        address receiver) internal view  returns (bytes memory commitData, bytes memory proveData) {
-
-            bytes32 nullifier = bytes32(_randFR());
-            // commitData = abi.encodePacked(nullifier);
-            bytes memory transfer_delta_bytes =  abi.encodePacked(//28
-                    uint48(0), //index 6
-                    uint112(0), //energy 14
-                    int64(-int256((_amount)))//8
-                    );
-            commitData = abi.encodePacked(
+        address receiver
+    ) internal view  returns (bytes memory commitData, bytes memory proveData) {
+        bytes32 nullifier = bytes32(_randFR());
+        // commitData = abi.encodePacked(nullifier);
+        bytes memory transfer_delta_bytes =  abi.encodePacked(//28
+            uint48(0), //index 6
+            uint112(0), //energy 14
+            int64(-int256((_amount)))//8
+        );
+        commitData = abi.encodePacked(
             // ZkBobSequencer.commit.selector, //4
             nullifier, //32 nullifier
             new bytes(32), //32 out_commit
@@ -629,14 +630,17 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
             commitData,
             uint16(2), //withdrawal,
             uint16(memo.length),
-            memo);
+            memo
+        );
 
         proveData = abi.encodePacked(
             proveData,
             uint16(2), //withdrawal,
-            memo.length,
-            memo);
-        }
+            uint16(memo.length),
+            memo
+        );
+    }
+
     function _encodeDeposit(
         int256 _amount,
         uint64 _proxyFee,
