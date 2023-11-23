@@ -495,6 +495,49 @@ abstract contract AbstractZkBobPoolSequencerTest is AbstractForkTest {
         sequencer.proveDirectDeposit(_randFR(), indices, outCommitment, batchProof, _randProof());
     }
 
+    function testProveDirectDepositShouldRevertIfTreeProofIsInvalid() external {
+        _setUpDD();
+
+        uint256[] memory indices = new uint256[](2);
+        indices[0] = 0;
+        indices[1] = 1;
+        uint256 outCommitment = _randFR();
+        uint256[8] memory batchProof = _randProof();
+
+        vm.startPrank(user1);
+        _directDeposit(10 ether / D, user2, zkAddress);
+        _directDeposit(5 ether / D, user2, zkAddress);
+        vm.stopPrank();
+
+        hoax(prover1, prover1);
+        sequencer.commitDirectDeposits(indices, outCommitment, batchProof);
+
+        TreeUpdateVerifierMock(pool.tree_verifier()).setResult(false);
+
+        hoax(prover1, prover1);
+        vm.expectRevert();
+        sequencer.proveDirectDeposit(_randFR(), indices, outCommitment, batchProof, _randProof());
+    }
+
+    function testProveShouldRevertIfTreeProofIsInvalid() external {
+        int256 amount = int256(9_960_000_000);
+        uint64 proxyFee = uint64(10_000_000);
+        uint64 proverFee = uint64(30_000_000);
+
+        (bytes memory commitData, bytes memory proveData) = _encodeDeposit(amount, proxyFee, proverFee, prover1);
+        approve(user1, amount, proxyFee, proverFee);
+        
+        hoax(prover1, prover1);
+        (bool success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.commit.selector, commitData));
+        assertTrue(success);
+
+        TreeUpdateVerifierMock(pool.tree_verifier()).setResult(false);
+
+        hoax(prover1, prover1);
+        (success, ) = address(sequencer).call(abi.encodePacked(ZkBobSequencer.prove.selector, proveData));
+        assertFalse(success);
+    }
+
     function approve(address user, int256 amount, uint64 proxyFee, uint64 proverFee) internal {
         vm.startPrank(user);
         IERC20(token).approve(address(pool), (uint256(amount) + proxyFee + proverFee) * denominator);

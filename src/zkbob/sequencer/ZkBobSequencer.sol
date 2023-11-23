@@ -10,7 +10,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IERC20Permit} from "../../interfaces/IERC20Permit.sol";
 import {EIP1967Admin} from "../../proxy/EIP1967Admin.sol";
 import {Ownable} from "../../utils/Ownable.sol";
-
+import {console2} from "forge-std/console2.sol";
 
 contract ZkBobSequencer is SequencerABIDecoder, EIP1967Admin, Ownable {
     using PriorityQueue for PriorityQueue.Queue;
@@ -113,7 +113,6 @@ contract ZkBobSequencer is SequencerABIDecoder, EIP1967Admin, Ownable {
         PriorityOperation memory op = _popFirstUnexpiredOperation();
 
         uint256 nullifier = _transfer_nullifier();
-        uint48 index = _transfer_index();
         bytes calldata memo = _memo_data();
         uint256[8] calldata transferProof = _transfer_proof();
 
@@ -126,22 +125,10 @@ contract ZkBobSequencer is SequencerABIDecoder, EIP1967Admin, Ownable {
         uint256 timestamp = _max(op.timestamp, lastQueueUpdateTimestamp);
         require(msg.sender == prover || block.timestamp > timestamp + gracePeriod, "ZkBobSequencer: not authorized");
 
-        uint256[8] memory treeProof = _tree_proof();
-
-        // We check proofs twice with the current implementation.
-        // It should be possible to avoid it but we need to modify pool contract.
-        require(
-            pool.tree_verifier().verifyProof(
-                _tree_pub(pool.roots(index)),
-                treeProof
-            ),
-            "ZkBobSequencer: invalid proof"
-        );
-
         lastQueueUpdateTimestamp = block.timestamp;
         delete pendingNullifiers[nullifier];
 
-        bool success = _propagateToPool(ZkBobPool.transact.selector);
+        (bool success, string memory revertReason) = _propagateToPool(ZkBobPool.transact.selector);
 
         // We remove the commitment from the queue regardless of the result of the call to pool contract
         // If we check that the prover is not malicious then the tx is not valid because of the limits or
@@ -149,6 +136,9 @@ contract ZkBobSequencer is SequencerABIDecoder, EIP1967Admin, Ownable {
         if (success) {
             emit Proved();
         } else {
+            // We should revert if the tree proof is invalid since the malicious prover can
+            // send invalid proof to skip the operation even though the operation is valid
+            _revertIfEquals(revertReason, "ZkBobPool: bad tree proof");
             emit Rejected();
         }
     }
@@ -201,20 +191,19 @@ contract ZkBobSequencer is SequencerABIDecoder, EIP1967Admin, Ownable {
 
         // TODO: Access control to prevent race condition
 
-        // We need to check that the proof is valid to prevent the case when the prover is malicious
-        uint256[3] memory tree_pub = [pool.roots(pool.pool_index()), _root_after, _out_commit];
-        require(pool.tree_verifier().verifyProof(tree_pub, _tree_proof), "ZkBobSequencer: bad tree proof");
-
         lastQueueUpdateTimestamp = block.timestamp;
         for (uint256 i = 0; i < op.directDeposits.length; i++) {
             delete pendingDirectDeposits[op.directDeposits[i]];
         }
 
-        bool success = _propagateToPool(ZkBobPool.appendDirectDeposits.selector);
+        (bool success, string memory revertReason) = _propagateToPool(ZkBobPool.appendDirectDeposits.selector);
 
         if (success) {
             emit Proved();
         } else {
+            // We should revert if the tree proof is invalid since the malicious prover can
+            // send invalid proof to skip the operation even though the operation is valid
+            _revertIfEquals(revertReason, "ZkBobPool: bad tree proof");
             emit Rejected();
         }
     }
@@ -299,8 +288,16 @@ contract ZkBobSequencer is SequencerABIDecoder, EIP1967Admin, Ownable {
         r[4] = uint256(keccak256(memo)) % R;
     }
 
-    function _propagateToPool(bytes4 selector) internal returns (bool success) {
-        (success, ) = address(pool).call(abi.encodePacked(selector, msg.data[4:]));
+    function _propagateToPool(bytes4 selector) internal returns (bool success, string memory revertReason) {
+        (bool result, bytes memory data) = address(pool).call(abi.encodePacked(selector, msg.data[4:]));
+        
+        success = result;
+        if (!result && data.length >= 68) {
+            assembly {
+                data := add(data, 0x04)
+            }
+            revertReason = abi.decode(data, (string));
+        }
     }
 
     function _max(uint256 a, uint256 b) internal pure returns (uint256 maxValue) {
@@ -308,6 +305,10 @@ contract ZkBobSequencer is SequencerABIDecoder, EIP1967Admin, Ownable {
         if (b > a) {
             maxValue = b;
         }
+    }
+
+    function _revertIfEquals(string memory reason, string memory revertReason) internal pure {
+        require(keccak256(abi.encodePacked((reason))) != keccak256(abi.encodePacked((revertReason))), revertReason);
     }
 
     function pendingOperation() external view returns (PriorityOperation memory op) {
