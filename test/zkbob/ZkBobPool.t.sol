@@ -530,7 +530,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             uint64(4.9 ether / D / denominator) // second deposit amount
         );
         vm.expectEmit(true, false, false, true);
-        emit Message(128, bytes32(0), message);
+        emit Message(0, bytes32(0), message);
         vm.prank(user2);
         pool.appendDirectDeposits(indices, outCommitment, _randProof());
     }

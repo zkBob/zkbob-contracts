@@ -9,7 +9,9 @@ pragma solidity ^0.8.13;
 /// @param layer2Tip Additional payment to the validator as an incentive to perform the operation
 struct PriorityOperation {
     uint256 commitment;
+    address prover;
     uint64 fee;
+    uint64 timestamp;
 }
 
 /// @author Matter Labs

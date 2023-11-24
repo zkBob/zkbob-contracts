@@ -38,6 +38,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
     uint256 internal constant FORCED_EXIT_MIN_DELAY = 1 hours;
     uint256 internal constant FORCED_EXIT_MAX_DELAY = 24 hours;
+    // TODO: make configurable
+    uint64 internal constant TREE_UPDATE_GRACE_PERIOD = 5 minutes;
 
     uint256 internal immutable TOKEN_DENOMINATOR;
     uint256 internal constant TOKEN_NUMERATOR = 1;
@@ -63,7 +65,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
     mapping(address => uint256) public accumulatedFee;
 
-    PriorityQueue.Queue pendingCommitments;
+    PriorityQueue.Queue internal pendingCommitments;
+    uint64 internal lastTreeUpdateTimestamp;
 
     event UpdateOperatorManager(address manager);
     event UpdateAccounting(address accounting);
@@ -71,6 +74,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     event WithdrawFee(address indexed operator, uint256 fee);
 
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
+    event RootUpdated(uint256 indexed index, uint256 root);
 
     event CommitForcedExit(
         uint256 indexed nullifier, address operator, address to, uint256 amount, uint256 exitStart, uint256 exitEnd
@@ -241,7 +245,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             require(_transfer_index() <= poolIndex, "ZkBobPool: transfer index out of bounds");
             require(transfer_verifier.verifyProof(_transfer_pub(), _transfer_proof()), "ZkBobPool: bad transfer proof");
             
-            _appendCommitment(_transfer_out_commit(), uint64(_memo_tree_update_fee()));
+            _appendCommitment(_transfer_out_commit(), uint64(_memo_tree_update_fee()), msg.sender);
 
             nullifiers[nullifier] = uint256(keccak256(abi.encodePacked(_transfer_out_commit(), _transfer_delta())));
             
@@ -252,6 +256,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
             all_messages_hash = _all_messages_hash;
             pool_index = poolIndex;
+
+            // TODO: is it fine that index wasn't updated?
             emit Message(poolIndex, _all_messages_hash, message);
         }
 
@@ -333,7 +339,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         );
 
         // TODO: what is about fees in this case?
-        _appendCommitment(_out_commit, uint64(0));
+        _appendCommitment(_out_commit, uint64(0), msg.sender);
 
         bytes32 message_hash = keccak256(message);
         bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
@@ -344,17 +350,28 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             accumulatedFee[msg.sender] += totalFee;
         }
 
+        // TODO: is it fine that index wasn't updated?
         emit Message(poolIndex, _all_messages_hash, message);
     }
 
     function proveTreeUpdate(uint256 _commitment, uint256[8] calldata _proof, uint256 _rootAfter) external {
         PriorityOperation memory pendindCommitment = pendingCommitments.popFront();
         require(pendindCommitment.commitment == _commitment, "ZkBobPool: commitment mismatch");
+
+        uint64 timestamp = pendindCommitment.timestamp;
+        if (timestamp < lastTreeUpdateTimestamp) {
+            timestamp = lastTreeUpdateTimestamp;
+        }
+        require(block.timestamp > timestamp + TREE_UPDATE_GRACE_PERIOD || pendindCommitment.prover == msg.sender, "ZkBobPool: unauthorized");
+        
         uint256[3] memory tree_pub = [roots[pool_index], _rootAfter, _commitment];
         require(tree_verifier.verifyProof(tree_pub, _proof), "ZkBobPool: bad tree proof");
         pool_index += 128;
         roots[pool_index] = _rootAfter;
         accumulatedFee[msg.sender] += pendindCommitment.fee;
+        lastTreeUpdateTimestamp = uint64(block.timestamp);
+
+        emit RootUpdated(pool_index, _rootAfter);
     }
 
     /**
@@ -531,10 +548,12 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         return super._isOwner() || _admin() == _msgSender();
     }
 
-    function _appendCommitment(uint256 _commitment, uint64 _fee) internal {
+    function _appendCommitment(uint256 _commitment, uint64 _fee, address _prover) internal {
         pendingCommitments.pushBack(PriorityOperation({
             commitment: _commitment,
-            fee: _fee
+            fee: _fee,
+            prover: _prover,
+            timestamp: uint64(block.timestamp)
         }));
     }
 }
