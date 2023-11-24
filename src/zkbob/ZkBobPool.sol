@@ -24,6 +24,7 @@ import "../utils/Ownable.sol";
 import "../proxy/EIP1967Admin.sol";
 import "../interfaces/IEnergyRedeemer.sol";
 import "../utils/ExternalSload.sol";
+import {PriorityQueue, PriorityOperation} from "./utils/PriorityQueue.sol";
 
 /**
  * @title ZkBobPool
@@ -31,6 +32,7 @@ import "../utils/ExternalSload.sol";
  */
 abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ExternalSload {
     using SafeERC20 for IERC20;
+    using PriorityQueue for PriorityQueue.Queue;
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
@@ -60,6 +62,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     bytes32 public all_messages_hash;
 
     mapping(address => uint256) public accumulatedFee;
+
+    PriorityQueue.Queue pendingCommitments;
 
     event UpdateOperatorManager(address manager);
     event UpdateAccounting(address accounting);
@@ -147,6 +151,12 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         return TOKEN_NUMERATOR == 1 ? TOKEN_DENOMINATOR : (1 << 255) | TOKEN_NUMERATOR;
     }
 
+    function pendingCommitment() external view returns (uint256 commitment) {
+        PriorityOperation memory op = pendingCommitments.front();
+        require(op.commitment != 0, "ZkBobPool: no pending commitment");
+        return op.commitment;
+    }
+
     /**
      * @dev Updates used accounting module.
      * Callable only by the contract owner / proxy admin.
@@ -226,14 +236,15 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
         uint256 nullifier = _transfer_nullifier();
         {
+            require(msg.sender == _memo_prover_address(), "ZkBobPool: unauthorized");
             require(nullifiers[nullifier] == 0, "ZkBobPool: doublespend detected");
             require(_transfer_index() <= poolIndex, "ZkBobPool: transfer index out of bounds");
             require(transfer_verifier.verifyProof(_transfer_pub(), _transfer_proof()), "ZkBobPool: bad transfer proof");
-            require(tree_verifier.verifyProof(_tree_pub(roots[poolIndex]), _tree_proof()), "ZkBobPool: bad tree proof");
+            
+            _appendCommitment(_transfer_out_commit(), uint64(_memo_tree_update_fee()));
 
             nullifiers[nullifier] = uint256(keccak256(abi.encodePacked(_transfer_out_commit(), _transfer_delta())));
-            poolIndex += 128;
-            roots[poolIndex] = _tree_root_after();
+            
             bytes memory message = _memo_message();
             // restrict memo message prefix (items count in little endian) to be < 2**16
             require(bytes4(message) & 0x0000ffff == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
@@ -244,7 +255,10 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             emit Message(poolIndex, _all_messages_hash, message);
         }
 
-        uint256 fee = _memo_fee();
+        uint256 transactFee = _memo_transact_fee();
+        uint256 treeUpdateFee = _memo_tree_update_fee();
+        uint256 fee = transactFee + treeUpdateFee;
+
         int256 token_amount = transfer_token_delta + int256(fee);
         int256 energy_amount = _transfer_energy_amount();
 
@@ -286,25 +300,21 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         }
 
         if (fee > 0) {
-            accumulatedFee[msg.sender] += fee;
+            accumulatedFee[msg.sender] += transactFee;
         }
     }
 
     /**
      * @dev Appends a batch of direct deposits into a zkBob merkle tree.
      * Callable only by the current operator.
-     * @param _root_after new merkle tree root after append.
      * @param _indices list of indices for queued pending deposits.
      * @param _out_commit out commitment for output notes serialized from direct deposits.
      * @param _batch_deposit_proof snark proof for batch deposit verifier.
-     * @param _tree_proof snark proof for tree update verifier.
      */
     function appendDirectDeposits(
-        uint256 _root_after,
         uint256[] calldata _indices,
         uint256 _out_commit,
-        uint256[8] memory _batch_deposit_proof,
-        uint256[8] memory _tree_proof
+        uint256[8] memory _batch_deposit_proof
     )
         external
         onlyOperator
@@ -322,11 +332,9 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             batch_deposit_verifier.verifyProof([hashsum], _batch_deposit_proof), "ZkBobPool: bad batch deposit proof"
         );
 
-        uint256[3] memory tree_pub = [roots[poolIndex], _root_after, _out_commit];
-        require(tree_verifier.verifyProof(tree_pub, _tree_proof), "ZkBobPool: bad tree proof");
+        // TODO: what is about fees in this case?
+        _appendCommitment(_out_commit, uint64(0));
 
-        poolIndex += 128;
-        roots[poolIndex] = _root_after;
         bytes32 message_hash = keccak256(message);
         bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
         all_messages_hash = _all_messages_hash;
@@ -337,6 +345,16 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         }
 
         emit Message(poolIndex, _all_messages_hash, message);
+    }
+
+    function proveTreeUpdate(uint256 _commitment, uint256[8] calldata _proof, uint256 _rootAfter) external {
+        PriorityOperation memory pendindCommitment = pendingCommitments.popFront();
+        require(pendindCommitment.commitment == _commitment, "ZkBobPool: commitment mismatch");
+        uint256[3] memory tree_pub = [roots[pool_index], _rootAfter, _commitment];
+        require(tree_verifier.verifyProof(tree_pub, _proof), "ZkBobPool: bad tree proof");
+        pool_index += 128;
+        roots[pool_index] = _rootAfter;
+        accumulatedFee[msg.sender] += pendindCommitment.fee;
     }
 
     /**
@@ -511,5 +529,12 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      */
     function _isOwner() internal view override returns (bool) {
         return super._isOwner() || _admin() == _msgSender();
+    }
+
+    function _appendCommitment(uint256 _commitment, uint64 _fee) internal {
+        pendingCommitments.pushBack(PriorityOperation({
+            commitment: _commitment,
+            fee: _fee
+        }));
     }
 }

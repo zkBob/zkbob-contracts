@@ -11,6 +11,8 @@ interface IZkBobPoolAdmin {
 
     function pool_index() external view returns (uint256);
 
+    function pendingCommitment() external view returns (uint256);
+
     function initialize(uint256 _root) external;
 
     function setTokenSeller(address _tokenSeller) external;
@@ -26,6 +28,8 @@ interface IZkBobPoolAdmin {
     function accounting() external view returns (address);
 
     function transact() external;
+
+    function proveTreeUpdate(uint256, uint256[8] memory, uint256) external;
 
     function committedForcedExits(uint256 _nullifier) external view returns (bytes32);
 
@@ -52,11 +56,9 @@ interface IZkBobPoolAdmin {
         external;
 
     function appendDirectDeposits(
-        uint256 _root_after,
         uint256[] calldata _indices,
         uint256 _out_commit,
-        uint256[8] memory _batch_deposit_proof,
-        uint256[8] memory _tree_proof
+        uint256[8] memory _batch_deposit_proof
     )
         external;
 
