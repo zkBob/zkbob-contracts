@@ -38,8 +38,6 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
     uint256 internal constant FORCED_EXIT_MIN_DELAY = 1 hours;
     uint256 internal constant FORCED_EXIT_MAX_DELAY = 24 hours;
-    // TODO: make configurable
-    uint64 internal constant TREE_UPDATE_GRACE_PERIOD = 5 minutes;
 
     uint256 internal immutable TOKEN_DENOMINATOR;
     uint256 internal constant TOKEN_NUMERATOR = 1;
@@ -67,10 +65,15 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
     PriorityQueue.Queue internal pendingCommitments;
     uint64 internal lastTreeUpdateTimestamp;
+    
+    uint64 public gracePeriod = 5 minutes;
+    uint64 public minTreeUpdateFee = 0;
 
     event UpdateOperatorManager(address manager);
     event UpdateAccounting(address accounting);
     event UpdateRedeemer(address redeemer);
+    event UpdateGracePeriod(uint64 gracePeriod);
+    event UpdateMinTreeUpdateFee(uint64 minTreeUpdateFee);
     event WithdrawFee(address indexed operator, uint256 fee);
 
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
@@ -106,6 +109,10 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         direct_deposit_queue = IZkBobDirectDepositQueue(_direct_deposit_queue);
 
         TOKEN_DENOMINATOR = _denominator;
+
+        // TODO: Hardcoded values for now
+        gracePeriod = 5 minutes;
+        minTreeUpdateFee = 0;
     }
 
     /**
@@ -183,6 +190,16 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         require(address(_redeemer) == address(0) || Address.isContract(address(_redeemer)), "ZkBobPool: not a contract");
         redeemer = _redeemer;
         emit UpdateRedeemer(address(_redeemer));
+    }
+
+    function setGracePeriod(uint64 _gracePeriod) external onlyOwner {
+        gracePeriod = _gracePeriod;
+        emit UpdateGracePeriod(_gracePeriod);
+    }
+
+    function setMinTreeUpdateFee(uint64 _minTreeUpdateFee) external onlyOwner {
+        minTreeUpdateFee = _minTreeUpdateFee;
+        emit UpdateMinTreeUpdateFee(_minTreeUpdateFee);
     }
 
     function _root() internal view override returns (uint256) {
@@ -263,6 +280,9 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
         uint256 transactFee = _memo_transact_fee();
         uint256 treeUpdateFee = _memo_tree_update_fee();
+
+        require(treeUpdateFee >= minTreeUpdateFee, "ZkBobPool: tree update fee is too low");
+        
         uint256 fee = transactFee + treeUpdateFee;
 
         int256 token_amount = transfer_token_delta + int256(fee);
@@ -338,8 +358,10 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             batch_deposit_verifier.verifyProof([hashsum], _batch_deposit_proof), "ZkBobPool: bad batch deposit proof"
         );
 
-        // TODO: what is about fees in this case?
-        _appendCommitment(_out_commit, uint64(0), msg.sender);
+        // TODO: is it ok?
+        require(totalFee > minTreeUpdateFee, "ZkBobPool: tree update fee is too low");
+        uint64 ddFee = uint64(totalFee) - minTreeUpdateFee;
+        _appendCommitment(_out_commit, minTreeUpdateFee, msg.sender);
 
         bytes32 message_hash = keccak256(message);
         bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
@@ -347,28 +369,37 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         pool_index = poolIndex;
 
         if (totalFee > 0) {
-            accumulatedFee[msg.sender] += totalFee;
+            accumulatedFee[msg.sender] += ddFee;
         }
 
         // TODO: is it fine that index wasn't updated?
         emit Message(poolIndex, _all_messages_hash, message);
     }
 
-    function proveTreeUpdate(uint256 _commitment, uint256[8] calldata _proof, uint256 _rootAfter) external {
-        PriorityOperation memory pendindCommitment = pendingCommitments.popFront();
-        require(pendindCommitment.commitment == _commitment, "ZkBobPool: commitment mismatch");
+    /**
+     * @dev Updates pool index and merkle tree root if the provided proof is valid and
+     * the proof corresponds to the pending commitment. 
+     * A prover that submitted the transfer proof has the grace period to submit the tree update proof.
+     * @param _commitment pending commitment to be proven.
+     * @param _proof snark proof for tree update verifier.
+     * @param _rootAfter new merkle tree root.
+     */
+    function proveTreeUpdate(
+        uint256 _commitment, 
+        uint256[8] calldata _proof, 
+        uint256 _rootAfter
+    ) external onlyOperator {
+        PriorityOperation memory commitment = pendingCommitments.popFront();
+        require(commitment.commitment == _commitment, "ZkBobPool: commitment mismatch");
 
-        uint64 timestamp = pendindCommitment.timestamp;
-        if (timestamp < lastTreeUpdateTimestamp) {
-            timestamp = lastTreeUpdateTimestamp;
-        }
-        require(block.timestamp > timestamp + TREE_UPDATE_GRACE_PERIOD || pendindCommitment.prover == msg.sender, "ZkBobPool: unauthorized");
+        _validateGracePeriod(commitment.timestamp, commitment.prover);
         
         uint256[3] memory tree_pub = [roots[pool_index], _rootAfter, _commitment];
         require(tree_verifier.verifyProof(tree_pub, _proof), "ZkBobPool: bad tree proof");
+        
         pool_index += 128;
         roots[pool_index] = _rootAfter;
-        accumulatedFee[msg.sender] += pendindCommitment.fee;
+        accumulatedFee[msg.sender] += commitment.fee;
         lastTreeUpdateTimestamp = uint64(block.timestamp);
 
         emit RootUpdated(pool_index, _rootAfter);
@@ -555,5 +586,18 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             prover: _prover,
             timestamp: uint64(block.timestamp)
         }));
+    }
+
+    function _validateGracePeriod(uint64 commitmentTimestamp, address privilegedProver) internal view {
+        // We calculate the beggining of the grace period either from the timestamp of the last tree update,
+        // or from the timestamp of the commitment, whichever is greater.
+        uint64 timestamp = commitmentTimestamp;
+        if (timestamp < lastTreeUpdateTimestamp) {
+            timestamp = lastTreeUpdateTimestamp;
+        }
+        require(
+            block.timestamp > timestamp + gracePeriod || msg.sender == privilegedProver, 
+            "ZkBobPool: prover is not allowed to submit the proof yet"
+        );
     }
 }

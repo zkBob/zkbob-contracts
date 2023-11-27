@@ -30,7 +30,7 @@ import "../../src/zkbob/ZkBobPoolETH.sol";
 import "../../src/infra/UniswapV3Seller.sol";
 import {EnergyRedeemer} from "../../src/infra/EnergyRedeemer.sol";
 
-abstract contract AbstractZkBobPoolTest is AbstractForkTest {
+abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
     address constant permit2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     address constant uniV3Router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
     address constant uniV3Quoter = 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6;
@@ -86,7 +86,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
     IOperatorManager operatorManager;
     ZkBobAccounting accounting;
 
-    function setUp() public {
+    function setUp() public virtual {
         vm.createSelectFork(forkRpcUrl, forkBlock);
 
         EIP1967Proxy poolProxy = new EIP1967Proxy(address(this), address(0xdead), "");
@@ -152,6 +152,286 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
 
         deal(token, user1, 1 ether / D);
         deal(token, user3, 0);
+    }
+
+    function _setUpDD() internal {
+        deal(user1, 100 ether / D);
+        deal(user2, 100 ether / D);
+        deal(address(token), user1, 100 ether / D);
+        deal(address(token), user2, 100 ether / D);
+
+        accounting.setLimits(
+            1,
+            2_000_000 ether / D / denominator,
+            200_000 ether / D / denominator,
+            200_000 ether / D / denominator,
+            20_000 ether / D / denominator,
+            20_000 ether / D / denominator,
+            25 ether / D / denominator,
+            10 ether / D / denominator
+        );
+        address[] memory users = new address[](1);
+        users[0] = user1;
+        accounting.setUsersTier(1, users);
+
+        queue.setDirectDepositFee(uint64(0.1 ether / D / pool.denominator()));
+
+        if (autoApproveQueue) {
+            vm.prank(user1);
+            IERC20(token).approve(address(queue), type(uint256).max);
+            vm.prank(user2);
+            IERC20(token).approve(address(queue), type(uint256).max);
+        }
+    }
+
+    function _encodeDeposit(int256 _amount, uint256 _transactFee, uint256 _treeUpdateFee, address prover) internal view returns (bytes memory) {
+        bytes32 nullifier = bytes32(_randFR());
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
+        bytes memory data = abi.encodePacked(
+            ZkBobPool.transact.selector,
+            nullifier,
+            _randFR(),
+            uint48(0),
+            uint112(0),
+            int64(_amount / int256(denominator))
+        );
+        for (uint256 i = 0; i < 8; i++) {
+            data = abi.encodePacked(data, _randFR());
+        }
+        data = abi.encodePacked(
+            data, 
+            uint16(0), 
+            uint16(72), 
+            prover, 
+            uint64(_transactFee / denominator), 
+            uint64(_treeUpdateFee / denominator), 
+            bytes4(0x01000000), 
+            _randFR()
+        );
+        return abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
+    }
+
+    function _encodeWithdrawal(
+        address _to,
+        uint256 _amount,
+        uint256 _nativeAmount,
+        uint256 _energyAmount,
+        address prover
+    )
+        internal
+        view
+        returns (bytes memory)
+    {
+        bytes memory data = abi.encodePacked(
+            ZkBobPool.transact.selector,
+            _randFR(),
+            _randFR(),
+            uint48(0),
+            -int112(int256(_energyAmount)),
+            int64(-int256((_amount / denominator) + 0.005 ether / D / denominator + 0.005 ether / D / denominator))
+        );
+        for (uint256 i = 0; i < 8; i++) {
+            data = abi.encodePacked(data, _randFR());
+        }
+
+        data = abi.encodePacked(
+            data,
+            uint16(2),
+            uint16(100)
+        );
+
+        return abi.encodePacked(
+            data,
+            prover,
+            uint64(0.005 ether / D / denominator),
+            uint64(0.005 ether / D / denominator),
+            uint64(_nativeAmount / denominator),
+            _to,
+            bytes4(0x01000000),
+            _randFR()
+        );
+    }
+
+    function _encodeTransfer(uint256 _transactFee, uint256 _treeUpdateFee, address prover) internal view returns (bytes memory) {
+        bytes memory data = abi.encodePacked(
+            ZkBobPool.transact.selector, _randFR(), _randFR(), uint48(0), uint112(0), -int64(uint64((_transactFee + _treeUpdateFee) / denominator))
+        );
+        for (uint256 i = 0; i < 8; i++) {
+            data = abi.encodePacked(data, _randFR());
+        }
+        return abi.encodePacked(
+            data, 
+            uint16(1), 
+            uint16(72),
+            prover, 
+            uint64(_transactFee / denominator), 
+            uint64(_treeUpdateFee / denominator), 
+            bytes4(0x01000000), 
+            _randFR()
+        );
+    }
+
+    function _transact(bytes memory _data) internal {
+        vm.prank(user2);
+        (bool status,) = address(pool).call(_data);
+        require(status, "transact() reverted");
+    }
+
+    function _proveTreeUpdate() internal {
+        vm.startPrank(user2);
+        pool.proveTreeUpdate(pool.pendingCommitment(), _randProof(), _randFR());
+        vm.stopPrank();
+    }
+
+    function _transactReverted(bytes memory _data, bytes memory _revertReason) internal {
+        vm.prank(user2);
+        (bool status, bytes memory returnData) = address(pool).call(_data);
+        assert(!status);
+        assertEq(returnData, abi.encodeWithSignature("Error(string)", _revertReason));
+    }
+
+    function _randFR() internal view returns (uint256) {
+        return uint256(keccak256(abi.encode(gasleft())))
+            % 21888242871839275222246405745257275088696311157297823662689037894645226208583;
+    }
+
+    function _randProof() internal view returns (uint256[8] memory) {
+        return [_randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR()];
+    }
+
+    function _encodePermitDeposit(int256 _amount, uint256 _transactFee, uint256 _treeUpdateFee, address prover) internal returns (bytes memory) {
+        if (permitType == PermitType.Permit2) {
+            vm.prank(user1);
+            IERC20(token).approve(permit2, type(uint256).max);
+        }
+
+        uint256 expiry = block.timestamp + 1 hours;
+        bytes32 nullifier = bytes32(_randFR());
+
+        bytes memory signature;
+        {
+            bytes32 digest;
+            if (permitType == PermitType.BOBPermit) {
+                digest = _digestSaltedPermit(user1, address(pool), uint256(_amount + int256(_transactFee) + int256(_treeUpdateFee)), expiry, nullifier);
+            } else if (permitType == PermitType.Permit2) {
+                digest = _digestPermit2(user1, address(pool), uint256(_amount + int256(_transactFee) + int256(_treeUpdateFee)), expiry, nullifier);
+            } else if (permitType == PermitType.USDCPermit) {
+                digest = _digestUSDCPermit(user1, address(pool), uint256(_amount + int256(_transactFee) + int256(_treeUpdateFee)), expiry, nullifier);
+            }
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, digest);
+            signature = abi.encodePacked(r, uint256(s) + (v == 28 ? (1 << 255) : 0));
+        }
+
+        bytes memory data = abi.encodePacked(
+            ZkBobPool.transact.selector,
+            nullifier,
+            _randFR(),
+            uint48(0),
+            uint112(0),
+            int64(_amount / int256(denominator))
+        );
+        for (uint256 i = 0; i < 8; i++) {
+            data = abi.encodePacked(data, _randFR());
+        }
+
+        data = abi.encodePacked(
+            data,
+            uint16(3),
+            uint16(100)
+        );
+
+        data = abi.encodePacked(
+            data,
+            prover,
+            uint64(_transactFee / denominator),
+            uint64(_treeUpdateFee / denominator),
+            uint64(expiry),
+            user1,
+            bytes4(0x01000000),
+            _randFR()
+        );
+        return abi.encodePacked(data, signature);
+    }
+
+    function _digestSaltedPermit(
+        address _holder,
+        address _spender,
+        uint256 _value,
+        uint256 _expiry,
+        bytes32 _salt
+    )
+        internal
+        view
+        returns (bytes32)
+    {
+        uint256 nonce = IERC20Permit(token).nonces(_holder);
+        return ECDSA.toTypedDataHash(
+            IERC20Permit(token).DOMAIN_SEPARATOR(),
+            keccak256(
+                abi.encode(
+                    IERC20Permit(token).SALTED_PERMIT_TYPEHASH(), _holder, _spender, _value, nonce, _expiry, _salt
+                )
+            )
+        );
+    }
+
+    function _digestPermit2(
+        address _holder,
+        address _spender,
+        uint256 _value,
+        uint256 _expiry,
+        bytes32 _salt
+    )
+        internal
+        view
+        returns (bytes32)
+    {
+        return ECDSA.toTypedDataHash(
+            IPermit2(permit2).DOMAIN_SEPARATOR(),
+            keccak256(
+                abi.encode(
+                    PERMIT_TRANSFER_FROM_TYPEHASH,
+                    keccak256(abi.encode(TOKEN_PERMISSIONS_TYPEHASH, token, _value)),
+                    _spender,
+                    _salt,
+                    _expiry
+                )
+            )
+        );
+    }
+
+    function _digestUSDCPermit(
+        address _holder,
+        address _spender,
+        uint256 _value,
+        uint256 _expiry,
+        bytes32 _salt
+    )
+        internal
+        view
+        returns (bytes32)
+    {
+        return ECDSA.toTypedDataHash(
+            IERC20Permit(token).DOMAIN_SEPARATOR(),
+            keccak256(abi.encode(TRANSFER_WITH_AUTHORIZATION_TYPEHASH, _holder, _spender, _value, 0, _expiry, _salt))
+        );
+    }
+
+    function _directDeposit(uint256 amount, address fallbackUser, bytes memory _zkAddress) internal {
+        if (poolType == PoolType.ETH) {
+            ZkBobDirectDepositQueueETH(address(queue)).directNativeDeposit{value: amount}(fallbackUser, _zkAddress);
+        } else if (poolType == PoolType.BOB) {
+            IERC677(token).transferAndCall(address(queue), amount, abi.encode(fallbackUser, _zkAddress));
+        } else {
+            queue.directDeposit(fallbackUser, amount, _zkAddress);
+        }
+    }
+}
+
+abstract contract AbstractZkBobPoolTest is AbstractZkBobPoolTestBase {
+    
+    function setUp() public override {
+        super.setUp();
     }
 
     function testSimpleTransaction() public {
@@ -408,36 +688,6 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
 
         bytes memory data3 = _encodeDeposit(-int256(0.5 ether / D), 0.5 ether / D, 0.5 ether / D, user2);
         _transactReverted(data3, "ZkBobPool: incorrect deposit amounts");
-    }
-
-    function _setUpDD() internal {
-        deal(user1, 100 ether / D);
-        deal(user2, 100 ether / D);
-        deal(address(token), user1, 100 ether / D);
-        deal(address(token), user2, 100 ether / D);
-
-        accounting.setLimits(
-            1,
-            2_000_000 ether / D / denominator,
-            200_000 ether / D / denominator,
-            200_000 ether / D / denominator,
-            20_000 ether / D / denominator,
-            20_000 ether / D / denominator,
-            25 ether / D / denominator,
-            10 ether / D / denominator
-        );
-        address[] memory users = new address[](1);
-        users[0] = user1;
-        accounting.setUsersTier(1, users);
-
-        queue.setDirectDepositFee(uint64(0.1 ether / D / pool.denominator()));
-
-        if (autoApproveQueue) {
-            vm.prank(user1);
-            IERC20(token).approve(address(queue), type(uint256).max);
-            vm.prank(user2);
-            IERC20(token).approve(address(queue), type(uint256).max);
-        }
     }
 
     function testDirectDepositSubmit() public {
@@ -741,248 +991,6 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         // max weekly tx count ~= 28
         // 1e18 energy * (1e16 * 1e12 / 1e18) / 2e5 / 28 ~= 1785e18 reward tokens
         assertApproxEqAbs(rewardToken.balanceOf(user1), 1785 ether, 200 ether);
-    }
-
-    function _encodeDeposit(int256 _amount, uint256 _transactFee, uint256 _treeUpdateFee, address prover) internal returns (bytes memory) {
-        bytes32 nullifier = bytes32(_randFR());
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
-        bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector,
-            nullifier,
-            _randFR(),
-            uint48(0),
-            uint112(0),
-            int64(_amount / int256(denominator))
-        );
-        for (uint256 i = 0; i < 8; i++) {
-            data = abi.encodePacked(data, _randFR());
-        }
-        data = abi.encodePacked(
-            data, 
-            uint16(0), 
-            uint16(72), 
-            prover, 
-            uint64(_transactFee / denominator), 
-            uint64(_treeUpdateFee / denominator), 
-            bytes4(0x01000000), 
-            _randFR()
-        );
-        return abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
-    }
-
-    function _encodeWithdrawal(
-        address _to,
-        uint256 _amount,
-        uint256 _nativeAmount,
-        uint256 _energyAmount,
-        address prover
-    )
-        internal
-        returns (bytes memory)
-    {
-        bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector,
-            _randFR(),
-            _randFR(),
-            uint48(0),
-            -int112(int256(_energyAmount)),
-            int64(-int256((_amount / denominator) + 0.005 ether / D / denominator + 0.005 ether / D / denominator))
-        );
-        for (uint256 i = 0; i < 8; i++) {
-            data = abi.encodePacked(data, _randFR());
-        }
-
-        data = abi.encodePacked(
-            data,
-            uint16(2),
-            uint16(100)
-        );
-
-        return abi.encodePacked(
-            data,
-            prover,
-            uint64(0.005 ether / D / denominator),
-            uint64(0.005 ether / D / denominator),
-            uint64(_nativeAmount / denominator),
-            _to,
-            bytes4(0x01000000),
-            _randFR()
-        );
-    }
-
-    function _encodeTransfer(uint256 _transactFee, uint256 _treeUpdateFee, address prover) internal returns (bytes memory) {
-        bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector, _randFR(), _randFR(), uint48(0), uint112(0), -int64(uint64((_transactFee + _treeUpdateFee) / denominator))
-        );
-        for (uint256 i = 0; i < 8; i++) {
-            data = abi.encodePacked(data, _randFR());
-        }
-        return abi.encodePacked(
-            data, 
-            uint16(1), 
-            uint16(72),
-            prover, 
-            uint64(_transactFee / denominator), 
-            uint64(_treeUpdateFee / denominator), 
-            bytes4(0x01000000), 
-            _randFR()
-        );
-    }
-
-    function _transact(bytes memory _data) internal {
-        vm.prank(user2);
-        (bool status,) = address(pool).call(_data);
-        require(status, "transact() reverted");
-    }
-
-    function _proveTreeUpdate() internal {
-        vm.startPrank(user2);
-        pool.proveTreeUpdate(pool.pendingCommitment(), _randProof(), _randFR());
-        vm.stopPrank();
-    }
-
-    function _transactReverted(bytes memory _data, bytes memory _revertReason) internal {
-        vm.prank(user2);
-        (bool status, bytes memory returnData) = address(pool).call(_data);
-        assert(!status);
-        assertEq(returnData, abi.encodeWithSignature("Error(string)", _revertReason));
-    }
-
-    function _randFR() internal returns (uint256) {
-        return uint256(keccak256(abi.encode(gasleft())))
-            % 21888242871839275222246405745257275088696311157297823662689037894645226208583;
-    }
-
-    function _randProof() internal returns (uint256[8] memory) {
-        return [_randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR()];
-    }
-
-    function _encodePermitDeposit(int256 _amount, uint256 _transactFee, uint256 _treeUpdateFee, address prover) internal returns (bytes memory) {
-        if (permitType == PermitType.Permit2) {
-            vm.prank(user1);
-            IERC20(token).approve(permit2, type(uint256).max);
-        }
-
-        uint256 expiry = block.timestamp + 1 hours;
-        bytes32 nullifier = bytes32(_randFR());
-
-        bytes memory signature;
-        {
-            bytes32 digest;
-            if (permitType == PermitType.BOBPermit) {
-                digest = _digestSaltedPermit(user1, address(pool), uint256(_amount + int256(_transactFee) + int256(_treeUpdateFee)), expiry, nullifier);
-            } else if (permitType == PermitType.Permit2) {
-                digest = _digestPermit2(user1, address(pool), uint256(_amount + int256(_transactFee) + int256(_treeUpdateFee)), expiry, nullifier);
-            } else if (permitType == PermitType.USDCPermit) {
-                digest = _digestUSDCPermit(user1, address(pool), uint256(_amount + int256(_transactFee) + int256(_treeUpdateFee)), expiry, nullifier);
-            }
-            (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, digest);
-            signature = abi.encodePacked(r, uint256(s) + (v == 28 ? (1 << 255) : 0));
-        }
-
-        bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector,
-            nullifier,
-            _randFR(),
-            uint48(0),
-            uint112(0),
-            int64(_amount / int256(denominator))
-        );
-        for (uint256 i = 0; i < 8; i++) {
-            data = abi.encodePacked(data, _randFR());
-        }
-
-        data = abi.encodePacked(
-            data,
-            uint16(3),
-            uint16(100)
-        );
-
-        data = abi.encodePacked(
-            data,
-            prover,
-            uint64(_transactFee / denominator),
-            uint64(_treeUpdateFee / denominator),
-            uint64(expiry),
-            user1,
-            bytes4(0x01000000),
-            _randFR()
-        );
-        return abi.encodePacked(data, signature);
-    }
-
-    function _digestSaltedPermit(
-        address _holder,
-        address _spender,
-        uint256 _value,
-        uint256 _expiry,
-        bytes32 _salt
-    )
-        internal
-        view
-        returns (bytes32)
-    {
-        uint256 nonce = IERC20Permit(token).nonces(_holder);
-        return ECDSA.toTypedDataHash(
-            IERC20Permit(token).DOMAIN_SEPARATOR(),
-            keccak256(
-                abi.encode(
-                    IERC20Permit(token).SALTED_PERMIT_TYPEHASH(), _holder, _spender, _value, nonce, _expiry, _salt
-                )
-            )
-        );
-    }
-
-    function _digestPermit2(
-        address _holder,
-        address _spender,
-        uint256 _value,
-        uint256 _expiry,
-        bytes32 _salt
-    )
-        internal
-        view
-        returns (bytes32)
-    {
-        return ECDSA.toTypedDataHash(
-            IPermit2(permit2).DOMAIN_SEPARATOR(),
-            keccak256(
-                abi.encode(
-                    PERMIT_TRANSFER_FROM_TYPEHASH,
-                    keccak256(abi.encode(TOKEN_PERMISSIONS_TYPEHASH, token, _value)),
-                    _spender,
-                    _salt,
-                    _expiry
-                )
-            )
-        );
-    }
-
-    function _digestUSDCPermit(
-        address _holder,
-        address _spender,
-        uint256 _value,
-        uint256 _expiry,
-        bytes32 _salt
-    )
-        internal
-        view
-        returns (bytes32)
-    {
-        return ECDSA.toTypedDataHash(
-            IERC20Permit(token).DOMAIN_SEPARATOR(),
-            keccak256(abi.encode(TRANSFER_WITH_AUTHORIZATION_TYPEHASH, _holder, _spender, _value, 0, _expiry, _salt))
-        );
-    }
-
-    function _directDeposit(uint256 amount, address fallbackUser, bytes memory _zkAddress) internal {
-        if (poolType == PoolType.ETH) {
-            ZkBobDirectDepositQueueETH(address(queue)).directNativeDeposit{value: amount}(fallbackUser, _zkAddress);
-        } else if (poolType == PoolType.BOB) {
-            IERC677(token).transferAndCall(address(queue), amount, abi.encode(fallbackUser, _zkAddress));
-        } else {
-            queue.directDeposit(fallbackUser, amount, _zkAddress);
-        }
     }
 }
 
