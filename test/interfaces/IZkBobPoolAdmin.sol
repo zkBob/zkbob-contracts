@@ -25,6 +25,8 @@ interface IZkBobPoolAdmin {
 
     function setEnergyRedeemer(IEnergyRedeemer _redeemer) external;
 
+    function setGracePeriod(uint64 _gracePeriod) external;
+
     function setMinTreeUpdateFee(uint64 _minTreeUpdateFee) external;
 
     function accounting() external view returns (address);

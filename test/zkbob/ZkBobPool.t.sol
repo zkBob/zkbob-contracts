@@ -28,7 +28,6 @@ import "../../src/zkbob/ZkBobPoolERC20.sol";
 import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "../../src/zkbob/ZkBobPoolETH.sol";
 import "../../src/infra/UniswapV3Seller.sol";
-import "../../src/utils/Ownable.sol";
 import {EnergyRedeemer} from "../../src/infra/EnergyRedeemer.sol";
 
 abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
@@ -151,10 +150,11 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         queue.setDirectDepositFee(uint64(0.1 ether / D));
         queue.setDirectDepositTimeout(1 days);
 
+        pool.setGracePeriod(5 minutes);
+        pool.setMinTreeUpdateFee(1);
+
         deal(token, user1, 1 ether / D);
         deal(token, user3, 0);
-        ZkBobPool(address(poolProxy)).transferOwnership(owner);
-        ZkBobPool(address(queueProxy)).transferOwnership(owner);
     }
 
     function _setUpDD() internal {
@@ -783,7 +783,7 @@ abstract contract AbstractZkBobPoolTest is AbstractZkBobPoolTestBase {
             uint64(4.9 ether / D / denominator) // second deposit amount
         );
         vm.expectEmit(true, false, false, true);
-        emit Message(0, bytes32(0), message);
+        emit Message(128, bytes32(0), message);
         vm.prank(user2);
         pool.appendDirectDeposits(indices, outCommitment, _randProof());
     }

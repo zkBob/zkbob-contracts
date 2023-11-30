@@ -66,7 +66,17 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     PriorityQueue.Queue internal pendingCommitments;
     uint64 internal lastTreeUpdateTimestamp;
     
+    /**
+     * @dev The duration of the grace period within which only the prover who submitted the transaction
+     * can submit the tree update proof.
+     */
     uint64 public gracePeriod = 5 minutes;
+
+    /**
+     * @dev The minimal fee required to be reserved for the prover who will submit the tree update proof.
+     * This fee is used to prevent spamming the pool with transactions that don't incentivize provers
+     * to provide tree update proof.
+     */
     uint64 public minTreeUpdateFee = 0;
 
     event UpdateOperatorManager(address manager);
@@ -109,10 +119,6 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         direct_deposit_queue = IZkBobDirectDepositQueue(_direct_deposit_queue);
 
         TOKEN_DENOMINATOR = _denominator;
-
-        // TODO: Hardcoded values for now
-        gracePeriod = 5 minutes;
-        minTreeUpdateFee = 0;
     }
 
     /**
@@ -192,11 +198,21 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         emit UpdateRedeemer(address(_redeemer));
     }
 
+    /**
+     * @dev Updates grace period duration.
+     * Callable only by the contract owner / proxy admin.
+     * @param _gracePeriod new grace period duration.
+     */
     function setGracePeriod(uint64 _gracePeriod) external onlyOwner {
         gracePeriod = _gracePeriod;
         emit UpdateGracePeriod(_gracePeriod);
     }
 
+    /**
+     * @dev Updates minimal fee required to be reserved for the prover who will submit the tree update proof.
+     * Callable only by the contract owner / proxy admin.
+     * @param _minTreeUpdateFee new minimal fee.
+     */
     function setMinTreeUpdateFee(uint64 _minTreeUpdateFee) external onlyOwner {
         minTreeUpdateFee = _minTreeUpdateFee;
         emit UpdateMinTreeUpdateFee(_minTreeUpdateFee);
@@ -272,15 +288,17 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             bytes32 message_hash = keccak256(message);
             bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
             all_messages_hash = _all_messages_hash;
-            pool_index = poolIndex;
 
-            // TODO: is it fine that index wasn't updated?
-            emit Message(poolIndex, _all_messages_hash, message);
+            // Since there is no way to skip commitments in the queue
+            // we can precompute the index of this commitment in the merkle tree
+            uint256 pendingIndex = poolIndex + 128 * pendingCommitments.getSize();
+            emit Message(pendingIndex, _all_messages_hash, message);
         }
 
         uint256 transactFee = _memo_transact_fee();
         uint256 treeUpdateFee = _memo_tree_update_fee();
 
+        require(minTreeUpdateFee > 0, "ZkBobPool: minimal tree update fee is not set");
         require(treeUpdateFee >= minTreeUpdateFee, "ZkBobPool: tree update fee is too low");
         
         uint256 fee = transactFee + treeUpdateFee;
@@ -359,21 +377,24 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         );
 
         // TODO: is it ok?
-        require(totalFee > minTreeUpdateFee, "ZkBobPool: tree update fee is too low");
+        require(minTreeUpdateFee > 0, "ZkBobPool: minimal tree update fee is not set");
+        require(totalFee >= minTreeUpdateFee, "ZkBobPool: tree update fee is too low");
         uint64 ddFee = uint64(totalFee) - minTreeUpdateFee;
+        
         _appendCommitment(_out_commit, minTreeUpdateFee, msg.sender);
 
         bytes32 message_hash = keccak256(message);
         bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
         all_messages_hash = _all_messages_hash;
-        pool_index = poolIndex;
 
-        if (totalFee > 0) {
+        if (ddFee > 0) {
             accumulatedFee[msg.sender] += ddFee;
         }
 
-        // TODO: is it fine that index wasn't updated?
-        emit Message(poolIndex, _all_messages_hash, message);
+        // Since there is no way to skip commitments in the queue
+        // we can precompute the index of this commitment in the merkle tree
+        uint256 pendingIndex = poolIndex + 128 * pendingCommitments.getSize();
+        emit Message(pendingIndex, _all_messages_hash, message);
     }
 
     /**
@@ -579,6 +600,9 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         return super._isOwner() || _admin() == _msgSender();
     }
 
+    /**
+     * @dev Appends a commitment to the pending commitments queue.
+     */
     function _appendCommitment(uint256 _commitment, uint64 _fee, address _prover) internal {
         pendingCommitments.pushBack(PriorityOperation({
             commitment: _commitment,
@@ -588,6 +612,10 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         }));
     }
 
+    /**
+     * @dev Validates either the grace period has passed or the caller 
+     * is the prover who submitted this commitment.
+     */
     function _validateGracePeriod(uint64 commitmentTimestamp, address privilegedProver) internal view {
         // We calculate the beggining of the grace period either from the timestamp of the last tree update,
         // or from the timestamp of the commitment, whichever is greater.
