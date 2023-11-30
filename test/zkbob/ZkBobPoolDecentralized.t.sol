@@ -5,6 +5,7 @@ pragma solidity 0.8.15;
 import {AbstractZkBobPoolTestBase} from "./ZkBobPool.t.sol";
 import {AllowListOperatorManager} from "../../src/zkbob/manager/AllowListOperatorManager.sol";
 import {IOperatorManager} from "../../src/interfaces/IOperatorManager.sol";
+import {IBatchDepositVerifier} from "../../src/interfaces/IBatchDepositVerifier.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../shared/ForkTests.t.sol";
 
@@ -167,6 +168,55 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
         vm.expectRevert(bytes(expectedRevertReason));
         vm.prank(caller);
         pool.proveTreeUpdate(commitment, _randProof(), _randFR());
+    }
+
+    function testDirectDepositsTreeUpdateFeeTooLow() public {
+        _setUpDD();
+
+        vm.startPrank(owner);
+
+        pool.setMinTreeUpdateFee(uint64(3));
+        queue.setDirectDepositFee(uint64(1));
+
+        vm.startPrank(user1);
+        
+        _directDeposit(10 ether / D, user2, zkAddress);
+        _directDeposit(5 ether / D, user2, zkAddress);
+        vm.stopPrank();
+
+        uint256[] memory indices = new uint256[](2);
+        indices[0] = 0;
+        indices[1] = 1;
+        address verifier = address(pool.batch_deposit_verifier());
+        uint256 outCommitment = _randFR();
+        vm.prank(prover1);
+        vm.expectRevert("ZkBobPool: tree update fee is too low");
+        pool.appendDirectDeposits(indices, outCommitment, _randProof());
+    }
+    function testDirectDepositsTreeFeesAccrued() public {
+        _setUpDD();
+
+        uint64 minTreeUpdateFee = uint64(0.01 ether / (D * denominator));
+        uint64 singleDirectDepositFee = uint64(0.1 ether / (D * denominator));
+        
+        vm.startPrank(owner);
+        pool.setMinTreeUpdateFee(minTreeUpdateFee);
+        queue.setDirectDepositFee(singleDirectDepositFee);
+
+        vm.startPrank(user1);
+        _directDeposit(10 ether / D, user2, zkAddress);
+        _directDeposit(5 ether / D, user2, zkAddress);
+        vm.stopPrank();
+
+        uint256[] memory indices = new uint256[](2);
+        indices[0] = 0;
+        indices[1] = 1;
+        address verifier = address(pool.batch_deposit_verifier());
+        uint256 outCommitment = _randFR();
+        vm.prank(prover1);
+        pool.appendDirectDeposits(indices, outCommitment, _randProof());
+        uint64 expectedFee = uint64(singleDirectDepositFee* 2 - minTreeUpdateFee);
+        assertEq(expectedFee, pool.accumulatedFee(prover1));
     }
 }
 

@@ -28,6 +28,7 @@ import "../../src/zkbob/ZkBobPoolERC20.sol";
 import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "../../src/zkbob/ZkBobPoolETH.sol";
 import "../../src/infra/UniswapV3Seller.sol";
+import "../../src/utils/Ownable.sol";
 import {EnergyRedeemer} from "../../src/infra/EnergyRedeemer.sol";
 
 abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
@@ -152,6 +153,8 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
 
         deal(token, user1, 1 ether / D);
         deal(token, user3, 0);
+        ZkBobPool(address(poolProxy)).transferOwnership(owner);
+        ZkBobPool(address(queueProxy)).transferOwnership(owner);
     }
 
     function _setUpDD() internal {
