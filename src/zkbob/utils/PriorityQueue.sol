@@ -61,6 +61,14 @@ library PriorityQueue {
         _queue.tail = tail + 1;
     }
 
+    function list(Queue storage _queue) external view returns ( PriorityOperation[] memory) {
+        PriorityOperation[] memory result = new PriorityOperation[] (_queue.getSize());
+        for (uint256 index = _queue.head; index < _queue.tail; index++) {
+            result[index-_queue.head] = _queue.data[index];
+        }
+        return result;
+    }
+
     /// @return The first unprocessed priority operation from the queue
     function front(Queue storage _queue) internal view returns (PriorityOperation memory) {
         require(!_queue.isEmpty(), "D"); // priority queue is empty
