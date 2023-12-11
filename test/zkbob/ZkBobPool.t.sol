@@ -732,7 +732,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         data = _encodeTransferWithPrefix(0.01 ether / D, bytes2(0x0001));
         _transactReverted(data, "ZkBobPool: bad message prefix");
 
-         data = _encodeTransferWithPrefix(0.01 ether / D, bytes2(0x1234));
+        data = _encodeTransferWithPrefix(0.01 ether / D, bytes2(0x1234));
         _transactReverted(data, "ZkBobPool: bad message prefix");
     }
 
@@ -797,7 +797,8 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());
         }
-        return abi.encodePacked(data, uint16(1), uint16(44), uint64(_fee / denominator), bytes2(0x0100), prefix, _randFR());
+        return
+            abi.encodePacked(data, uint16(1), uint16(44), uint64(_fee / denominator), bytes2(0x0100), prefix, _randFR());
     }
 
     function _transact(bytes memory _data) internal {
