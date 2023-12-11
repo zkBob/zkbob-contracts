@@ -719,6 +719,23 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         assertApproxEqAbs(rewardToken.balanceOf(user1), 1785 ether, 200 ether);
     }
 
+    function testTransactAcceptsOnlyValidPrefixes() public {
+        bytes memory data = _encodePermitDeposit(int256(0.5 ether / D), 0.01 ether / D);
+        _transact(data);
+
+        data = _encodeTransferWithPrefix(0.01 ether / D, bytes2(0x0000));
+        _transact(data);
+
+        data = _encodeTransferWithPrefix(0.01 ether / D, bytes2(0x0100));
+        _transact(data);
+
+        data = _encodeTransferWithPrefix(0.01 ether / D, bytes2(0x0001));
+        _transactReverted(data, "ZkBobPool: bad message prefix");
+
+         data = _encodeTransferWithPrefix(0.01 ether / D, bytes2(0x1234));
+        _transactReverted(data, "ZkBobPool: bad message prefix");
+    }
+
     function _encodeDeposit(int256 _amount, uint256 _fee) internal returns (bytes memory) {
         bytes32 nullifier = bytes32(_randFR());
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
@@ -770,13 +787,17 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
     }
 
     function _encodeTransfer(uint256 _fee) internal returns (bytes memory) {
+        return _encodeTransferWithPrefix(_fee, bytes2(0x0000));
+    }
+
+    function _encodeTransferWithPrefix(uint256 _fee, bytes2 prefix) internal returns (bytes memory) {
         bytes memory data = abi.encodePacked(
             ZkBobPool.transact.selector, _randFR(), _randFR(), uint48(0), uint112(0), -int64(uint64(_fee / denominator))
         );
         for (uint256 i = 0; i < 17; i++) {
             data = abi.encodePacked(data, _randFR());
         }
-        return abi.encodePacked(data, uint16(1), uint16(44), uint64(_fee / denominator), bytes4(0x01000000), _randFR());
+        return abi.encodePacked(data, uint16(1), uint16(44), uint64(_fee / denominator), bytes2(0x0100), prefix, _randFR());
     }
 
     function _transact(bytes memory _data) internal {
