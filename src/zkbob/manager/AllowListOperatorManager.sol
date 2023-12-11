@@ -25,17 +25,20 @@ contract AllowListOperatorManager is IOperatorManager, Ownable {
     event UpdateAllowListEnabled(bool enabled);
 
     modifier nonZeroAddress(address addr) {
-        require(addr != address(0), "WhitelistBasedOperatorManager: zero address");
+        require(addr != address(0), "AllowListOperatorManager: zero address");
         _;
     }
 
     constructor(
         address[] memory _operators, 
-        bool[] memory _allowed, 
         address[] memory _feeReceivers, 
-        bool _whitelistEnabled
+        bool _allowListEnabled
     ) Ownable() {
-        allowListEnabled = _whitelistEnabled;
+        allowListEnabled = _allowListEnabled;
+        bool[] memory _allowed = new bool[](_operators.length);
+        for (uint256 i = 0; i < _operators.length; i++) {
+            _allowed[i] = true;
+        }
         _setOperators(_operators, _allowed, _feeReceivers);
     }
     
@@ -69,8 +72,8 @@ contract AllowListOperatorManager is IOperatorManager, Ownable {
         bool[] memory _allowed,
         address[] memory _feeReceivers
     ) internal {
-        require(_operators.length == _feeReceivers.length, "WhitelistBasedOperatorManager: arrays length mismatch");
-        require(_operators.length == _allowed.length, "WhitelistBasedOperatorManager: arrays length mismatch");
+        require(_operators.length == _feeReceivers.length, "AllowListOperatorManager: arrays length mismatch");
+        require(_operators.length == _allowed.length, "AllowListOperatorManager: arrays length mismatch");
         
         for (uint256 i = 0; i < _operators.length; i++) {
             _setOperator(_operators[i], _allowed[i], _feeReceivers[i]);

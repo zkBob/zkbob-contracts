@@ -282,7 +282,8 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
 
     function _proveTreeUpdate() internal {
         vm.startPrank(user2);
-        pool.proveTreeUpdate(pool.pendingCommitment(), _randProof(), _randFR());
+        (uint256 commitment, , , ) = pool.pendingCommitment();
+        pool.proveTreeUpdate(commitment, _randProof(), _randFR());
         vm.stopPrank();
     }
 

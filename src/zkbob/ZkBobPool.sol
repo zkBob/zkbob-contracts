@@ -168,10 +168,15 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         return TOKEN_NUMERATOR == 1 ? TOKEN_DENOMINATOR : (1 << 255) | TOKEN_NUMERATOR;
     }
 
-    function pendingCommitment() external view returns (uint256 commitment) {
+    function pendingCommitment() external view returns (
+        uint256 commitment,
+        address privilegedProver,
+        uint64 timestamp,
+        uint64 fee
+    ) {
         PriorityOperation memory op = pendingCommitments.front();
         require(op.commitment != 0, "ZkBobPool: no pending commitment");
-        return op.commitment;
+        return (op.commitment, op.prover, op.timestamp, op.fee);
     }
 
     /**
@@ -214,6 +219,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      * @param _minTreeUpdateFee new minimal fee.
      */
     function setMinTreeUpdateFee(uint64 _minTreeUpdateFee) external onlyOwner {
+        require(_minTreeUpdateFee > 0, "ZkBobPool: tree update fee can't be zero");
         minTreeUpdateFee = _minTreeUpdateFee;
         emit UpdateMinTreeUpdateFee(_minTreeUpdateFee);
     }
@@ -376,7 +382,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             batch_deposit_verifier.verifyProof([hashsum], _batch_deposit_proof), "ZkBobPool: bad batch deposit proof"
         );
 
-        // TODO: is it ok?
+        // we reserve the minimal tree update fee for the prover who will submit the tree update proof
         require(minTreeUpdateFee > 0, "ZkBobPool: minimal tree update fee is not set");
         require(totalFee >= minTreeUpdateFee, "ZkBobPool: tree update fee is too low");
         uint64 ddFee = uint64(totalFee) - minTreeUpdateFee;

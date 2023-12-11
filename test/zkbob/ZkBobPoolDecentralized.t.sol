@@ -22,12 +22,11 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
 
     address[] provers = [prover1, prover2];
     address[] feeReceivers = [feeReceiver1, feeReceiver2];
-    bool[] allowed = [true, true];
     
     function setUp() public override {
         super.setUp();
 
-        manager = new AllowListOperatorManager(provers, allowed, feeReceivers, true);
+        manager = new AllowListOperatorManager(provers, feeReceivers, true);
         pool.setOperatorManager(IOperatorManager(manager));
     }
 
@@ -179,6 +178,64 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
         _proveTreeUpdate(prover2);
     }
 
+    function testDirectDepositsTreeUpdateFeeTooLow() public {
+        _setUpDD();
+
+        pool.setMinTreeUpdateFee(uint64(3));
+        queue.setDirectDepositFee(uint64(1));
+
+        vm.startPrank(user1);
+        
+        _directDeposit(10 ether / D, user2, zkAddress);
+        _directDeposit(5 ether / D, user2, zkAddress);
+        vm.stopPrank();
+
+        uint256[] memory indices = new uint256[](2);
+        indices[0] = 0;
+        indices[1] = 1;
+        
+        uint256 outCommitment = _randFR();
+        vm.prank(prover1);
+        vm.expectRevert("ZkBobPool: tree update fee is too low");
+        pool.appendDirectDeposits(indices, outCommitment, _randProof());
+    }
+
+    function testDirectDepositsTreeFeesAccrued() public {
+        _setUpDD();
+
+        uint64 minTreeUpdateFee = uint64(0.01 ether / (D * denominator));
+        uint64 singleDirectDepositFee = uint64(0.1 ether / (D * denominator));
+        
+        pool.setMinTreeUpdateFee(minTreeUpdateFee);
+        queue.setDirectDepositFee(singleDirectDepositFee);
+
+        vm.startPrank(user1);
+        _directDeposit(10 ether / D, user2, zkAddress);
+        _directDeposit(5 ether / D, user2, zkAddress);
+        vm.stopPrank();
+
+        uint256[] memory indices = new uint256[](2);
+        indices[0] = 0;
+        indices[1] = 1;
+        
+        uint256 outCommitment = _randFR();
+        vm.prank(prover1);
+        pool.appendDirectDeposits(indices, outCommitment, _randProof());
+        uint64 expectedFee = uint64(singleDirectDepositFee* 2 - minTreeUpdateFee);
+        assertEq(expectedFee, pool.accumulatedFee(prover1));
+
+        vm.prank(prover1);
+        pool.withdrawFee(prover1, feeReceiver1);
+        assertEq(IERC20(token).balanceOf(feeReceiver1), expectedFee * denominator);
+
+        _proveTreeUpdate(prover1);
+        assertEq(minTreeUpdateFee, pool.accumulatedFee(prover1));
+
+        vm.prank(prover1);
+        pool.withdrawFee(prover1, feeReceiver1);
+        assertEq(IERC20(token).balanceOf(feeReceiver1), (expectedFee + minTreeUpdateFee) * denominator);
+    }
+
     function _transact(bytes memory _data, address caller) internal {
         vm.prank(caller);
         (bool status,) = address(pool).call(_data);
@@ -197,13 +254,13 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
     }
 
     function _proveTreeUpdate(address caller) internal {
-        uint256 commitment = pool.pendingCommitment();
+        (uint256 commitment, , , ) = pool.pendingCommitment();
         vm.prank(caller);
         pool.proveTreeUpdate(commitment, _randProof(), _randFR());
     }
 
     function _proveTreeUpdateExpectRevert(address caller, string memory expectedRevertReason) internal {
-        uint256 commitment = pool.pendingCommitment();
+        (uint256 commitment, , , ) = pool.pendingCommitment();
         vm.expectRevert(bytes(expectedRevertReason));
         vm.prank(caller);
         pool.proveTreeUpdate(commitment, _randProof(), _randFR());
@@ -237,53 +294,6 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
     ) internal {
         vm.prank(prover);
         pool.appendDirectDeposits(indices, commitment, proof);
-    }
-
-    function testDirectDepositsTreeUpdateFeeTooLow() public {
-        _setUpDD();
-
-        pool.setMinTreeUpdateFee(uint64(3));
-        queue.setDirectDepositFee(uint64(1));
-
-        vm.startPrank(user1);
-        
-        _directDeposit(10 ether / D, user2, zkAddress);
-        _directDeposit(5 ether / D, user2, zkAddress);
-        vm.stopPrank();
-
-        uint256[] memory indices = new uint256[](2);
-        indices[0] = 0;
-        indices[1] = 1;
-        address verifier = address(pool.batch_deposit_verifier());
-        uint256 outCommitment = _randFR();
-        vm.prank(prover1);
-        vm.expectRevert("ZkBobPool: tree update fee is too low");
-        pool.appendDirectDeposits(indices, outCommitment, _randProof());
-    }
-
-    function testDirectDepositsTreeFeesAccrued() public {
-        _setUpDD();
-
-        uint64 minTreeUpdateFee = uint64(0.01 ether / (D * denominator));
-        uint64 singleDirectDepositFee = uint64(0.1 ether / (D * denominator));
-        
-        pool.setMinTreeUpdateFee(minTreeUpdateFee);
-        queue.setDirectDepositFee(singleDirectDepositFee);
-
-        vm.startPrank(user1);
-        _directDeposit(10 ether / D, user2, zkAddress);
-        _directDeposit(5 ether / D, user2, zkAddress);
-        vm.stopPrank();
-
-        uint256[] memory indices = new uint256[](2);
-        indices[0] = 0;
-        indices[1] = 1;
-        address verifier = address(pool.batch_deposit_verifier());
-        uint256 outCommitment = _randFR();
-        vm.prank(prover1);
-        pool.appendDirectDeposits(indices, outCommitment, _randProof());
-        uint64 expectedFee = uint64(singleDirectDepositFee* 2 - minTreeUpdateFee);
-        assertEq(expectedFee, pool.accumulatedFee(prover1));
     }
 }
 
