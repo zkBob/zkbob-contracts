@@ -45,12 +45,7 @@ contract DeployLocal is Script {
         EIP1967Proxy queueProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
 
         ZkBobPoolBOB poolImpl = new ZkBobPoolBOB(
-            zkBobPoolId,
-            address(bob),
-            transferVerifier,
-            treeVerifier,
-            batchDepositVerifier,
-            address(queueProxy)
+            zkBobPoolId, address(bob), transferVerifier, treeVerifier, batchDepositVerifier, address(queueProxy)
         );
         {
             bytes memory initData = abi.encodeWithSelector(ZkBobPool.initialize.selector, zkBobInitialRoot);

@@ -95,27 +95,42 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         ZkBobPool impl;
         if (poolType == PoolType.ETH) {
             impl = new ZkBobPoolETH(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
-                address(queueProxy), permit2
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
+                address(queueProxy),
+                permit2
             );
         } else if (poolType == PoolType.BOB) {
             impl = new ZkBobPoolBOB(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
                 address(queueProxy)
             );
         } else if (poolType == PoolType.USDC) {
             impl = new ZkBobPoolUSDC(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
                 address(queueProxy)
             );
         } else if (poolType == PoolType.ERC20) {
             impl = new ZkBobPoolERC20(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
-                address(queueProxy), permit2, 1_000_000_000
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
+                address(queueProxy),
+                permit2,
+                1_000_000_000
             );
         }
 
