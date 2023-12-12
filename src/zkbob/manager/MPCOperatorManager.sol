@@ -21,6 +21,8 @@ contract MPCOperatorManager is IOperatorManager, Ownable, CustomABIDecoder {
 
     address[] _operatorsList ;
 
+    event Log(uint256);
+
     // mapping of all historical fee receiver addresses, we keep fee receivers addresses
     // in a mapping to allow fee withdrawals even after operator address was changed
     mapping(address => Operator ) public  _operatorsMap;
@@ -62,29 +64,26 @@ contract MPCOperatorManager is IOperatorManager, Ownable, CustomABIDecoder {
 
     function _setOperators(
         address[] memory _newOperators, 
-        string[] memory URI,
+        string[] memory _URI,
         address[] memory _feeReceivers
     ) internal {
-        require(_newOperators.length == _feeReceivers.length, "WhitelistBasedOperatorManager: feeReceivers length mismatch");
-        require(_newOperators.length == URI.length, "WhitelistBasedOperatorManager: URI length mismatch");
+        require(_newOperators.length >0, "MPCManager: operators absent");
+        require(_newOperators.length == _feeReceivers.length, "MPCManager: feeReceivers length mismatch");
+        require(_newOperators.length == _URI.length, "MPCManager: URI length mismatch");
         
         //if new list is shorter than current, delete all extra records before overwriting them
-        if(_newOperators.length > _operatorsList.length) {
+        if(_newOperators.length < _operatorsList.length) {
             for (uint256 index = _newOperators.length; index < _operatorsList.length; index++) {
                 _operatorsList.pop();        
             }
         }
         //Overwrite all of the operators with new indices
         for (uint256 i = 0; i < _newOperators.length; i++) {
-            _setOperator(_newOperators[i],i, URI[i], _feeReceivers[i]);
+            emit Log(i+1);
+            _setOperator(_newOperators[i],i+1, _URI[i], _feeReceivers[i]);
         }
     }
 
-    //this should give a binary number 11...1 where every bit is considered to be operators verification flag
-    function bitmask() public view returns (uint256) {
-        uint256 _operatorsCount = _operatorsList.length;
-        return 1<<_operatorsCount - 1;
-    }
     function _setOperator(
         address _operator, 
         uint256 index,
@@ -94,7 +93,7 @@ contract MPCOperatorManager is IOperatorManager, Ownable, CustomABIDecoder {
         if (_feeReceiver != address(0) ) {
             
             _operatorsMap[_operator] = Operator(URI, index, _feeReceiver);
-            _operatorsList[index] = _operator;
+            _operatorsList.push(_operator);
         }
         emit UpdateOperator(_operator, _feeReceiver,URI);
     }
