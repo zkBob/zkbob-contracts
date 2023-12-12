@@ -7,6 +7,8 @@ import "../../utils/Ownable.sol";
 import "../utils/CustomABIDecoder.sol";
 import "../../../lib/@openzeppelin/contracts/contracts/utils/cryptography/ECDSA.sol";
 
+import "forge-std/console2.sol";
+
 /**
  * @title MPCOperatorManager
  * @dev Implements a specialized policy which utilizes offchain verifiers' signatures.
@@ -25,20 +27,27 @@ contract MPCOperatorManager is
     //     new MutableOperatorManager(_operator, _feeReceiver, _operatorURI);
     // }
 
-    constructor(address _operator, address _feeReceiver, string memory _operatorURI) Ownable() {
-        new MutableOperatorManager(_operator, _feeReceiver, _operatorURI);
-    }
+constructor(
+        address _operator,
+        address _feeReceiver,
+        string memory _operatorURI
+    )
+        MutableOperatorManager(_operator, _feeReceiver, _operatorURI)
+    {}
 
     function setSigners(address[] calldata _signers ) external onlyOwner {
         signers = _signers;
     }
 
-    function isOperator(address _addr) external view override returns (bool) {
+    function isOperator(address _addr) public view override returns (bool) {
          if (!super.isOperator(_addr)) {
             return false;
         }
         (uint8 count, bytes calldata signatures) = _mpc_signatures();
         uint256 _signersCount = signers.length;
+        console2.log("_signersCount", _signersCount);
+        console2.log("count", count);
+        
         require(count == _signersCount, "MPCOperatorManager: bad quorum");
         uint256 offset = 0;
         for (uint256 index = 0; index < _signersCount; index++) {

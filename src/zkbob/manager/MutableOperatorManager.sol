@@ -42,7 +42,7 @@ contract MutableOperatorManager is IOperatorManager, Ownable {
         emit UpdateOperator(_operator, _feeReceiver, _operatorURI);
     }
 
-    function isOperator(address _addr) external view override returns (bool) {
+    function isOperator(address _addr) public view virtual returns (bool) {
         return operator == _addr || operator == address(0);
     }
 
