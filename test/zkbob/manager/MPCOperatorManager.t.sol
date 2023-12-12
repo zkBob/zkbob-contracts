@@ -3,38 +3,37 @@ import "forge-std/Test.sol";
 import "../../../src/zkbob/manager/MPCOperatorManager.sol";
 
 contract MPCOperatorManagerTest is Test {
-    address[] _addresses;
-    address[] _feeReceivers;
-    string[] _URI;
+
     // MPCOperatorManager _manager;
 
-    (address fooAddr, uint256 key) = makeAddrAndKey("1337"); = makeAddr("foo");
+    
     address bar = makeAddr("bar");
+    address signer1Addr;
+    uint256 signer1Key;
+
+    address[]  signers ;
 
     function setUp() public {
-        _addresses.push(foo);
-        _URI.push("foo");
-        _feeReceivers.push(foo);
-        _addresses.push(bar);
-        _URI.push("bar");
-        _feeReceivers.push(bar);
+        
+        (signer1Addr,  signer1Key) = makeAddrAndKey("signer1");
+        // (address signer2Addr, uint256 signer2Key) = makeAddrAndKey("signer2");
+        // (address signer3Addr, uint256 signer3Key) = makeAddrAndKey("signer3");
+
+        signers.push(signer1Addr);
+        // signers.push(signer2Addr);
+        // signers.push(signer3Addr);
     }
 
     function testInit() public {
 
-        MPCOperatorManager _manager = new MPCOperatorManager(_addresses, _URI, _feeReceivers);
+        MPCOperatorManager _manager = new MPCOperatorManager(signer1Addr, signer1Addr, "");
 
-        (string memory URI,uint256 index,) =  _manager._operatorsMap(foo);
-        assertEq("foo", URI);
-        assertEq(index, 1);  
-        
-        (URI,index,) =  _manager._operatorsMap(bar);
-        assertEq("bar", URI);
-        assertEq(index, 2);   
+        // _manager.setSigners(_signers);
+        // 
     }
 
     function testIsOperator() public {
-        vm.prank(foo);
+        // vm.prank(foo);
 
     }
 }
