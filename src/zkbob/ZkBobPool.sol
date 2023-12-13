@@ -63,21 +63,28 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
     mapping(address => uint256) public accumulatedFee;
 
+    /**
+     * @dev Queue of pending commitments to be included in the Merkle Tree.
+     */
     PriorityQueue.Queue internal pendingCommitments;
+
+    /**
+     * @dev Timestamp of the last tree update.
+     */
     uint64 internal lastTreeUpdateTimestamp;
     
     /**
      * @dev The duration of the grace period within which only the prover who submitted the transaction
      * can submit the tree update proof.
      */
-    uint64 public gracePeriod = 5 minutes;
+    uint64 public gracePeriod;
 
     /**
      * @dev The minimal fee required to be reserved for the prover who will submit the tree update proof.
      * This fee is used to prevent spamming the pool with transactions that don't incentivize provers
      * to provide tree update proof.
      */
-    uint64 public minTreeUpdateFee = 0;
+    uint64 public minTreeUpdateFee;
 
     event UpdateOperatorManager(address manager);
     event UpdateAccounting(address accounting);
@@ -126,6 +133,14 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      */
     modifier onlyOperator() {
         require(operatorManager.isOperator(_msgSender()), "ZkBobPool: not an operator");
+        _;
+    }
+
+    /**
+     * @dev Throws if minimal tree update fee is not set.
+     */
+    modifier minTreeUpdateFeeIsSet() {
+        require(minTreeUpdateFee > 0, "ZkBobPool: minimal tree update fee is not set");
         _;
     }
 
@@ -261,7 +276,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      * Method uses a custom ABI encoding scheme described in CustomABIDecoder.
      * Single transact() call performs either deposit, withdrawal or shielded transfer operation.
      */
-    function transact() external onlyOperator {
+    function transact() external onlyOperator minTreeUpdateFeeIsSet {
         address user = msg.sender;
         uint256 txType = _tx_type();
         if (txType == 0) {
@@ -311,7 +326,6 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         uint256 transactFee = _memo_transact_fee();
         uint256 treeUpdateFee = _memo_tree_update_fee();
 
-        require(minTreeUpdateFee > 0, "ZkBobPool: minimal tree update fee is not set");
         require(treeUpdateFee >= minTreeUpdateFee, "ZkBobPool: tree update fee is too low");
         
         uint256 fee = transactFee + treeUpdateFee;
@@ -375,6 +389,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     )
         external
         onlyOperator
+        minTreeUpdateFeeIsSet
     {
         (uint256 total, uint256 totalFee, uint256 hashsum, bytes memory message) =
             direct_deposit_queue.collect(_indices, _out_commit);
@@ -390,7 +405,6 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         );
 
         // we reserve the minimal tree update fee for the prover who will submit the tree update proof
-        require(minTreeUpdateFee > 0, "ZkBobPool: minimal tree update fee is not set");
         require(totalFee >= minTreeUpdateFee, "ZkBobPool: tree update fee is too low");
         uint64 ddFee = uint64(totalFee) - minTreeUpdateFee;
         
