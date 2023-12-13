@@ -193,7 +193,7 @@ contract CustomABIDecoder {
 
     function _mpc_signatures_pos() internal pure returns ( uint256 pos) {
         uint256 t = _tx_type(); 
-        if (t==3) {
+        if (t==3 || t == 0) {
           pos = _sign_r_vs_pos() + sign_r_vs_size;
         } else {
             pos = _sign_r_vs_pos();
@@ -208,14 +208,18 @@ contract CustomABIDecoder {
             message.offset := 0
             message.length := message_length
         }
+
+        console2.log("_mpc_message");
+        console2.logBytes(message);
     }
     
+    uint256 constant signatures_count_size = 1;
     function _mpc_signatures() internal pure returns (uint8 count, bytes calldata signatures) {
-        uint256 countPos = _mpc_signatures_pos();
-        console2.log("mpc_signatures_pos", mpc_signatures_pos());
-        count = uint8(_loaduint256(countPos+8-uint256_size));
+        uint256 offset = _mpc_signatures_pos();
+        count = uint8(_loaduint256(offset + signatures_count_size - uint256_size));
         uint256 length = count * sign_r_vs_size;
-        uint256 offset = countPos + 8;
+
+        offset = offset + signatures_count_size;
         assembly {
             signatures.offset := offset
             signatures.length := length

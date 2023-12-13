@@ -17,6 +17,8 @@ import "../mocks/DummyImpl.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
+import "../../src/zkbob/manager/MPCOperatorManager.sol";
+import "../../src/zkbob/manager/MPCWrapper.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
 import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
 import "../interfaces/IZkBobDirectDepositsAdmin.sol";
@@ -29,6 +31,7 @@ import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "../../src/zkbob/ZkBobPoolETH.sol";
 import "../../src/infra/UniswapV3Seller.sol";
 import {EnergyRedeemer} from "../../src/infra/EnergyRedeemer.sol";
+import "forge-std/console2.sol";
 
 abstract contract AbstractZkBobPoolTest is AbstractForkTest {
     address constant permit2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
@@ -37,6 +40,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
 
     uint256 constant initialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
 
+    address [] signers;
     enum PoolType {
         BOB,
         ETH,
@@ -53,6 +57,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
     address token;
     address weth;
     address tempToken;
+    address wrapper;
     bool autoApproveQueue;
     PoolType poolType;
     PermitType permitType;
@@ -144,7 +149,14 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             0
         );
         pool.setAccounting(accounting);
-        operatorManager = new MutableOperatorManager(user2, user3, "https://example.com");
+        address relayer = makeAddr("relayer");
+        wrapper = address(new MPCWrapper(relayer, address(pool)));
+        (address signer1Addr, uint256 signer1Key) = makeAddrAndKey("signer1");
+        (address signer2Addr, uint256 signer2Key) = makeAddrAndKey("signer2");
+        signers.push(signer1Addr);
+        signers.push(signer2Addr);
+        MPCWrapper(wrapper).setSigners(signers);
+        operatorManager = new MutableOperatorManager(wrapper, user3, "https://example.com");
         pool.setOperatorManager(operatorManager);
         queue.setOperatorManager(operatorManager);
         queue.setDirectDepositFee(uint64(0.1 ether / D));
@@ -723,18 +735,31 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         bytes32 nullifier = bytes32(_randFR());
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
         bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector,
-            nullifier,
-            _randFR(),
-            uint48(0),
-            uint112(0),
-            int64(_amount / int256(denominator))
-        );
-        for (uint256 i = 0; i < 17; i++) {
+            ZkBobPool.transact.selector, //4
+            nullifier,//32
+            _randFR(),//32
+            uint48(0),//6
+            uint112(0),//14
+            int64(_amount / int256(denominator))//8
+        );//96
+        for (uint256 i = 0; i < 17; i++) {//32*17 = 544
             data = abi.encodePacked(data, _randFR());
         }
-        data = abi.encodePacked(data, uint16(0), uint16(44), uint64(_fee / denominator), bytes4(0x01000000), _randFR());
-        return abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
+        data = abi.encodePacked(
+            data, 
+        uint16(0)//2
+        ); //642
+        bytes memory memo = abi.encodePacked(
+            uint16(44), //2
+         uint64(_fee / denominator), //8
+          bytes4(0x01000000),//4
+           _randFR()//32
+           );
+        data = abi.encodePacked(data,memo);//688
+        data =  abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));//688+64=752
+        return data;
+
+        
     }
 
     function _encodeWithdrawal(
