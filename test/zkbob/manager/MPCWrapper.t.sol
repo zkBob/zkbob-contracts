@@ -55,7 +55,6 @@ contract MPCOperatorManagerTest is
         console2.logBytes32(digest);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, digest);
         signatureData = abi.encodePacked(
-            data,
             r,
             uint256(s) + (v == 28 ? (1 << 255) : 0)
         );
