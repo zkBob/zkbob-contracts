@@ -2,12 +2,14 @@
 
 pragma solidity ^0.8.13;
 
-/// @notice The structure that contains meta information of the L2 transaction that was requested from L1
-/// @dev The weird size of fields was selected specifically to minimize the structure storage size
-/// @param canonicalTxHash Hashed L2 transaction data that is needed to process it
-/// @param expirationTimestamp Expiration timestamp for this request (must be satisfied before)
-/// @param layer2Tip Additional payment to the validator as an incentive to perform the operation
-struct PriorityOperation {
+/**
+ * @dev The structure that stores all information about the pending commitment.
+ * @param commitment commitment value to be added in the Merkle Tree.
+ * @param prover address of the prover that submitted the commitment.
+ * @param fee fee reserved for the prover who will submit the tree update proof.
+ * @param timestamp commitment timestamp.
+ */
+struct PendingCommitment {
     uint256 commitment;
     address prover;
     uint64 fee;
@@ -15,7 +17,6 @@ struct PriorityOperation {
 }
 
 /// @author Matter Labs
-/// @custom:security-contact security@matterlabs.dev
 /// @dev The library provides the API to interact with the priority queue container
 /// @dev Order of processing operations from queue - FIFO (Fist in - first out)
 library PriorityQueue {
@@ -26,7 +27,7 @@ library PriorityQueue {
     /// @param head The pointer to the first unprocessed priority operation, equal to the tail if the queue is empty
     /// @param tail The pointer to the free slot
     struct Queue {
-        mapping(uint256 => PriorityOperation) data;
+        mapping(uint256 => PendingCommitment) data;
         uint256 tail;
         uint256 head;
     }
@@ -53,7 +54,7 @@ library PriorityQueue {
     }
 
     /// @notice Add the priority operation to the end of the priority queue
-    function pushBack(Queue storage _queue, PriorityOperation memory _operation) internal {
+    function pushBack(Queue storage _queue, PendingCommitment memory _operation) internal {
         // Save value into the stack to avoid double reading from the storage
         uint256 tail = _queue.tail;
 
@@ -61,8 +62,8 @@ library PriorityQueue {
         _queue.tail = tail + 1;
     }
 
-    function list(Queue storage _queue) external view returns ( PriorityOperation[] memory) {
-        PriorityOperation[] memory result = new PriorityOperation[] (_queue.getSize());
+    function list(Queue storage _queue) external view returns ( PendingCommitment[] memory) {
+        PendingCommitment[] memory result = new PendingCommitment[] (_queue.getSize());
         for (uint256 index = _queue.head; index < _queue.tail; index++) {
             result[index-_queue.head] = _queue.data[index];
         }
@@ -70,21 +71,21 @@ library PriorityQueue {
     }
 
     /// @return The first unprocessed priority operation from the queue
-    function front(Queue storage _queue) internal view returns (PriorityOperation memory) {
+    function front(Queue storage _queue) internal view returns (PendingCommitment memory) {
         require(!_queue.isEmpty(), "D"); // priority queue is empty
 
         return _queue.data[_queue.head];
     }
 
     /// @notice Remove the first unprocessed priority operation from the queue
-    /// @return priorityOperation that was popped from the priority queue
-    function popFront(Queue storage _queue) internal returns (PriorityOperation memory priorityOperation) {
+    /// @return pendingCommitment that was popped from the priority queue
+    function popFront(Queue storage _queue) internal returns (PendingCommitment memory pendingCommitment) {
         require(!_queue.isEmpty(), "s"); // priority queue is empty
 
         // Save value into the stack to avoid double reading from the storage
         uint256 head = _queue.head;
 
-        priorityOperation = _queue.data[head];
+        pendingCommitment = _queue.data[head];
         delete _queue.data[head];
         _queue.head = head + 1;
     }

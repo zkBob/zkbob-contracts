@@ -24,7 +24,7 @@ import "../utils/Ownable.sol";
 import "../proxy/EIP1967Admin.sol";
 import "../interfaces/IEnergyRedeemer.sol";
 import "../utils/ExternalSload.sol";
-import {PriorityQueue, PriorityOperation} from "./utils/PriorityQueue.sol";
+import {PriorityQueue, PendingCommitment} from "./utils/PriorityQueue.sol";
 
 /**
  * @title ZkBobPool
@@ -168,15 +168,22 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         return TOKEN_NUMERATOR == 1 ? TOKEN_DENOMINATOR : (1 << 255) | TOKEN_NUMERATOR;
     }
 
+    /**
+     * @dev Returns the first pending commitment in the prioirty queue.
+     * @return commitment commitment value.
+     * @return privilegedProver prover that can submit the tree update proof within the grace period.
+     * @return fee fee reserved for the prover who will submit the tree update proof.
+     * @return timestamp commitment timestamp.
+     */
     function pendingCommitment() external view returns (
         uint256 commitment,
         address privilegedProver,
-        uint64 timestamp,
-        uint64 fee
+        uint64 fee,
+        uint64 timestamp
     ) {
-        PriorityOperation memory op = pendingCommitments.front();
+        PendingCommitment memory op = pendingCommitments.front();
         require(op.commitment != 0, "ZkBobPool: no pending commitment");
-        return (op.commitment, op.prover, op.timestamp, op.fee);
+        return (op.commitment, op.prover, op.fee, op.timestamp);
     }
 
     /**
@@ -416,7 +423,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         uint256[8] calldata _proof, 
         uint256 _rootAfter
     ) external onlyOperator {
-        PriorityOperation memory commitment = pendingCommitments.popFront();
+        PendingCommitment memory commitment = pendingCommitments.popFront();
         require(commitment.commitment == _commitment, "ZkBobPool: commitment mismatch");
 
         _validateGracePeriod(commitment.timestamp, commitment.prover);
@@ -610,7 +617,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      * @dev Appends a commitment to the pending commitments queue.
      */
     function _appendCommitment(uint256 _commitment, uint64 _fee, address _prover) internal {
-        pendingCommitments.pushBack(PriorityOperation({
+        pendingCommitments.pushBack(PendingCommitment({
             commitment: _commitment,
             fee: _fee,
             prover: _prover,
