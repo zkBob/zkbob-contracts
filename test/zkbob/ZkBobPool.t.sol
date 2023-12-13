@@ -17,7 +17,6 @@ import "../mocks/DummyImpl.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
-import "../../src/zkbob/manager/MPCOperatorManager.sol";
 import "../../src/zkbob/manager/MPCWrapper.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
 import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";

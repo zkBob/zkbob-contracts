@@ -1,6 +1,6 @@
 pragma solidity ^0.8.15;
 import "forge-std/Test.sol";
-import "../../../src/zkbob/manager/MPCOperatorManager.sol";
+
 import "../ZkBobPool.t.sol";
 import "../../shared/Env.t.sol";
 
@@ -23,28 +23,6 @@ contract MPCOperatorManagerTest is
         permitType = PermitType.BOBPermit;
         denominator = 1_000_000_000;
         precision = 1_000_000_000;
-    }
-
-    function testIsOperator() public {
-        address operator = makeAddr("operator");
-        MPCOperatorManager _manager = new MPCOperatorManager(
-            operator,
-            operator,
-            "_"
-        );
-        _manager.transferOwnership(operator);
-
-        // (address signer1Addr, uint256 signer1Key) = makeAddrAndKey("signer1");
-        // (address signer2Addr, uint256 signer2Key) = makeAddrAndKey("signer2");
-        // signers.push(signer1Addr);
-        // signers.push(signer2Addr);
-        // vm.prank(operator);
-        // _manager.setSigners(signers);
-
-        // bytes memory data = _encodeDeposit(1 ether, 0.1 ether);
-        // data = abi.encodePacked(data, uint8(2));
-        // data = appendSignature(data, signer1Key);
-        // data = appendSignature(data, signer2Key);
     }
 
     function testTransact() public {
