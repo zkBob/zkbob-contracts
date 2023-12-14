@@ -37,32 +37,21 @@ contract MPCWrapper is Ownable, CustomABIDecoder {
         signers = _signers;
     }
 
-    modifier paramsVerified(
-        uint8 count,
-        bytes calldata signatures
-    ) {
-        require(count == signers.length, "MPCWrapper: wrong quorum");
-        uint256 length = msg.data.length - count * 64 - 1; //
-        bytes calldata message;
-        assembly 
-        {
-            message.offset:= 4 //we don't take the selector
-            message.length:= length
-        }
-        require(checkQuorum(count, signatures,message));
-        _;
-    }
+   
     modifier calldataVerified() {
         (uint8 count, bytes calldata signatures) = _mpc_signatures();
         require(count == signers.length, "MPCWrapper: wrong quorum");
-        require(checkQuorum(count, signatures, _mpc_message()));
+        bytes32 digest = ECDSA.toEthSignedMessageHash(
+            keccak256(_mpc_message())
+        );
+        require(checkQuorum(count, signatures, digest));
         _;
     }
 
     function checkQuorum(
         uint8 count,
         bytes calldata signatures,
-        bytes calldata message
+        bytes32 _digest
     ) internal returns (bool) {
         uint256 offset = 0;
         assembly {
@@ -76,17 +65,14 @@ contract MPCWrapper is Ownable, CustomABIDecoder {
                 vs := calldataload(add(32, offset))
                 offset := add(offset, 64)
             }
-            address signer = ECDSA.recover(
-                ECDSA.toEthSignedMessageHash(keccak256(message)),
-                r,
-                vs
-            );
+            address signer = ECDSA.recover(_digest, r, vs);
             if (signer != signers[index]) {
                 return false;
             }
         }
         return true;
     }
+
     function transact() external calldataVerified {
         return propagate();
     }
@@ -99,22 +85,27 @@ contract MPCWrapper is Ownable, CustomABIDecoder {
         uint256[8] calldata _tree_proof,
         uint8 mpc_count,
         bytes calldata signatures
-    )
-        external
-        paramsVerified(
-            mpc_count,
-            signatures
-        )
+    ) external {
+        require(mpc_count == signers.length, "MPCWrapper: wrong quorum");
 
-    {
-        require(true);
-        // IZkBobPool(pool).appendDirectDeposits(
-        //     _root_after,
-        //     _indices,
-        //     _out_commit,
-        //     _batch_deposit_proof,
-        //     _tree_proof
-        // );
+        bytes memory mpc_message = abi.encodePacked(
+            _root_after,
+            _indices,
+            _out_commit,
+            _batch_deposit_proof,
+            _tree_proof
+        );
+
+        bytes32 digest = ECDSA.toEthSignedMessageHash(keccak256(mpc_message));
+
+        require(checkQuorum(mpc_count, signatures, digest));
+        IZkBobPool(pool).appendDirectDeposits(
+            _root_after,
+            _indices,
+            _out_commit,
+            _batch_deposit_proof,
+            _tree_proof
+        );
     }
 
     function propagate() internal {

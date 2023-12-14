@@ -157,7 +157,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             signers.push(signer2Addr);
             MPCWrapper(operatorContract).setSigners(signers);
         } else {
-        operatorManager = new MutableOperatorManager(operatorEOA, user3, "https://example.com");
+        operatorManager = new MutableOperatorManager(user2, user3, "https://example.com");
         }
         pool.setOperatorManager(operatorManager);
         queue.setOperatorManager(operatorManager);

@@ -88,15 +88,15 @@ contract MPCOperatorManagerTest is
             uint64(4.9 ether / D / denominator), // second deposit amount
             new bytes(14 * 50)
         );
-        // vm.expectCall(
-        //     verifier,
-        //     abi.encodeWithSelector(
-        //         IBatchDepositVerifier.verifyProof.selector,
-        //         [uint256(keccak256(data)) %
-        //             21888242871839275222246405745257275088548364400416034343698204186575808495617]
-        //     )
-        // );
-        // vm.expectEmit(true, false, false, true);
+        vm.expectCall(
+            verifier,
+            abi.encodeWithSelector(
+                IBatchDepositVerifier.verifyProof.selector,
+                [uint256(keccak256(data)) %
+                    21888242871839275222246405745257275088548364400416034343698204186575808495617]
+            )
+        );
+        vm.expectEmit(true, false, false, true);
         emit CompleteDirectDepositBatch(indices);
         bytes memory message = abi.encodePacked(
             bytes4(0x02000001), // uint16(2) in little endian ++ MESSAGE_PREFIX_DIRECT_DEPOSIT_V1
@@ -116,12 +116,15 @@ contract MPCOperatorManagerTest is
         // vm.expectEmit(true, false, false, true);
         emit Message(128, bytes32(0), message);
         vm.prank(user2);
+        uint256 root_afer = _randFR();
+        uint256[8] memory batch_deposit_proof = _randProof();
+        uint256[8] memory tree_proof = _randProof();
         bytes memory mpcMessage = abi.encodePacked(
-            _randFR(),
+            root_afer,
             indices,
             outCommitment,
-            _randProof(),
-            _randProof()
+            batch_deposit_proof,
+            tree_proof
         );
 
         (, uint256 signer1Key) = makeAddrAndKey("signer1");
@@ -129,11 +132,11 @@ contract MPCOperatorManagerTest is
 
         
         MPCWrapper(wrapper).appendDirectDepositsMPC(
-            _randFR(),
+            root_afer,
             indices,
             outCommitment,
-            _randProof(),
-            _randProof(),
+            batch_deposit_proof,
+            tree_proof,
             2,
             abi.encodePacked(sign(mpcMessage, signer1Key), sign(mpcMessage, signer2Key))
         );
@@ -144,6 +147,7 @@ contract MPCOperatorManagerTest is
         bytes memory data,
         uint256 key
     ) internal returns (bytes memory signatureData) {
+
         bytes32 digest = ECDSA.toEthSignedMessageHash(keccak256(data));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, digest);
         signatureData = abi.encodePacked(
