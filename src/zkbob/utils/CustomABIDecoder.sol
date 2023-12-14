@@ -209,8 +209,6 @@ contract CustomABIDecoder {
             message.length := message_length
         }
 
-        console2.log("_mpc_message");
-        console2.logBytes(message);
     }
     
     uint256 constant signatures_count_size = 1;

@@ -52,17 +52,12 @@ contract MPCWrapper is Ownable, CustomABIDecoder {
                 vs := calldataload(add(32, offset))
                 offset := add(offset, 64)
             }
-            console2.log("step", index);
-            console2.logBytes32(r);
-            console2.logBytes32(vs);
             address signer = ECDSA.recover(
                 ECDSA.toEthSignedMessageHash(keccak256(_mpc_message())),
                 r,
                 vs
             );
             if (signer != signers[index]) {
-                console2.log("signer", signer);
-                console2.log("signers[index]", signers[index]);
                 return false;
             }
         }

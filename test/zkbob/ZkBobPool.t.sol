@@ -30,7 +30,6 @@ import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "../../src/zkbob/ZkBobPoolETH.sol";
 import "../../src/infra/UniswapV3Seller.sol";
 import {EnergyRedeemer} from "../../src/infra/EnergyRedeemer.sol";
-import "forge-std/console2.sol";
 
 abstract contract AbstractZkBobPoolTest is AbstractForkTest {
     address constant permit2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
@@ -56,12 +55,12 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
     address token;
     address weth;
     address tempToken;
-    address wrapper;
     bool autoApproveQueue;
     PoolType poolType;
     PermitType permitType;
     uint256 denominator;
     uint256 precision;
+    bool isMPC = false;
 
     bytes constant zkAddress = "QsnTijXekjRm9hKcq5kLNPsa6P4HtMRrc3RxVx3jsLHeo2AiysYxVJP86mriHfN";
 
@@ -148,14 +147,18 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             0
         );
         pool.setAccounting(accounting);
-        address relayer = makeAddr("relayer");
-        wrapper = address(new MPCWrapper(relayer, address(pool)));
-        (address signer1Addr, uint256 signer1Key) = makeAddrAndKey("signer1");
-        (address signer2Addr, uint256 signer2Key) = makeAddrAndKey("signer2");
-        signers.push(signer1Addr);
-        signers.push(signer2Addr);
-        MPCWrapper(wrapper).setSigners(signers);
-        operatorManager = new MutableOperatorManager(wrapper, user3, "https://example.com");
+        address operatorEOA = makeAddr("operatorEOA");
+        if(isMPC) {
+            address operatorContract = address(new MPCWrapper(operatorEOA, address(pool)));
+            operatorManager = new MutableOperatorManager(operatorContract, user3, "https://example.com");
+            (address signer1Addr, uint256 signer1Key) = makeAddrAndKey("signer1");
+            (address signer2Addr, uint256 signer2Key) = makeAddrAndKey("signer2");
+            signers.push(signer1Addr);
+            signers.push(signer2Addr);
+            MPCWrapper(operatorContract).setSigners(signers);
+        } else {
+        operatorManager = new MutableOperatorManager(operatorEOA, user3, "https://example.com");
+        }
         pool.setOperatorManager(operatorManager);
         queue.setOperatorManager(operatorManager);
         queue.setDirectDepositFee(uint64(0.1 ether / D));
