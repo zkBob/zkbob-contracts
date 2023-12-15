@@ -77,12 +77,16 @@ contract MPCWrapper is Ownable, CustomABIDecoder {
         return propagate();
     }
 
+    /**
+     * @notice _tree_proof must be uint256[8] memory to avoid
+     * https://soliditylang.org/blog/2022/08/08/calldata-tuple-reencoding-head-overflow-bug/
+     */
     function appendDirectDepositsMPC(
         uint256 _root_after,
         uint256[] calldata _indices,
         uint256 _out_commit,
         uint256[8] calldata _batch_deposit_proof,
-        uint256[8] calldata _tree_proof,
+        uint256[8] memory _tree_proof,
         uint8 mpc_count,
         bytes calldata signatures
     ) external {
