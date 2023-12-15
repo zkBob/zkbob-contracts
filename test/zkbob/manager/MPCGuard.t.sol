@@ -6,7 +6,7 @@ import "../../shared/Env.t.sol";
 
 import "../../shared/ForkTests.t.sol";
 
-import "../../../src/zkbob/manager/MPCWrapper.sol";
+import "../../../src/zkbob/manager/MPCGuard.sol";
 
 contract MPCOperatorManagerTest is
     AbstractZkBobPoolTest,
@@ -48,14 +48,14 @@ contract MPCOperatorManagerTest is
     }
 
     function withMPC(bytes memory data) internal returns (bytes memory) {
-        (address signer1Addr, uint256 signer1Key) = makeAddrAndKey("signer1");
-        (address signer2Addr, uint256 signer2Key) = makeAddrAndKey("signer2");
+        (address guard1Addr, uint256 guard1Key) = makeAddrAndKey("guard1");
+        (address guard2Addr, uint256 guard2Key) = makeAddrAndKey("guard2");
         return
             abi.encodePacked(
                 data,
                 uint8(2), //753
-                sign(data, signer1Key), //817
-                sign(data, signer2Key) //881
+                sign(data, guard1Key), //817
+                sign(data, guard2Key) //881
             );
     }
 
@@ -127,18 +127,17 @@ contract MPCOperatorManagerTest is
             tree_proof
         );
 
-        (, uint256 signer1Key) = makeAddrAndKey("signer1");
-        (, uint256 signer2Key) = makeAddrAndKey("signer2");
+        (, uint256 guard1Key) = makeAddrAndKey("guard1");
+        (, uint256 guard2Key) = makeAddrAndKey("guard2");
 
         
-        MPCWrapper(wrapper).appendDirectDepositsMPC(
+        MPCGuard(wrapper).appendDirectDepositsMPC(
             root_afer,
             indices,
             outCommitment,
             batch_deposit_proof,
             tree_proof,
-            2,
-            abi.encodePacked(sign(mpcMessage, signer1Key), sign(mpcMessage, signer2Key))
+            abi.encodePacked(sign(mpcMessage, guard1Key), sign(mpcMessage, guard2Key))
         );
         
     }
@@ -146,7 +145,7 @@ contract MPCOperatorManagerTest is
     function sign(
         bytes memory data,
         uint256 key
-    ) internal returns (bytes memory signatureData) {
+    ) internal pure returns (bytes memory signatureData) {
 
         bytes32 digest = ECDSA.toEthSignedMessageHash(keccak256(data));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, digest);

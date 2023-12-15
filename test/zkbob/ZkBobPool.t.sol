@@ -17,7 +17,7 @@ import "../mocks/DummyImpl.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
-import "../../src/zkbob/manager/MPCWrapper.sol";
+import "../../src/zkbob/manager/MPCGuard.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
 import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
 import "../interfaces/IZkBobDirectDepositsAdmin.sol";
@@ -147,15 +147,15 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             0
         );
         pool.setAccounting(accounting);
-        address operatorEOA = makeAddr("operatorEOA");
         if(isMPC) {
-            address operatorContract = address(new MPCWrapper(operatorEOA, address(pool)));
+            address operatorEOA = makeAddr("operatorEOA");
+            address operatorContract = address(new MPCGuard(operatorEOA, address(pool)));
             operatorManager = new MutableOperatorManager(operatorContract, user3, "https://example.com");
-            (address signer1Addr, uint256 signer1Key) = makeAddrAndKey("signer1");
-            (address signer2Addr, uint256 signer2Key) = makeAddrAndKey("signer2");
-            signers.push(signer1Addr);
-            signers.push(signer2Addr);
-            MPCWrapper(operatorContract).setSigners(signers);
+            (address guard1Addr, ) = makeAddrAndKey("guard1");
+            (address guard2Addr, ) = makeAddrAndKey("guard2");
+            signers.push(guard1Addr);
+            signers.push(guard2Addr);
+            MPCGuard(operatorContract).setGuards(signers);
         } else {
         operatorManager = new MutableOperatorManager(user2, user3, "https://example.com");
         }

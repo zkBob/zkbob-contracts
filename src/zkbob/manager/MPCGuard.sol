@@ -5,12 +5,15 @@ import "../utils/CustomABIDecoder.sol";
 
 import "../../interfaces/IZkBobPool.sol";
 
-contract MPCWrapper is Ownable, CustomABIDecoder {
-    address[] private signers;
+contract MPCGuard is Ownable, CustomABIDecoder {
+
+    address[] private guards;
 
     address operator;
 
     address public immutable pool;
+
+    uint256 constant SIGNATURE_SIZE = 64;
 
     constructor(address _operator, address _pool) {
         pool = _pool;
@@ -33,31 +36,30 @@ contract MPCWrapper is Ownable, CustomABIDecoder {
         _setOperator(_operator);
     }
 
-    function setSigners(address[] calldata _signers) external onlyOwner {
-        signers = _signers;
+    function setGuards(address[] calldata _guards) external onlyOwner {
+        guards = _guards;
     }
 
    
     modifier calldataVerified() {
         (uint8 count, bytes calldata signatures) = _mpc_signatures();
-        require(count == signers.length, "MPCWrapper: wrong quorum");
+        require(count == guards.length, "MPCWrapper: wrong quorum");
         bytes32 digest = ECDSA.toEthSignedMessageHash(
             keccak256(_mpc_message())
         );
-        require(checkQuorum(count, signatures, digest));
+        require(checkQuorum(signatures, digest));
         _;
     }
 
     function checkQuorum(
-        uint8 count,
         bytes calldata signatures,
         bytes32 _digest
-    ) internal returns (bool) {
+    ) internal view returns (bool) {
         uint256 offset = 0;
         assembly {
             offset := signatures.offset
         }
-        for (uint256 index = 0; index < signers.length; index++) {
+        for (uint256 index = 0; index < guards.length; index++) {
             bytes32 r;
             bytes32 vs;
             assembly {
@@ -66,7 +68,7 @@ contract MPCWrapper is Ownable, CustomABIDecoder {
                 offset := add(offset, 64)
             }
             address signer = ECDSA.recover(_digest, r, vs);
-            if (signer != signers[index]) {
+            if (signer != guards[index]) {
                 return false;
             }
         }
@@ -87,10 +89,9 @@ contract MPCWrapper is Ownable, CustomABIDecoder {
         uint256 _out_commit,
         uint256[8] calldata _batch_deposit_proof,
         uint256[8] memory _tree_proof,
-        uint8 mpc_count,
         bytes calldata signatures
     ) external {
-        require(mpc_count == signers.length, "MPCWrapper: wrong quorum");
+        require(signatures.length == guards.length * SIGNATURE_SIZE, "MPCWrapper: wrong quorum");
 
         bytes memory mpc_message = abi.encodePacked(
             _root_after,
@@ -102,7 +103,7 @@ contract MPCWrapper is Ownable, CustomABIDecoder {
 
         bytes32 digest = ECDSA.toEthSignedMessageHash(keccak256(mpc_message));
 
-        require(checkQuorum(mpc_count, signatures, digest));
+        require(checkQuorum(signatures, digest));
         IZkBobPool(pool).appendDirectDeposits(
             _root_after,
             _indices,
