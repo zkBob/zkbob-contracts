@@ -38,7 +38,8 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
 
     uint256 constant initialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
 
-    address [] signers;
+    address[] guardians;
+
     enum PoolType {
         BOB,
         ETH,
@@ -98,27 +99,42 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         ZkBobPool impl;
         if (poolType == PoolType.ETH) {
             impl = new ZkBobPoolETH(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
-                address(queueProxy), permit2
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
+                address(queueProxy),
+                permit2
             );
         } else if (poolType == PoolType.BOB) {
             impl = new ZkBobPoolBOB(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
                 address(queueProxy)
             );
         } else if (poolType == PoolType.USDC) {
             impl = new ZkBobPoolUSDC(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
                 address(queueProxy)
             );
         } else if (poolType == PoolType.ERC20) {
             impl = new ZkBobPoolERC20(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
-                address(queueProxy), permit2, 1_000_000_000
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
+                address(queueProxy),
+                permit2,
+                1_000_000_000
             );
         }
 
@@ -147,17 +163,17 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             0
         );
         pool.setAccounting(accounting);
-        if(isMPC) {
+        if (isMPC) {
             address operatorEOA = makeAddr("operatorEOA");
             address operatorContract = address(new MPCGuard(operatorEOA, address(pool)));
             operatorManager = new MutableOperatorManager(operatorContract, user3, "https://example.com");
-            (address guard1Addr, ) = makeAddrAndKey("guard1");
-            (address guard2Addr, ) = makeAddrAndKey("guard2");
-            signers.push(guard1Addr);
-            signers.push(guard2Addr);
-            MPCGuard(operatorContract).setGuards(signers);
+            (address guard1Addr,) = makeAddrAndKey("guard1");
+            (address guard2Addr,) = makeAddrAndKey("guard2");
+            guardians.push(guard1Addr);
+            guardians.push(guard2Addr);
+            MPCGuard(operatorContract).setGuards(guardians);
         } else {
-        operatorManager = new MutableOperatorManager(user2, user3, "https://example.com");
+            operatorManager = new MutableOperatorManager(user2, user3, "https://example.com");
         }
         pool.setOperatorManager(operatorManager);
         queue.setOperatorManager(operatorManager);
@@ -738,30 +754,29 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
         bytes memory data = abi.encodePacked(
             ZkBobPool.transact.selector, //4
-            nullifier,//32
-            _randFR(),//32
-            uint48(0),//6
-            uint112(0),//14
-            int64(_amount / int256(denominator))//8
-        );//96
-        for (uint256 i = 0; i < 17; i++) {//32*17 = 544
+            nullifier, //32
+            _randFR(), //32
+            uint48(0), //6
+            uint112(0), //14
+            int64(_amount / int256(denominator)) //8
+        ); //96
+        for (uint256 i = 0; i < 17; i++) {
+            //32*17 = 544
             data = abi.encodePacked(data, _randFR());
         }
         data = abi.encodePacked(
-            data, 
-        uint16(0)//2
+            data,
+            uint16(0) //2
         ); //642
         bytes memory memo = abi.encodePacked(
             uint16(44), //2
-         uint64(_fee / denominator), //8
-          bytes4(0x01000000),//4
-           _randFR()//32
-           );
-        data = abi.encodePacked(data,memo);//688
-        data =  abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));//688+64=752
+            uint64(_fee / denominator), //8
+            bytes4(0x01000000), //4
+            _randFR() //32
+        );
+        data = abi.encodePacked(data, memo); //688
+        data = abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0)); //688+64=752
         return data;
-
-        
     }
 
     function _encodeWithdrawal(
