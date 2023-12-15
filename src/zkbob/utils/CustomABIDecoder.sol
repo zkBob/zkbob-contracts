@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 pragma solidity 0.8.15;
-import "forge-std/console2.sol";
+
 contract CustomABIDecoder {
     uint256 constant transfer_nullifier_pos = 4;
     uint256 constant transfer_nullifier_size = 32;

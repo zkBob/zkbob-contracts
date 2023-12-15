@@ -94,6 +94,7 @@ contract MPCGuard is Ownable, CustomABIDecoder {
         require(signatures.length == guards.length * SIGNATURE_SIZE, "MPCWrapper: wrong quorum");
 
         bytes memory mpc_message = abi.encodePacked(
+            ZkBobPool(pool).appendDirectDeposits.selector,
             _root_after,
             _indices,
             _out_commit,
@@ -115,11 +116,12 @@ contract MPCGuard is Ownable, CustomABIDecoder {
 
     function propagate() internal {
         address contractAddress = pool;
+        uint256 _calldatasize = _mpc_signatures_pos(); //we don't need to propagate signatures
         assembly {
             // Copy msg.data. We take full control of memory in this inline assembly
             // block because it will not return to Solidity code. We overwrite the
             // Solidity scratch pad at memory position 0.
-            calldatacopy(0, 0, calldatasize())
+            calldatacopy(0, 0, _calldatasize)
 
             // Call the implementation.
             // out and outsize are 0 because we don't know the size yet.
@@ -128,7 +130,7 @@ contract MPCGuard is Ownable, CustomABIDecoder {
                 contractAddress,
                 0,
                 0,
-                calldatasize(),
+                _calldatasize,
                 0,
                 0
             )

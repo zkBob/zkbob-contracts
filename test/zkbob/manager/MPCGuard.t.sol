@@ -48,8 +48,8 @@ contract MPCOperatorManagerTest is
     }
 
     function withMPC(bytes memory data) internal returns (bytes memory) {
-        (address guard1Addr, uint256 guard1Key) = makeAddrAndKey("guard1");
-        (address guard2Addr, uint256 guard2Key) = makeAddrAndKey("guard2");
+        (, uint256 guard1Key) = makeAddrAndKey("guard1");
+        (, uint256 guard2Key) = makeAddrAndKey("guard2");
         return
             abi.encodePacked(
                 data,
@@ -115,11 +115,12 @@ contract MPCOperatorManagerTest is
         );
         // vm.expectEmit(true, false, false, true);
         emit Message(128, bytes32(0), message);
-        vm.prank(user2);
+        
         uint256 root_afer = _randFR();
         uint256[8] memory batch_deposit_proof = _randProof();
         uint256[8] memory tree_proof = _randProof();
         bytes memory mpcMessage = abi.encodePacked(
+            ZkBobPool.appendDirectDeposits.selector,
             root_afer,
             indices,
             outCommitment,
@@ -130,7 +131,7 @@ contract MPCOperatorManagerTest is
         (, uint256 guard1Key) = makeAddrAndKey("guard1");
         (, uint256 guard2Key) = makeAddrAndKey("guard2");
 
-        
+        vm.prank(makeAddr("operatorEOA"));
         MPCGuard(wrapper).appendDirectDepositsMPC(
             root_afer,
             indices,
