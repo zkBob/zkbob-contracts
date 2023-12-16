@@ -1,5 +1,4 @@
 pragma solidity 0.8.15;
-
 import "../../../src/zkbob/ZkBobPool.sol";
 import "../../utils/Ownable.sol";
 import "../utils/CustomABIDecoder.sol";
@@ -40,15 +39,30 @@ contract MPCGuard is Ownable, CustomABIDecoder {
         guards = _guards;
     }
 
+    function digest(bytes memory data) internal returns (bytes32) {
+        return ECDSA.toEthSignedMessageHash(keccak256(data));
+    }
+
     modifier calldataVerified() {
         (uint8 count, bytes calldata signatures) = _mpc_signatures();
         require(count == guards.length, "MPCWrapper: wrong quorum");
-        bytes32 digest = ECDSA.toEthSignedMessageHash(keccak256(_mpc_message()));
-        require(checkQuorum(signatures, digest));
+        ZkBobPool poolContract = ZkBobPool(pool);
+        uint256 currentRoot = poolContract.roots(poolContract.pool_index());
+        uint256 transferRoot = poolContract.roots(_transfer_index());
+        require(
+            checkQuorum(
+                signatures,
+                digest(abi.encodePacked(_mpc_message(), transferRoot, currentRoot))
+            ),
+            "MPCWrapper: wrong quorum"
+        );
         _;
     }
 
-    function checkQuorum(bytes calldata signatures, bytes32 _digest) internal view returns (bool) {
+    function checkQuorum(
+        bytes calldata signatures,
+        bytes32 _digest
+    ) internal view returns (bool) {
         uint256 offset = 0;
         assembly {
             offset := signatures.offset
@@ -84,11 +98,13 @@ contract MPCGuard is Ownable, CustomABIDecoder {
         uint256[8] calldata _batch_deposit_proof,
         uint256[8] memory _tree_proof,
         bytes calldata signatures
-    )
-        external
-        onlyOperator
-    {
-        require(signatures.length == guards.length * SIGNATURE_SIZE, "MPCWrapper: wrong quorum");
+    ) external onlyOperator {
+        require(
+            signatures.length == guards.length * SIGNATURE_SIZE,
+            "MPCWrapper: wrong quorum"
+        );
+
+        ZkBobPool poolContract = ZkBobPool(pool);
 
         bytes memory mpc_message = abi.encodePacked(
             ZkBobPool(pool).appendDirectDeposits.selector,
@@ -96,13 +112,18 @@ contract MPCGuard is Ownable, CustomABIDecoder {
             _indices,
             _out_commit,
             _batch_deposit_proof,
-            _tree_proof
+            _tree_proof,
+            poolContract.roots(poolContract.pool_index())
         );
 
-        bytes32 digest = ECDSA.toEthSignedMessageHash(keccak256(mpc_message));
-
-        require(checkQuorum(signatures, digest));
-        IZkBobPool(pool).appendDirectDeposits(_root_after, _indices, _out_commit, _batch_deposit_proof, _tree_proof);
+        require(checkQuorum(signatures, digest(mpc_message)));
+        IZkBobPool(pool).appendDirectDeposits(
+            _root_after,
+            _indices,
+            _out_commit,
+            _batch_deposit_proof,
+            _tree_proof
+        );
     }
 
     function propagate() internal {
@@ -116,15 +137,27 @@ contract MPCGuard is Ownable, CustomABIDecoder {
 
             // Call the implementation.
             // out and outsize are 0 because we don't know the size yet.
-            let result := call(gas(), contractAddress, 0, 0, _calldatasize, 0, 0)
+            let result := call(
+                gas(),
+                contractAddress,
+                0,
+                0,
+                _calldatasize,
+                0,
+                0
+            )
 
             // Copy the returned data.
             returndatacopy(0, 0, returndatasize())
 
             switch result
             // delegatecall returns 0 on error.
-            case 0 { revert(0, returndatasize()) }
-            default { return(0, returndatasize()) }
+            case 0 {
+                revert(0, returndatasize())
+            }
+            default {
+                return(0, returndatasize())
+            }
         }
     }
 }
