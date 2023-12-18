@@ -74,8 +74,7 @@ contract DeployLocal is Script {
         }
 
         {
-
-            MPCGuard guard = new MPCGuard(zkBobRelayer,address(pool));
+            MPCGuard guard = new MPCGuard(zkBobRelayer, address(pool));
             address[] memory guardians = new address[](2);
             guardians[0] = address(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266);
             guardians[1] = address(0x70997970C51812dc3A010C7d01b50e0d17dc79C8);

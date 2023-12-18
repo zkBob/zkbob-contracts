@@ -64,8 +64,12 @@ contract DeployZkBobPoolModules is Script, Test {
         vm.startBroadcast();
 
         ZkBobPoolUSDC impl = new ZkBobPoolUSDC(
-            pool.pool_id(), pool.token(), pool.transfer_verifier(), pool.tree_verifier(),
-            pool.batch_deposit_verifier(), address(pool.direct_deposit_queue())
+            pool.pool_id(),
+            pool.token(),
+            pool.transfer_verifier(),
+            pool.tree_verifier(),
+            pool.batch_deposit_verifier(),
+            address(pool.direct_deposit_queue())
         );
         Migrator mig = new Migrator();
         ZkBobAccounting acc = new ZkBobAccounting(address(pool), 1_000_000_000);
