@@ -39,7 +39,7 @@ contract MPCGuard is Ownable, CustomABIDecoder {
         guards = _guards;
     }
 
-    function digest(bytes memory data) internal returns (bytes32) {
+    function digest(bytes memory data) internal pure returns (bytes32) {
         return ECDSA.toEthSignedMessageHash(keccak256(data));
     }
 
