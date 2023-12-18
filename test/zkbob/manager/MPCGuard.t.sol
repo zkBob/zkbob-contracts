@@ -45,7 +45,9 @@ contract MPCOperatorManagerTest is AbstractZkBobPoolTest, AbstractPolygonForkTes
     }
 
     function testWithdrawMPC() public {
-        bytes memory data = withMPC(_encodeWithdrawal(user1, 0.1 ether, 0.001 ether, 0));
+        bytes memory data = withMPC(_encodePermitDeposit(0.111 ether, 0.01 ether)); //752
+        _transactMPC(data);
+        data = withMPC(_encodeWithdrawal(user1, 0.1 ether, 0.001 ether, 0));
 
         _transactMPC(data);
     }
