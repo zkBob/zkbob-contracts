@@ -14,7 +14,7 @@ contract MPCGuard is Ownable, CustomABIDecoder {
 
     uint256 constant SIGNATURE_SIZE = 64;
 
-    constructor(address _operator, address _pool) {
+    constructor(address _operator, address _pool) Ownable() {
         pool = _pool;
         _setOperator(_operator);
     }
