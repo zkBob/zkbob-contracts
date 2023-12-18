@@ -52,7 +52,14 @@ contract MPCGuard is Ownable, CustomABIDecoder {
         require(
             checkQuorum(
                 signatures,
-                digest(abi.encodePacked(_mpc_message(), transferRoot, currentRoot))
+                digest(
+                    abi.encodePacked(
+                        _mpc_message(),
+                        transferRoot,
+                        currentRoot,
+                        poolContract.pool_id()
+                    )
+                )
             ),
             "MPCWrapper: wrong quorum"
         );
@@ -113,7 +120,8 @@ contract MPCGuard is Ownable, CustomABIDecoder {
             _out_commit,
             _batch_deposit_proof,
             _tree_proof,
-            poolContract.roots(poolContract.pool_index())
+            poolContract.roots(poolContract.pool_index()),
+            poolContract.pool_id()
         );
 
         require(checkQuorum(signatures, digest(mpc_message)));

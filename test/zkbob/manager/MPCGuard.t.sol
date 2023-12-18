@@ -75,7 +75,8 @@ contract MPCOperatorManagerTest is
         bytes memory challenge = abi.encodePacked(
             data,
             transfer_root,
-            current_root
+            current_root,
+            poolContract.pool_id()
         );
         (, uint256 guard1Key) = makeAddrAndKey("guard1");
         (, uint256 guard2Key) = makeAddrAndKey("guard2");
@@ -156,7 +157,8 @@ contract MPCOperatorManagerTest is
             outCommitment,
             batch_deposit_proof,
             tree_proof,
-            poolContract.roots(poolContract.pool_index())
+            poolContract.roots(poolContract.pool_index()),
+            poolContract.pool_id()
         );
 
         (, uint256 guard1Key) = makeAddrAndKey("guard1");
