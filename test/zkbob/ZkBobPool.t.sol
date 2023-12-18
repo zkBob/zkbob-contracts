@@ -175,16 +175,16 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             address[] memory users = new address[](2);
             users[0] = operatorContract;
             users[1] = address(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266);
-             accounting.setLimits(
-            1,
-            2_000_000 ether / D / denominator,
-            200_000 ether / D / denominator,
-            200_000 ether / D / denominator,
-            20_000 ether / D / denominator,
-            20_000 ether / D / denominator,
-            25 ether / D / denominator,
-            10 ether / D / denominator
-        );
+            accounting.setLimits(
+                1,
+                2_000_000 ether / D / denominator,
+                200_000 ether / D / denominator,
+                200_000 ether / D / denominator,
+                20_000 ether / D / denominator,
+                20_000 ether / D / denominator,
+                25 ether / D / denominator,
+                10 ether / D / denominator
+            );
             accounting.setUsersTier(1, users);
         } else {
             operatorManager = new MutableOperatorManager(user2, user3, "https://example.com");
