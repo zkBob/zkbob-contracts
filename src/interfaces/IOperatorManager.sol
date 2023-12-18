@@ -3,7 +3,6 @@
 pragma solidity 0.8.15;
 
 interface IOperatorManager {
-
     function operator() external returns (address);
 
     function isOperator(address _addr) external view returns (bool);
