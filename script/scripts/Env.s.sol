@@ -25,7 +25,7 @@ bytes32 constant bobSalt = bytes32(uint256(285834900769));
 // zkbob
 uint256 constant zkBobPoolId = 0; // 0 is reserved for Polygon MVP pool, do not use for other deployments
 PoolType constant zkBobPoolType = PoolType.BOB;
-string constant zkBobVerifiers = "prodV1";
+string constant zkBobVerifiers = "prodV2";
 address constant zkBobToken = 0xB0B195aEFA3650A6908f15CdaC7D92F8a5791B0B;
 uint256 constant zkBobInitialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
 address constant zkBobRelayer = 0xc2c4AD59B78F4A0aFD0CDB8133E640Db08Fa5b90;
