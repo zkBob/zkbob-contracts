@@ -38,7 +38,7 @@ contract MPCGuard is Ownable, CustomABIDecoder {
     }
 
     function setGuards(address[] calldata _guards) external onlyOwner {
-        for (uint256 i = 0; i < _guards[].length - 1; i++) {
+        for (uint256 i = 0; i < _guards.length - 1; i++) {
              require(_guards[i] > _guards[i + 1], "must be sorted in descending order") ;
         }
         guards = _guards;
@@ -116,9 +116,9 @@ contract MPCGuard is Ownable, CustomABIDecoder {
             _tree_proof
         );
         uint256 currentRoot = poolContract.roots(poolContract.pool_index());
-        bytes32 digest = digest(abi.encodePacked(mpc_message, currentRoot, poolContract.pool_id()));
+        bytes32 challenge = digest(abi.encodePacked(mpc_message, currentRoot, poolContract.pool_id()));
 
-        require(checkQuorum(signatures, digest(mpc_message)));
+        require(checkQuorum(signatures, challenge));
         IZkBobPool(pool).appendDirectDeposits(_root_after, _indices, _out_commit, _batch_deposit_proof, _tree_proof);
     }
 
