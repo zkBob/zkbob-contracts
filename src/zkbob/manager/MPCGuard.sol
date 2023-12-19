@@ -104,16 +104,16 @@ contract MPCGuard is Ownable, CustomABIDecoder {
 
         ZkBobPool poolContract = ZkBobPool(pool);
 
-        bytes memory mpc_message = abi.encodePacked(
+        bytes memory mpc_message = abi.encodeWithSelector(
             ZkBobPool(pool).appendDirectDeposits.selector,
             _root_after,
             _indices,
             _out_commit,
             _batch_deposit_proof,
-            _tree_proof,
-            poolContract.roots(poolContract.pool_index()),
-            poolContract.pool_id()
+            _tree_proof
         );
+        uint256 currentRoot = poolContract.roots(poolContract.pool_index());
+        bytes32 digest = digest(abi.encodePacked(mpc_message, currentRoot, poolContract.pool_id()));
 
         require(checkQuorum(signatures, digest(mpc_message)));
         IZkBobPool(pool).appendDirectDeposits(_root_after, _indices, _out_commit, _batch_deposit_proof, _tree_proof);
