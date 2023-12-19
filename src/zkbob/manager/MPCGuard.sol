@@ -38,6 +38,9 @@ contract MPCGuard is Ownable, CustomABIDecoder {
     }
 
     function setGuards(address[] calldata _guards) external onlyOwner {
+        for (uint256 i = 0; i < _guards[].length - 1; i++) {
+             require(_guards[i] > _guards[i + 1], "must be sorted in descending order") ;
+        }
         guards = _guards;
     }
 
