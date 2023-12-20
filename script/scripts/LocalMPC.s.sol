@@ -9,6 +9,7 @@ import "../../src/BobToken.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
+import "../../src/zkbob/manager/MPCGuard.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
 import "../../src/zkbob/utils/ZkBobAccounting.sol";
 
@@ -73,12 +74,17 @@ contract DeployLocal is Script {
         }
 
         {
+            MPCGuard guard = new MPCGuard(zkBobRelayer, address(pool));
+            address[] memory guardians = new address[](2);
+            guardians[0] = address(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266);
+            guardians[1] = address(0x70997970C51812dc3A010C7d01b50e0d17dc79C8);
             IOperatorManager operatorManager =
-                new MutableOperatorManager(zkBobRelayer, zkBobRelayerFeeReceiver, zkBobRelayerURL);
+                new MutableOperatorManager(address(guard), zkBobRelayerFeeReceiver, zkBobRelayerURL);
             pool.setOperatorManager(operatorManager);
             queue.setOperatorManager(operatorManager);
             queue.setDirectDepositFee(uint64(zkBobDirectDepositFee));
             queue.setDirectDepositTimeout(uint40(zkBobDirectDepositTimeout));
+            console2.log("MPCGuard:", address(guard));
         }
 
         {

@@ -190,4 +190,35 @@ contract CustomABIDecoder {
     function _memo_permit_holder() internal pure returns (address r) {
         r = address(uint160(_loaduint256(memo_permit_holder_pos + memo_permit_holder_size - uint256_size)));
     }
+
+    function _mpc_signatures_pos() internal pure returns (uint256 pos) {
+        uint256 t = _tx_type();
+        if (t == 3 || t == 0) {
+            pos = _sign_r_vs_pos() + sign_r_vs_size;
+        } else {
+            pos = _sign_r_vs_pos();
+        }
+    }
+
+    function _mpc_message() internal pure returns (bytes calldata message) {
+        uint256 message_length = _mpc_signatures_pos();
+        assembly {
+            message.offset := 0
+            message.length := message_length
+        }
+    }
+
+    uint256 constant signatures_count_size = 1;
+
+    function _mpc_signatures() internal pure returns (uint8 count, bytes calldata signatures) {
+        uint256 offset = _mpc_signatures_pos();
+        count = uint8(_loaduint256(offset + signatures_count_size - uint256_size));
+        uint256 length = count * sign_r_vs_size;
+
+        offset = offset + signatures_count_size;
+        assembly {
+            signatures.offset := offset
+            signatures.length := length
+        }
+    }
 }

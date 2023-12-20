@@ -17,6 +17,7 @@ import "../mocks/DummyImpl.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPool.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
+import "../../src/zkbob/manager/MPCGuard.sol";
 import "../../src/zkbob/manager/MutableOperatorManager.sol";
 import "../../src/zkbob/manager/kyc/SimpleKYCProviderManager.sol";
 import "../interfaces/IZkBobDirectDepositsAdmin.sol";
@@ -58,6 +59,7 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
     PermitType permitType;
     uint256 denominator;
     uint256 precision;
+    bool isMPC = false;
 
     bytes constant zkAddress = "QsnTijXekjRm9hKcq5kLNPsa6P4HtMRrc3RxVx3jsLHeo2AiysYxVJP86mriHfN";
 
@@ -95,27 +97,42 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         ZkBobPool impl;
         if (poolType == PoolType.ETH) {
             impl = new ZkBobPoolETH(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
-                address(queueProxy), permit2
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
+                address(queueProxy),
+                permit2
             );
         } else if (poolType == PoolType.BOB) {
             impl = new ZkBobPoolBOB(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
                 address(queueProxy)
             );
         } else if (poolType == PoolType.USDC) {
             impl = new ZkBobPoolUSDC(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
                 address(queueProxy)
             );
         } else if (poolType == PoolType.ERC20) {
             impl = new ZkBobPoolERC20(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
-                address(queueProxy), permit2, 1_000_000_000
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
+                address(queueProxy),
+                permit2,
+                1_000_000_000
             );
         }
 
@@ -144,7 +161,31 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             0
         );
         pool.setAccounting(accounting);
-        operatorManager = new MutableOperatorManager(user2, user3, "https://example.com");
+        if (isMPC) {
+            address operatorEOA = makeAddr("operatorEOA");
+            address operatorContract = address(new MPCGuard(operatorEOA, address(pool)));
+            operatorManager = new MutableOperatorManager(operatorContract, user3, "https://example.com");
+            address[] memory guardians = new address[](2);
+            guardians[0] = makeAddr("guard2");
+            guardians[1] = makeAddr("guard1");
+            MPCGuard(operatorContract).setGuards(guardians);
+            address[] memory users = new address[](2);
+            users[0] = operatorContract;
+            users[1] = address(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266);
+            accounting.setLimits(
+                1,
+                2_000_000 ether / D / denominator,
+                200_000 ether / D / denominator,
+                200_000 ether / D / denominator,
+                20_000 ether / D / denominator,
+                20_000 ether / D / denominator,
+                25 ether / D / denominator,
+                10 ether / D / denominator
+            );
+            accounting.setUsersTier(1, users);
+        } else {
+            operatorManager = new MutableOperatorManager(user2, user3, "https://example.com");
+        }
         pool.setOperatorManager(operatorManager);
         queue.setOperatorManager(operatorManager);
         queue.setDirectDepositFee(uint64(0.1 ether / D));
@@ -723,18 +764,30 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
         bytes32 nullifier = bytes32(_randFR());
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
         bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector,
-            nullifier,
-            _randFR(),
-            uint48(0),
-            uint112(0),
-            int64(_amount / int256(denominator))
-        );
+            ZkBobPool.transact.selector, //4
+            nullifier, //32
+            _randFR(), //32
+            uint48(0), //6
+            uint112(0), //14
+            int64(_amount / int256(denominator)) //8
+        ); //96
         for (uint256 i = 0; i < 17; i++) {
+            //32*17 = 544
             data = abi.encodePacked(data, _randFR());
         }
-        data = abi.encodePacked(data, uint16(0), uint16(44), uint64(_fee / denominator), bytes4(0x01000000), _randFR());
-        return abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
+        data = abi.encodePacked(
+            data,
+            uint16(0) //2
+        ); //642
+        bytes memory memo = abi.encodePacked(
+            uint16(44), //2
+            uint64(_fee / denominator), //8
+            bytes4(0x01000000), //4
+            _randFR() //32
+        );
+        data = abi.encodePacked(data, memo); //688
+        data = abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0)); //688+64=752
+        return data;
     }
 
     function _encodeWithdrawal(

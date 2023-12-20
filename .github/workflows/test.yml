@@ -68,7 +68,35 @@ jobs:
 
       - name: Run Forge tests
         run: |
-          forge test -vvv
+          forge test -vvv --no-match-contract MPCOperatorManagerTest
+        id: test
+  test-mpc:
+    name: Foundry Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - uses: actions/cache@v3
+        with:
+          path: "~/.foundry/cache/rpc"
+          key: "${{ runner.os }}-rpc-cache-v1"
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Run Forge build
+        run: |
+          forge --version
+          forge build --sizes
+        id: build
+
+      - name: Run Forge tests
+        run: |
+          forge test -vvv --match-contract MPCOperatorManagerTest --mt ".*MPC"
         id: test
   coverage:
     name: Foundry Coverage
