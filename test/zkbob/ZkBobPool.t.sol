@@ -38,8 +38,6 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
 
     uint256 constant initialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
 
-    address[] guardians;
-
     enum PoolType {
         BOB,
         ETH,
@@ -167,10 +165,9 @@ abstract contract AbstractZkBobPoolTest is AbstractForkTest {
             address operatorEOA = makeAddr("operatorEOA");
             address operatorContract = address(new MPCGuard(operatorEOA, address(pool)));
             operatorManager = new MutableOperatorManager(operatorContract, user3, "https://example.com");
-            (address guard1Addr,) = makeAddrAndKey("guard1");
-            (address guard2Addr,) = makeAddrAndKey("guard2");
-            guardians.push(guard1Addr);
-            guardians.push(guard2Addr);
+            address[] memory guardians = new address[](2);
+            guardians[0] = makeAddr("guard2");
+            guardians[1] = makeAddr("guard1");
             MPCGuard(operatorContract).setGuards(guardians);
             address[] memory users = new address[](2);
             users[0] = operatorContract;

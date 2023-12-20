@@ -65,14 +65,14 @@ contract MPCOperatorManagerTest is AbstractZkBobPoolTest, AbstractPolygonForkTes
         uint256 current_root = poolContract.roots(poolContract.pool_index());
         uint48 transfer_index = uint48(0);
         uint256 transfer_root = poolContract.roots(transfer_index);
-        bytes memory challenge = abi.encodePacked(data, transfer_root, current_root, poolContract.pool_id());
+        bytes32 challenge = digest(abi.encodePacked(data, transfer_root, current_root, poolContract.pool_id()));
         (, uint256 guard1Key) = makeAddrAndKey("guard1");
         (, uint256 guard2Key) = makeAddrAndKey("guard2");
         return abi.encodePacked(
             data,
             uint8(2), //753
-            sign(challenge, guard1Key), //817
-            sign(challenge, guard2Key) //881
+            sign(challenge, guard2Key), //817
+            sign(challenge, guard1Key) //881
         );
     }
 
@@ -130,34 +130,34 @@ contract MPCOperatorManagerTest is AbstractZkBobPoolTest, AbstractPolygonForkTes
         uint256 root_afer = _randFR();
         uint256[8] memory batch_deposit_proof = _randProof();
         uint256[8] memory tree_proof = _randProof();
-        bytes memory mpcMessage = abi.encodePacked(
-            ZkBobPool.appendDirectDeposits.selector,
+        bytes memory mpc_message = abi.encodeWithSelector(
+            poolContract.appendDirectDeposits.selector,
             root_afer,
             indices,
             outCommitment,
             batch_deposit_proof,
-            tree_proof,
-            poolContract.roots(poolContract.pool_index()),
-            poolContract.pool_id()
+            tree_proof
         );
-
-        (, uint256 guard1Key) = makeAddrAndKey("guard1");
-        (, uint256 guard2Key) = makeAddrAndKey("guard2");
-
+        bytes memory signatures;
+        {
+            uint256 currentRoot = poolContract.roots(poolContract.pool_index());
+            bytes32 challenge = digest(abi.encodePacked(mpc_message, currentRoot, poolContract.pool_id()));
+            (, uint256 guard1Key) = makeAddrAndKey("guard1");
+            (, uint256 guard2Key) = makeAddrAndKey("guard2");
+            signatures = abi.encodePacked(sign(challenge, guard2Key), sign(challenge, guard1Key));
+        }
         vm.prank(makeAddr("operatorEOA"));
         MPCGuard(wrapper).appendDirectDepositsMPC(
-            root_afer,
-            indices,
-            outCommitment,
-            batch_deposit_proof,
-            tree_proof,
-            abi.encodePacked(sign(mpcMessage, guard1Key), sign(mpcMessage, guard2Key))
+            root_afer, indices, outCommitment, batch_deposit_proof, tree_proof, signatures
         );
     }
 
-    function sign(bytes memory data, uint256 key) internal pure returns (bytes memory signatureData) {
-        bytes32 digest = ECDSA.toEthSignedMessageHash(keccak256(data));
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, digest);
+    function sign(bytes32 _digest, uint256 key) internal pure returns (bytes memory signatureData) {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, _digest);
         signatureData = abi.encodePacked(r, uint256(s) + (v == 28 ? (1 << 255) : 0));
+    }
+
+    function digest(bytes memory data) internal pure returns (bytes32) {
+        return ECDSA.toEthSignedMessageHash(keccak256(data));
     }
 }
