@@ -28,7 +28,7 @@ contract PriorityQueueTest is Test {
         assertEq(0, ops.length);
     }
 
-    function testPushBackPopFront() external {   
+    function testPushBackPopFront() external {
         for (uint256 i = 0; i < 100; i++) {
             _queue.pushBack(_newOp(i));
 
@@ -48,19 +48,14 @@ contract PriorityQueueTest is Test {
         }
     }
 
-    function _newOp(
-        uint256 id
-    ) internal pure returns (PendingCommitment memory) {
+    function _newOp(uint256 id) internal pure returns (PendingCommitment memory) {
         address prover = address(uint160(uint256(keccak256(abi.encodePacked("prover", id)))));
         uint64 fee = uint64(uint256(keccak256(abi.encodePacked("fee", id))));
         uint64 timestamp = uint64(uint256(keccak256(abi.encodePacked("timestamp", id))));
         return PendingCommitment(id, prover, fee, timestamp);
     }
 
-    function _verifyOp(
-        uint256 id,
-        PendingCommitment memory op
-    ) internal {
+    function _verifyOp(uint256 id, PendingCommitment memory op) internal {
         address prover = address(uint160(uint256(keccak256(abi.encodePacked("prover", id)))));
         uint64 fee = uint64(uint256(keccak256(abi.encodePacked("fee", id))));
         uint64 timestamp = uint64(uint256(keccak256(abi.encodePacked("timestamp", id))));

@@ -95,27 +95,42 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         ZkBobPool impl;
         if (poolType == PoolType.ETH) {
             impl = new ZkBobPoolETH(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
-                address(queueProxy), permit2
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
+                address(queueProxy),
+                permit2
             );
         } else if (poolType == PoolType.BOB) {
             impl = new ZkBobPoolBOB(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
                 address(queueProxy)
             );
         } else if (poolType == PoolType.USDC) {
             impl = new ZkBobPoolUSDC(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
                 address(queueProxy)
             );
         } else if (poolType == PoolType.ERC20) {
             impl = new ZkBobPoolERC20(
-                0, token,
-                new TransferVerifierMock(), new TreeUpdateVerifierMock(), new BatchDepositVerifierMock(),
-                address(queueProxy), permit2, 1_000_000_000
+                0,
+                token,
+                new TransferVerifierMock(),
+                new TreeUpdateVerifierMock(),
+                new BatchDepositVerifierMock(),
+                address(queueProxy),
+                permit2,
+                1_000_000_000
             );
         }
 
@@ -187,7 +202,16 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         }
     }
 
-    function _encodeDeposit(int256 _amount, uint256 _transactFee, uint256 _treeUpdateFee, address prover) internal view returns (bytes memory) {
+    function _encodeDeposit(
+        int256 _amount,
+        uint256 _transactFee,
+        uint256 _treeUpdateFee,
+        address prover
+    )
+        internal
+        view
+        returns (bytes memory)
+    {
         bytes32 nullifier = bytes32(_randFR());
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
         bytes memory data = abi.encodePacked(
@@ -202,13 +226,13 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             data = abi.encodePacked(data, _randFR());
         }
         data = abi.encodePacked(
-            data, 
-            uint16(0), 
-            uint16(72), 
-            prover, 
-            uint64(_transactFee / denominator), 
-            uint64(_treeUpdateFee / denominator), 
-            bytes4(0x01000000), 
+            data,
+            uint16(0),
+            uint16(72),
+            prover,
+            uint64(_transactFee / denominator),
+            uint64(_treeUpdateFee / denominator),
+            bytes4(0x01000000),
             _randFR()
         );
         return abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
@@ -237,11 +261,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             data = abi.encodePacked(data, _randFR());
         }
 
-        data = abi.encodePacked(
-            data,
-            uint16(2),
-            uint16(100)
-        );
+        data = abi.encodePacked(data, uint16(2), uint16(100));
 
         return abi.encodePacked(
             data,
@@ -255,21 +275,34 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         );
     }
 
-    function _encodeTransfer(uint256 _transactFee, uint256 _treeUpdateFee, address prover) internal view returns (bytes memory) {
+    function _encodeTransfer(
+        uint256 _transactFee,
+        uint256 _treeUpdateFee,
+        address prover
+    )
+        internal
+        view
+        returns (bytes memory)
+    {
         bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector, _randFR(), _randFR(), uint48(0), uint112(0), -int64(uint64((_transactFee + _treeUpdateFee) / denominator))
+            ZkBobPool.transact.selector,
+            _randFR(),
+            _randFR(),
+            uint48(0),
+            uint112(0),
+            -int64(uint64((_transactFee + _treeUpdateFee) / denominator))
         );
         for (uint256 i = 0; i < 8; i++) {
             data = abi.encodePacked(data, _randFR());
         }
         return abi.encodePacked(
-            data, 
-            uint16(1), 
+            data,
+            uint16(1),
             uint16(72),
-            prover, 
-            uint64(_transactFee / denominator), 
-            uint64(_treeUpdateFee / denominator), 
-            bytes4(0x01000000), 
+            prover,
+            uint64(_transactFee / denominator),
+            uint64(_treeUpdateFee / denominator),
+            bytes4(0x01000000),
             _randFR()
         );
     }
@@ -282,7 +315,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
 
     function _proveTreeUpdate() internal {
         vm.startPrank(user2);
-        (uint256 commitment, , , ) = pool.pendingCommitment();
+        (uint256 commitment,,,) = pool.pendingCommitment();
         pool.proveTreeUpdate(commitment, _randProof(), _randFR());
         vm.stopPrank();
     }
@@ -303,7 +336,15 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         return [_randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR(), _randFR()];
     }
 
-    function _encodePermitDeposit(int256 _amount, uint256 _transactFee, uint256 _treeUpdateFee, address prover) internal returns (bytes memory) {
+    function _encodePermitDeposit(
+        int256 _amount,
+        uint256 _transactFee,
+        uint256 _treeUpdateFee,
+        address prover
+    )
+        internal
+        returns (bytes memory)
+    {
         if (permitType == PermitType.Permit2) {
             vm.prank(user1);
             IERC20(token).approve(permit2, type(uint256).max);
@@ -316,11 +357,29 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         {
             bytes32 digest;
             if (permitType == PermitType.BOBPermit) {
-                digest = _digestSaltedPermit(user1, address(pool), uint256(_amount + int256(_transactFee) + int256(_treeUpdateFee)), expiry, nullifier);
+                digest = _digestSaltedPermit(
+                    user1,
+                    address(pool),
+                    uint256(_amount + int256(_transactFee) + int256(_treeUpdateFee)),
+                    expiry,
+                    nullifier
+                );
             } else if (permitType == PermitType.Permit2) {
-                digest = _digestPermit2(user1, address(pool), uint256(_amount + int256(_transactFee) + int256(_treeUpdateFee)), expiry, nullifier);
+                digest = _digestPermit2(
+                    user1,
+                    address(pool),
+                    uint256(_amount + int256(_transactFee) + int256(_treeUpdateFee)),
+                    expiry,
+                    nullifier
+                );
             } else if (permitType == PermitType.USDCPermit) {
-                digest = _digestUSDCPermit(user1, address(pool), uint256(_amount + int256(_transactFee) + int256(_treeUpdateFee)), expiry, nullifier);
+                digest = _digestUSDCPermit(
+                    user1,
+                    address(pool),
+                    uint256(_amount + int256(_transactFee) + int256(_treeUpdateFee)),
+                    expiry,
+                    nullifier
+                );
             }
             (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, digest);
             signature = abi.encodePacked(r, uint256(s) + (v == 28 ? (1 << 255) : 0));
@@ -338,11 +397,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             data = abi.encodePacked(data, _randFR());
         }
 
-        data = abi.encodePacked(
-            data,
-            uint16(3),
-            uint16(100)
-        );
+        data = abi.encodePacked(data, uint16(3), uint16(100));
 
         data = abi.encodePacked(
             data,
@@ -433,7 +488,6 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
 }
 
 abstract contract AbstractZkBobPoolTest is AbstractZkBobPoolTestBase {
-    
     function setUp() public override {
         super.setUp();
     }
@@ -555,7 +609,9 @@ abstract contract AbstractZkBobPoolTest is AbstractZkBobPoolTestBase {
     function testMultiplePermitDeposits() public {
         for (uint256 i = 1; i < 10; i++) {
             deal(address(token), user1, 0.101 ether / D * i);
-            bytes memory data = _encodePermitDeposit(int256(0.1 ether / D) * int256(i), 0.0005 ether / D * i, 0.0005 ether / D * i, user2);
+            bytes memory data = _encodePermitDeposit(
+                int256(0.1 ether / D) * int256(i), 0.0005 ether / D * i, 0.0005 ether / D * i, user2
+            );
             _transact(data);
             _proveTreeUpdate();
         }

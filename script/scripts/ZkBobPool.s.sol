@@ -53,27 +53,31 @@ contract DeployZkBobPool is Script {
 
         if (zkBobPoolType == PoolType.ETH) {
             vars.poolImpl = new ZkBobPoolETH(
-                zkBobPoolId, zkBobToken,
-                transferVerifier, treeVerifier, batchDepositVerifier,
-                address(vars.queueProxy), permit2
+                zkBobPoolId,
+                zkBobToken,
+                transferVerifier,
+                treeVerifier,
+                batchDepositVerifier,
+                address(vars.queueProxy),
+                permit2
             );
         } else if (zkBobPoolType == PoolType.BOB) {
             vars.poolImpl = new ZkBobPoolBOB(
-                zkBobPoolId, zkBobToken,
-                transferVerifier, treeVerifier, batchDepositVerifier,
-                address(vars.queueProxy)
+                zkBobPoolId, zkBobToken, transferVerifier, treeVerifier, batchDepositVerifier, address(vars.queueProxy)
             );
         } else if (zkBobPoolType == PoolType.USDC) {
             vars.poolImpl = new ZkBobPoolUSDC(
-                zkBobPoolId, zkBobToken,
-                transferVerifier, treeVerifier, batchDepositVerifier,
-                address(vars.queueProxy)
+                zkBobPoolId, zkBobToken, transferVerifier, treeVerifier, batchDepositVerifier, address(vars.queueProxy)
             );
         } else if (zkBobPoolType == PoolType.ERC20) {
             vars.poolImpl = new ZkBobPoolERC20(
-                zkBobPoolId, zkBobToken,
-                transferVerifier, treeVerifier, batchDepositVerifier,
-                address(vars.queueProxy), permit2,
+                zkBobPoolId,
+                zkBobToken,
+                transferVerifier,
+                treeVerifier,
+                batchDepositVerifier,
+                address(vars.queueProxy),
+                permit2,
                 vars.denominator
             );
         } else {
