@@ -51,10 +51,10 @@ library PriorityQueue {
         _queue.tail = tail + 1;
     }
 
-    function list(Queue storage _queue) internal view returns ( PendingCommitment[] memory) {
-        PendingCommitment[] memory result = new PendingCommitment[] (_queue.getSize());
+    function list(Queue storage _queue) internal view returns (PendingCommitment[] memory) {
+        PendingCommitment[] memory result = new PendingCommitment[](_queue.getSize());
         for (uint256 index = _queue.head; index < _queue.tail; index++) {
-            result[index-_queue.head] = _queue.data[index];
+            result[index - _queue.head] = _queue.data[index];
         }
         return result;
     }

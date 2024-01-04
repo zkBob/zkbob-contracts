@@ -153,7 +153,8 @@ contract CustomABIDecoder {
     uint256 constant memo_tree_update_fee_mask = (1 << (memo_tree_update_fee_size * 8)) - 1;
 
     function _memo_tree_update_fee() internal pure returns (uint256 r) {
-        r = _loaduint256(memo_tree_update_fee_pos + memo_tree_update_fee_size - uint256_size) & memo_tree_update_fee_mask;
+        r = _loaduint256(memo_tree_update_fee_pos + memo_tree_update_fee_size - uint256_size)
+            & memo_tree_update_fee_mask;
     }
 
     // Withdraw specific data

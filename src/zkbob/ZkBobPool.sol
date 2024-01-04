@@ -72,7 +72,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      * @dev Timestamp of the last tree update.
      */
     uint64 internal lastTreeUpdateTimestamp;
-    
+
     /**
      * @dev The duration of the grace period within which only the prover who submitted the transaction
      * can submit the tree update proof.
@@ -190,12 +190,11 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      * @return fee fee reserved for the prover who will submit the tree update proof.
      * @return timestamp commitment timestamp.
      */
-    function pendingCommitment() external view returns (
-        uint256 commitment,
-        address privilegedProver,
-        uint64 fee,
-        uint64 timestamp
-    ) {
+    function pendingCommitment()
+        external
+        view
+        returns (uint256 commitment, address privilegedProver, uint64 fee, uint64 timestamp)
+    {
         PendingCommitment memory op = pendingCommitments.front();
         require(op.commitment != 0, "ZkBobPool: no pending commitment");
         return (op.commitment, op.prover, op.fee, op.timestamp);
@@ -305,11 +304,11 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             require(nullifiers[nullifier] == 0, "ZkBobPool: doublespend detected");
             require(_transfer_index() <= poolIndex, "ZkBobPool: transfer index out of bounds");
             require(transfer_verifier.verifyProof(_transfer_pub(), _transfer_proof()), "ZkBobPool: bad transfer proof");
-            
+
             _appendCommitment(_transfer_out_commit(), uint64(_memo_tree_update_fee()), msg.sender);
 
             nullifiers[nullifier] = uint256(keccak256(abi.encodePacked(_transfer_out_commit(), _transfer_delta())));
-            
+
             bytes memory message = _memo_message();
             // restrict memo message prefix (items count in little endian) to be < 2**16
             require(bytes4(message) & 0x0000ffff == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
@@ -327,7 +326,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         uint256 treeUpdateFee = _memo_tree_update_fee();
 
         require(treeUpdateFee >= minTreeUpdateFee, "ZkBobPool: tree update fee is too low");
-        
+
         uint256 fee = transactFee + treeUpdateFee;
 
         int256 token_amount = transfer_token_delta + int256(fee);
@@ -407,7 +406,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         // we reserve the minimal tree update fee for the prover who will submit the tree update proof
         require(totalFee >= minTreeUpdateFee, "ZkBobPool: tree update fee is too low");
         uint64 ddFee = uint64(totalFee) - minTreeUpdateFee;
-        
+
         _appendCommitment(_out_commit, minTreeUpdateFee, msg.sender);
 
         bytes32 message_hash = keccak256(message);
@@ -426,25 +425,28 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
     /**
      * @dev Updates pool index and merkle tree root if the provided proof is valid and
-     * the proof corresponds to the pending commitment. 
+     * the proof corresponds to the pending commitment.
      * A prover that submitted the transfer proof has the grace period to submit the tree update proof.
      * @param _commitment pending commitment to be proven.
      * @param _proof snark proof for tree update verifier.
      * @param _rootAfter new merkle tree root.
      */
     function proveTreeUpdate(
-        uint256 _commitment, 
-        uint256[8] calldata _proof, 
+        uint256 _commitment,
+        uint256[8] calldata _proof,
         uint256 _rootAfter
-    ) external onlyOperator {
+    )
+        external
+        onlyOperator
+    {
         PendingCommitment memory commitment = pendingCommitments.popFront();
         require(commitment.commitment == _commitment, "ZkBobPool: commitment mismatch");
 
         _validateGracePeriod(commitment.timestamp, commitment.prover);
-        
+
         uint256[3] memory tree_pub = [roots[pool_index], _rootAfter, _commitment];
         require(tree_verifier.verifyProof(tree_pub, _proof), "ZkBobPool: bad tree proof");
-        
+
         pool_index += 128;
         roots[pool_index] = _rootAfter;
         accumulatedFee[msg.sender] += commitment.fee;
@@ -631,16 +633,13 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      * @dev Appends a commitment to the pending commitments queue.
      */
     function _appendCommitment(uint256 _commitment, uint64 _fee, address _prover) internal {
-        pendingCommitments.pushBack(PendingCommitment({
-            commitment: _commitment,
-            fee: _fee,
-            prover: _prover,
-            timestamp: uint64(block.timestamp)
-        }));
+        pendingCommitments.pushBack(
+            PendingCommitment({commitment: _commitment, fee: _fee, prover: _prover, timestamp: uint64(block.timestamp)})
+        );
     }
 
     /**
-     * @dev Validates either the grace period has passed or the caller 
+     * @dev Validates either the grace period has passed or the caller
      * is the prover who submitted this commitment.
      */
     function _validateGracePeriod(uint64 commitmentTimestamp, address privilegedProver) internal view {
@@ -651,7 +650,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             timestamp = lastTreeUpdateTimestamp;
         }
         require(
-            block.timestamp > timestamp + gracePeriod || msg.sender == privilegedProver, 
+            block.timestamp > timestamp + gracePeriod || msg.sender == privilegedProver,
             "ZkBobPool: prover is not allowed to submit the proof yet"
         );
     }
