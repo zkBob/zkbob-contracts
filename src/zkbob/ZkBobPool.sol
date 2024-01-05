@@ -275,7 +275,9 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      * Method uses a custom ABI encoding scheme described in CustomABIDecoder.
      * Single transact() call performs either deposit, withdrawal or shielded transfer operation.
      */
-    function transact() external onlyOperator minTreeUpdateFeeIsSet {
+    function transactV2() external onlyOperator minTreeUpdateFeeIsSet {
+        require(_version() == 2, "ZkBobPool: incorrect calldata version");
+
         address user = msg.sender;
         uint256 txType = _tx_type();
         if (txType == 0) {

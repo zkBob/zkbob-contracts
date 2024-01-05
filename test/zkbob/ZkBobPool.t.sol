@@ -213,9 +213,15 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         returns (bytes memory)
     {
         bytes32 nullifier = bytes32(_randFR());
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
+
+        bytes memory permitSignature;
+        {
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk1, ECDSA.toEthSignedMessageHash(nullifier));
+            permitSignature = abi.encodePacked(r, uint256(s) + (v == 28 ? (1 << 255) : 0));
+        }
         bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector,
+            ZkBobPool.transactV2.selector,
+            uint8(2),
             nullifier,
             _randFR(),
             uint48(0),
@@ -235,7 +241,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             bytes4(0x01000000),
             _randFR()
         );
-        return abi.encodePacked(data, r, uint256(s) + (v == 28 ? (1 << 255) : 0));
+        return abi.encodePacked(data, permitSignature);
     }
 
     function _encodeWithdrawal(
@@ -250,7 +256,8 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         returns (bytes memory)
     {
         bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector,
+            ZkBobPool.transactV2.selector,
+            uint8(2),
             _randFR(),
             _randFR(),
             uint48(0),
@@ -285,7 +292,8 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         returns (bytes memory)
     {
         bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector,
+            ZkBobPool.transactV2.selector,
+            uint8(2),
             _randFR(),
             _randFR(),
             uint48(0),
@@ -386,7 +394,8 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         }
 
         bytes memory data = abi.encodePacked(
-            ZkBobPool.transact.selector,
+            ZkBobPool.transactV2.selector,
+            uint8(2),
             nullifier,
             _randFR(),
             uint48(0),

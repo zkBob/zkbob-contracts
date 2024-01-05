@@ -3,8 +3,6 @@
 pragma solidity 0.8.15;
 
 contract CustomABIDecoder {
-    uint256 constant transfer_nullifier_pos = 4;
-    uint256 constant transfer_nullifier_size = 32;
     uint256 constant uint256_size = 32;
 
     function _loaduint256(uint256 pos) internal pure returns (uint256 r) {
@@ -12,6 +10,16 @@ contract CustomABIDecoder {
             r := calldataload(pos)
         }
     }
+
+    uint256 constant version_pos = 4;
+    uint256 constant version_size = 1;
+
+    function _version() internal pure returns (uint8 r) {
+        r = uint8(_loaduint256(version_pos) >> (8 * (uint256_size - version_size)));
+    }
+
+    uint256 constant transfer_nullifier_pos = version_pos + version_size;
+    uint256 constant transfer_nullifier_size = 32;
 
     function _transfer_nullifier() internal pure returns (uint256 r) {
         r = _loaduint256(transfer_nullifier_pos);
