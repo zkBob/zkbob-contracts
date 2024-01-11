@@ -63,6 +63,12 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
     mapping(address => uint256) public accumulatedFee;
 
+    // TODO:
+    // Is it safe to just add deprecated gap here and
+    // call setTokenSeller() again after upgrade to fix storage layout?
+    // Additionally, it makes sense to add __gap as well.
+    // address private __deprecatedGap2;
+
     /**
      * @dev Queue of pending commitments to be included in the Merkle Tree.
      */
@@ -86,6 +92,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      */
     uint64 public minTreeUpdateFee;
 
+    // uint256[50] __gap;
+
     event UpdateOperatorManager(address manager);
     event UpdateAccounting(address accounting);
     event UpdateRedeemer(address redeemer);
@@ -94,7 +102,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     event WithdrawFee(address indexed operator, uint256 fee);
 
     event Message(uint256 indexed index, bytes32 indexed hash, bytes message);
-    event RootUpdated(uint256 indexed index, uint256 root);
+    event RootUpdated(uint256 indexed index, uint256 root, uint256 commitment);
 
     event CommitForcedExit(
         uint256 indexed nullifier, address operator, address to, uint256 amount, uint256 exitStart, uint256 exitEnd
@@ -454,7 +462,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         accumulatedFee[msg.sender] += commitment.fee;
         lastTreeUpdateTimestamp = uint64(block.timestamp);
 
-        emit RootUpdated(pool_index, _rootAfter);
+        emit RootUpdated(pool_index, _rootAfter, _commitment);
     }
 
     /**
