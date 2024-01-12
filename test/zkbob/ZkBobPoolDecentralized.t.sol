@@ -255,13 +255,13 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
     }
 
     function _proveTreeUpdate(address caller) internal {
-        (uint256 commitment,,,) = pool.pendingCommitment();
+        (uint256 commitment,,,,) = pool.pendingCommitment();
         vm.prank(caller);
         pool.proveTreeUpdate(commitment, _randProof(), _randFR());
     }
 
     function _proveTreeUpdateExpectRevert(address caller, string memory expectedRevertReason) internal {
-        (uint256 commitment,,,) = pool.pendingCommitment();
+        (uint256 commitment,,,,) = pool.pendingCommitment();
         vm.expectRevert(bytes(expectedRevertReason));
         vm.prank(caller);
         pool.proveTreeUpdate(commitment, _randProof(), _randFR());

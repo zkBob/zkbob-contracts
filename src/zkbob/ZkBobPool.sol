@@ -77,7 +77,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     /**
      * @dev Timestamp of the last tree update.
      */
-    uint64 internal lastTreeUpdateTimestamp;
+    uint64 public lastTreeUpdateTimestamp;
 
     /**
      * @dev The duration of the grace period within which only the prover who submitted the transaction
@@ -197,15 +197,18 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      * @return privilegedProver prover that can submit the tree update proof within the grace period.
      * @return fee fee reserved for the prover who will submit the tree update proof.
      * @return timestamp commitment timestamp.
+     * @return gracePeriodEnd timestamp when the grace period ends.
      */
     function pendingCommitment()
         external
         view
-        returns (uint256 commitment, address privilegedProver, uint64 fee, uint64 timestamp)
+        returns (uint256 commitment, address privilegedProver, uint64 fee, uint64 timestamp, uint64 gracePeriodEnd)
     {
         PendingCommitment memory op = pendingCommitments.front();
         require(op.commitment != 0, "ZkBobPool: no pending commitment");
-        return (op.commitment, op.prover, op.fee, op.timestamp);
+        uint64 gracePeriodStart = op.timestamp > lastTreeUpdateTimestamp ? op.timestamp : lastTreeUpdateTimestamp;
+        gracePeriodEnd = gracePeriodStart + gracePeriod;
+        return (op.commitment, op.prover, op.fee, op.timestamp, gracePeriodEnd);
     }
 
     /**

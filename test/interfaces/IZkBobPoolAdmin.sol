@@ -11,7 +11,7 @@ interface IZkBobPoolAdmin {
 
     function pool_index() external view returns (uint256);
 
-    function pendingCommitment() external view returns (uint256, address, uint64, uint64);
+    function pendingCommitment() external view returns (uint256, address, uint64, uint64, uint64);
 
     function initialize(uint256 _root) external;
 
