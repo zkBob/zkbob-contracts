@@ -131,10 +131,14 @@ contract CustomABIDecoder {
         }
     }
 
+    uint256 constant memo_message_size_size = 2;
+    uint256 constant memo_message_size_mask = (1 << (memo_message_size_size * 8)) - 1;
+
     function _memo_message() internal pure returns (bytes calldata r) {
         uint256 memo_fixed_size = _memo_fixed_size();
         uint256 offset = memo_data_pos + memo_fixed_size;
-        uint256 length = _memo_data_size() - memo_fixed_size;
+        uint256 length = _loaduint256(offset + memo_message_size_size - uint256_size) & memo_message_size_mask;
+        offset += memo_message_size_size;
         assembly {
             r.offset := offset
             r.length := length

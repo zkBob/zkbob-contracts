@@ -234,10 +234,11 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         data = abi.encodePacked(
             data,
             uint16(0),
-            uint16(72),
+            uint16(74),
             prover,
             uint64(_transactFee / denominator),
             uint64(_treeUpdateFee / denominator),
+            uint16(36), // memo message size
             bytes4(0x01000000),
             _randFR()
         );
@@ -268,7 +269,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             data = abi.encodePacked(data, _randFR());
         }
 
-        data = abi.encodePacked(data, uint16(2), uint16(100));
+        data = abi.encodePacked(data, uint16(2), uint16(102));
 
         return abi.encodePacked(
             data,
@@ -277,6 +278,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             uint64(0.005 ether / D / denominator),
             uint64(_nativeAmount / denominator),
             _to,
+            uint16(36), // memo message size
             bytes4(0x01000000),
             _randFR()
         );
@@ -306,10 +308,11 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         return abi.encodePacked(
             data,
             uint16(1),
-            uint16(72),
+            uint16(74),
             prover,
             uint64(_transactFee / denominator),
             uint64(_treeUpdateFee / denominator),
+            uint16(36), // memo message size
             bytes4(0x01000000),
             _randFR()
         );
@@ -406,7 +409,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             data = abi.encodePacked(data, _randFR());
         }
 
-        data = abi.encodePacked(data, uint16(3), uint16(100));
+        data = abi.encodePacked(data, uint16(3), uint16(102));
 
         data = abi.encodePacked(
             data,
@@ -415,6 +418,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             uint64(_treeUpdateFee / denominator),
             uint64(expiry),
             user1,
+            uint16(36), // memo message size
             bytes4(0x01000000),
             _randFR()
         );
@@ -1060,6 +1064,47 @@ abstract contract AbstractZkBobPoolTest is AbstractZkBobPoolTestBase {
         // max weekly tx count ~= 28
         // 1e18 energy * (1e16 * 1e12 / 1e18) / 2e5 / 28 ~= 1785e18 reward tokens
         assertApproxEqAbs(rewardToken.balanceOf(user1), 1785 ether, 200 ether);
+    }
+
+    function testTransactMessageEvent() public {
+        bytes memory data = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, user2);
+        bytes memory message = _slice(data, 423, 36);
+        vm.expectEmit(true, false, false, true);
+        emit Message(128, bytes32(0), message);
+        _transact(data);
+        _proveTreeUpdate();
+
+        vm.prank(user1);
+        IERC20(token).approve(address(pool), 0.11 ether / D);
+
+        bytes memory data1 = _encodeDeposit(int256(0.1 ether / D), 0.005 ether / D, 0.005 ether / D, user2);
+        bytes memory message1 = _slice(data1, 395, 36);
+        vm.expectEmit(true, false, false, true);
+        emit Message(256, bytes32(0), message1);
+        _transact(data1);
+        _proveTreeUpdate();
+
+        bytes memory data2 = _encodeTransfer(0.005 ether / D, 0.005 ether / D, user2);
+        bytes memory message2 = _slice(data2, 395, 36);
+        vm.expectEmit(true, false, false, true);
+        emit Message(384, bytes32(0), message2);
+        _transact(data2);
+        _proveTreeUpdate();
+
+        bytes memory data3 = _encodeWithdrawal(user1, 0.1 ether / D, 0, 0, user2);
+        bytes memory message3 = _slice(data3, 423, 36);
+        vm.expectEmit(true, false, false, true);
+        emit Message(512, bytes32(0), message3);
+        _transact(data3);
+        _proveTreeUpdate();
+    }
+
+    function _slice(bytes memory data, uint256 start, uint256 length) internal pure returns (bytes memory) {
+        bytes memory res = new bytes(length);
+        for (uint256 i = 0; i < length; i++) {
+            res[i] = data[start + i];
+        }
+        return res;
     }
 }
 
