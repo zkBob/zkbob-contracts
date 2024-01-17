@@ -234,13 +234,11 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         data = abi.encodePacked(
             data,
             uint16(0),
-            uint16(74),
+            uint16(84),
             prover,
             uint64(_transactFee / denominator),
             uint64(_treeUpdateFee / denominator),
-            uint16(36), // memo message size
-            bytes4(0x01000000),
-            _randFR()
+            _memoMessageAndExtraData()
         );
         return abi.encodePacked(data, permitSignature);
     }
@@ -269,7 +267,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             data = abi.encodePacked(data, _randFR());
         }
 
-        data = abi.encodePacked(data, uint16(2), uint16(102));
+        data = abi.encodePacked(data, uint16(2), uint16(112));
 
         return abi.encodePacked(
             data,
@@ -278,9 +276,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             uint64(0.005 ether / D / denominator),
             uint64(_nativeAmount / denominator),
             _to,
-            uint16(36), // memo message size
-            bytes4(0x01000000),
-            _randFR()
+            _memoMessageAndExtraData()
         );
     }
 
@@ -308,13 +304,20 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         return abi.encodePacked(
             data,
             uint16(1),
-            uint16(74),
+            uint16(84),
             prover,
             uint64(_transactFee / denominator),
             uint64(_treeUpdateFee / denominator),
+            _memoMessageAndExtraData()
+        );
+    }
+
+    function _memoMessageAndExtraData() internal view returns (bytes memory) {
+        return abi.encodePacked(
             uint16(36), // memo message size
             bytes4(0x01000000),
-            _randFR()
+            _randFR(),
+            bytes("extra data")
         );
     }
 
@@ -409,7 +412,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             data = abi.encodePacked(data, _randFR());
         }
 
-        data = abi.encodePacked(data, uint16(3), uint16(102));
+        data = abi.encodePacked(data, uint16(3), uint16(112));
 
         data = abi.encodePacked(
             data,
@@ -418,9 +421,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             uint64(_treeUpdateFee / denominator),
             uint64(expiry),
             user1,
-            uint16(36), // memo message size
-            bytes4(0x01000000),
-            _randFR()
+            _memoMessageAndExtraData()
         );
         return abi.encodePacked(data, signature);
     }
