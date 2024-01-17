@@ -36,6 +36,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
+    bytes4 internal constant MESSAGE_PREFIX_COMMON_V2 = 0x00000002;
     uint256 internal constant FORCED_EXIT_MIN_DELAY = 1 hours;
     uint256 internal constant FORCED_EXIT_MAX_DELAY = 24 hours;
 
@@ -323,8 +324,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             nullifiers[nullifier] = uint256(keccak256(abi.encodePacked(_transfer_out_commit(), _transfer_delta())));
 
             bytes memory message = _memo_message();
-            // restrict memo message prefix (items count in little endian) to be < 2**16
-            require(bytes4(message) & 0x0000ffff == MESSAGE_PREFIX_COMMON_V1, "ZkBobPool: bad message prefix");
+            require(_isValidPrefix(bytes4(message) & 0x0000ffff), "ZkBobPool: bad message prefix");
             bytes32 message_hash = keccak256(message);
             bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
             all_messages_hash = _all_messages_hash;
@@ -666,5 +666,14 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
             block.timestamp > timestamp + gracePeriod || msg.sender == privilegedProver,
             "ZkBobPool: prover is not allowed to submit the proof yet"
         );
+    }
+
+    /**
+     * @dev Tells if given message prefix is valid.
+     * @param _prefix prefix to check.
+     * @return true, if prefix is valid.
+     */
+    function _isValidPrefix(bytes4 _prefix) internal pure returns (bool) {
+        return _prefix == MESSAGE_PREFIX_COMMON_V1 || _prefix == MESSAGE_PREFIX_COMMON_V2;
     }
 }

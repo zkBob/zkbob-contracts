@@ -238,7 +238,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             prover,
             uint64(_transactFee / denominator),
             uint64(_treeUpdateFee / denominator),
-            _memoMessageAndExtraData()
+            _memoMessageAndExtraData(bytes2(0))
         );
         return abi.encodePacked(data, permitSignature);
     }
@@ -276,14 +276,27 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             uint64(0.005 ether / D / denominator),
             uint64(_nativeAmount / denominator),
             _to,
-            _memoMessageAndExtraData()
+            _memoMessageAndExtraData(bytes2(0))
         );
     }
 
     function _encodeTransfer(
         uint256 _transactFee,
         uint256 _treeUpdateFee,
-        address prover
+        address _prover
+    )
+        internal
+        view
+        returns (bytes memory)
+    {
+        return _encodeTransferWithPrefix(_transactFee, _treeUpdateFee, _prover, bytes2(0));
+    }
+
+    function _encodeTransferWithPrefix(
+        uint256 _transactFee,
+        uint256 _treeUpdateFee,
+        address _prover,
+        bytes2 _prefix
     )
         internal
         view
@@ -305,17 +318,18 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             data,
             uint16(1),
             uint16(84),
-            prover,
+            _prover,
             uint64(_transactFee / denominator),
             uint64(_treeUpdateFee / denominator),
-            _memoMessageAndExtraData()
+            _memoMessageAndExtraData(_prefix)
         );
     }
 
-    function _memoMessageAndExtraData() internal view returns (bytes memory) {
+    function _memoMessageAndExtraData(bytes2 _prefix) internal view returns (bytes memory) {
         return abi.encodePacked(
             uint16(36), // memo message size
-            bytes4(0x01000000),
+            bytes2(0x0100),
+            _prefix,
             _randFR(),
             bytes("extra data")
         );
@@ -421,7 +435,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             uint64(_treeUpdateFee / denominator),
             uint64(expiry),
             user1,
-            _memoMessageAndExtraData()
+            _memoMessageAndExtraData(bytes2(0))
         );
         return abi.encodePacked(data, signature);
     }
@@ -1098,6 +1112,23 @@ abstract contract AbstractZkBobPoolTest is AbstractZkBobPoolTestBase {
         emit Message(512, bytes32(0), message3);
         _transact(data3);
         _proveTreeUpdate();
+    }
+
+    function testTransactAcceptsOnlyValidPrefixes() public {
+        bytes memory data = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, user2);
+        _transact(data);
+
+        data = _encodeTransferWithPrefix(0.005 ether / D, 0.005 ether / D, user2, bytes2(0x0000));
+        _transact(data);
+
+        data = _encodeTransferWithPrefix(0.005 ether / D, 0.005 ether / D, user2, bytes2(0x0002));
+        _transact(data);
+
+        data = _encodeTransferWithPrefix(0.005 ether / D, 0.005 ether / D, user2, bytes2(0x0001));
+        _transactReverted(data, "ZkBobPool: bad message prefix");
+
+        data = _encodeTransferWithPrefix(0.005 ether / D, 0.005 ether / D, user2, bytes2(0x1234));
+        _transactReverted(data, "ZkBobPool: bad message prefix");
     }
 
     function _slice(bytes memory data, uint256 start, uint256 length) internal pure returns (bytes memory) {
