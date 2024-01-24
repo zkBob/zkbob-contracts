@@ -35,30 +35,6 @@ interface IZkBobPoolAdmin {
 
     function proveTreeUpdate(uint256, uint256[8] memory, uint256) external;
 
-    function committedForcedExits(uint256 _nullifier) external view returns (bytes32);
-
-    function commitForcedExit(
-        address _operator,
-        address _to,
-        uint256 _amount,
-        uint256 _index,
-        uint256 _nullifier,
-        uint256 _out_commit,
-        uint256[8] memory _transfer_proof
-    )
-        external;
-
-    function executeForcedExit(
-        uint256 _nullifier,
-        address _operator,
-        address _to,
-        uint256 _amount,
-        uint256 _exitStart,
-        uint256 _exitEnd,
-        bool _cancel
-    )
-        external;
-
     function appendDirectDeposits(
         uint256[] calldata _indices,
         uint256 _out_commit,
