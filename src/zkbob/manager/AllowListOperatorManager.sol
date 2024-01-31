@@ -29,12 +29,12 @@ contract AllowListOperatorManager is IOperatorManager, Ownable {
     }
 
     constructor(address[] memory _operators, address[] memory _feeReceivers, bool _allowListEnabled) Ownable() {
+        require(_operators.length == _feeReceivers.length, "OperatorManager: arrays length mismatch");
+        
         allowListEnabled = _allowListEnabled;
-        bool[] memory _allowed = new bool[](_operators.length);
         for (uint256 i = 0; i < _operators.length; i++) {
-            _allowed[i] = true;
+            _setOperator(_operators[i], true, _feeReceivers[i]);
         }
-        _setOperators(_operators, _allowed, _feeReceivers);
     }
 
     /**
@@ -77,7 +77,12 @@ contract AllowListOperatorManager is IOperatorManager, Ownable {
         external
         onlyOwner
     {
-        _setOperators(_operators, _allowed, _feeReceivers);
+        require(_operators.length == _feeReceivers.length, "OperatorManager: arrays length mismatch");
+        require(_operators.length == _allowed.length, "OperatorManager: arrays length mismatch");
+
+        for (uint256 i = 0; i < _operators.length; i++) {
+            _setOperator(_operators[i], _allowed[i], _feeReceivers[i]);
+        }
     }
 
     /**
@@ -90,24 +95,9 @@ contract AllowListOperatorManager is IOperatorManager, Ownable {
         emit UpdateOperator(msg.sender, _feeReceiver, true);
     }
 
-    function _setOperators(
-        address[] memory _operators,
-        bool[] memory _allowed,
-        address[] memory _feeReceivers
-    )
-        internal
-    {
-        require(_operators.length == _feeReceivers.length, "OperatorManager: arrays length mismatch");
-        require(_operators.length == _allowed.length, "OperatorManager: arrays length mismatch");
-
-        for (uint256 i = 0; i < _operators.length; i++) {
-            _setOperator(_operators[i], _allowed[i], _feeReceivers[i]);
-        }
-    }
-
     function _setOperator(address _operator, bool _allowed, address _feeReceiver) internal nonZeroAddress(_operator) {
         operators[_operator] = _allowed;
-        if (_feeReceiver != address(0) && _allowed) {
+        if (_allowed) {
             operatorFeeReceiver[_operator] = _feeReceiver;
         }
         emit UpdateOperator(_operator, operatorFeeReceiver[_operator], _allowed);
