@@ -23,7 +23,7 @@ library PriorityQueue {
     using PriorityQueue for Queue;
 
     /// @notice Container that stores pending commitments
-    /// @param data The inner mapping that saves poending commitment by its index
+    /// @param data The inner mapping that saves pending commitment by its index
     /// @param head The pointer to the first unprocessed pending commitment, equal to the tail if the queue is empty
     /// @param tail The pointer to the free slot
     struct Queue {
