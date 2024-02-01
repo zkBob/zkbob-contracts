@@ -3,7 +3,7 @@
 pragma solidity ^0.8.15;
 
 import "forge-std/Test.sol";
-import {PriorityQueue, PendingCommitment} from "../../src/zkbob/utils/PriorityQueue.sol";
+import {Queue, PendingCommitment} from "../../src/zkbob/utils/Queue.sol";
 import "forge-std/console.sol";
 
 contract PriorityQueueTest is Test {
@@ -51,14 +51,14 @@ contract PriorityQueueTest is Test {
     function _newOp(uint256 id) internal pure returns (PendingCommitment memory) {
         address prover = address(uint160(uint256(keccak256(abi.encodePacked("prover", id)))));
         uint64 fee = uint64(uint256(keccak256(abi.encodePacked("fee", id))));
-        uint64 timestamp = uint64(uint256(keccak256(abi.encodePacked("timestamp", id))));
+        uint32 timestamp = uint32(uint256(keccak256(abi.encodePacked("timestamp", id))));
         return PendingCommitment(id, prover, fee, timestamp);
     }
 
     function _verifyOp(uint256 id, PendingCommitment memory op) internal {
         address prover = address(uint160(uint256(keccak256(abi.encodePacked("prover", id)))));
         uint64 fee = uint64(uint256(keccak256(abi.encodePacked("fee", id))));
-        uint64 timestamp = uint64(uint256(keccak256(abi.encodePacked("timestamp", id))));
+        uint32 timestamp = uint32(uint256(keccak256(abi.encodePacked("timestamp", id))));
 
         assertEq(op.commitment, id);
         assertEq(op.prover, prover);
@@ -72,14 +72,14 @@ contract PriorityQueueTest is Test {
  * Without this contract forge coverage doesn't work properly
  */
 contract DummyQueue {
-    PriorityQueue.Queue _queue;
+    Queue.CommitmentQueue _queue;
 
     function list() external view returns (PendingCommitment[] memory) {
-        return PriorityQueue.list(_queue);
+        return Queue.list(_queue);
     }
 
     function pushBack(PendingCommitment memory _operation) external {
-        PriorityQueue.pushBack(_queue, _operation);
+        Queue.pushBack(_queue, _operation);
     }
 
     function head() external view returns (uint256) {
@@ -91,18 +91,18 @@ contract DummyQueue {
     }
 
     function getSize() external view returns (uint256) {
-        return PriorityQueue.getSize(_queue);
+        return Queue.getSize(_queue);
     }
 
     function isEmpty() external view returns (bool) {
-        return PriorityQueue.isEmpty(_queue);
+        return Queue.isEmpty(_queue);
     }
 
     function front() external view returns (PendingCommitment memory) {
-        return PriorityQueue.front(_queue);
+        return Queue.front(_queue);
     }
 
     function popFront() external returns (PendingCommitment memory pendingCommitments) {
-        return PriorityQueue.popFront(_queue);
+        return Queue.popFront(_queue);
     }
 }

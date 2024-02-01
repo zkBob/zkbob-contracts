@@ -30,7 +30,7 @@ contract AllowListOperatorManager is IOperatorManager, Ownable {
 
     constructor(address[] memory _operators, address[] memory _feeReceivers, bool _allowListEnabled) Ownable() {
         require(_operators.length == _feeReceivers.length, "OperatorManager: arrays length mismatch");
-        
+
         allowListEnabled = _allowListEnabled;
         for (uint256 i = 0; i < _operators.length; i++) {
             _setOperator(_operators[i], true, _feeReceivers[i]);

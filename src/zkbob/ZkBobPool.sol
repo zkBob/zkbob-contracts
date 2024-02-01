@@ -24,7 +24,7 @@ import "../utils/Ownable.sol";
 import "../proxy/EIP1967Admin.sol";
 import "../interfaces/IEnergyRedeemer.sol";
 import "../utils/ExternalSload.sol";
-import {PriorityQueue, PendingCommitment} from "./utils/PriorityQueue.sol";
+import {Queue, PendingCommitment} from "./utils/Queue.sol";
 
 /**
  * @title ZkBobPool
@@ -32,7 +32,7 @@ import {PriorityQueue, PendingCommitment} from "./utils/PriorityQueue.sol";
  */
 abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, ExternalSload {
     using SafeERC20 for IERC20;
-    using PriorityQueue for PriorityQueue.Queue;
+    using Queue for Queue.CommitmentQueue;
 
     uint256 internal constant MAX_POOL_ID = 0xffffff;
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
@@ -70,7 +70,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     /**
      * @dev Queue of pending commitments to be included in the Merkle Tree.
      */
-    PriorityQueue.Queue internal pendingCommitments;
+    Queue.CommitmentQueue internal pendingCommitments;
 
     /**
      * @dev Timestamp of the last tree update.
@@ -505,7 +505,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      */
     function _appendCommitment(uint256 _commitment, uint64 _fee, address _prover) internal {
         pendingCommitments.pushBack(
-            PendingCommitment({commitment: _commitment, fee: _fee, prover: _prover, timestamp: uint64(block.timestamp)})
+            PendingCommitment({commitment: _commitment, fee: _fee, prover: _prover, timestamp: uint32(block.timestamp)})
         );
     }
 
