@@ -137,14 +137,6 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     }
 
     /**
-     * @dev Throws if minimal tree update fee is not set.
-     */
-    modifier minTreeUpdateFeeIsSet() {
-        require(minTreeUpdateFee > 0, "ZkBobPool: minimal tree update fee is not set");
-        _;
-    }
-
-    /**
      * @dev Initializes pool proxy storage.
      * Callable only once and only through EIP1967Proxy constructor / upgradeToAndCall.
      * @param _root initial empty merkle tree root.
@@ -278,7 +270,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      * Method uses a custom ABI encoding scheme described in CustomABIDecoder.
      * Single transact() call performs either deposit, withdrawal or shielded transfer operation.
      */
-    function transactV2() external onlyOperator minTreeUpdateFeeIsSet {
+    function transactV2() external onlyOperator {
         require(_version() == 2, "ZkBobPool: incorrect calldata version");
 
         address user = msg.sender;
@@ -392,7 +384,6 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     )
         external
         onlyOperator
-        minTreeUpdateFeeIsSet
     {
         (uint256 total, uint256 totalFee, uint256 hashsum, bytes memory message) =
             direct_deposit_queue.collect(_indices, _out_commit);
