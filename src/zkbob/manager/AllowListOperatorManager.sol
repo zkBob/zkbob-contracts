@@ -10,15 +10,22 @@ import {Ownable} from "../../utils/Ownable.sol";
  * @dev Implements an allow list based access control for ZkBobPool relayers.
  */
 contract AllowListOperatorManager is IOperatorManager, Ownable {
+    /**
+     * @param allowed flag to enable or disable operator.
+     * @param feeReceiver address of the fee receiver.
+     * @dev feeReceiver is still active even if allowed is false.
+     */
+    struct Operator {
+        bool allowed;
+        address feeReceiver;
+    }
+
     // if true, only whitelisted addresses can be operators
     // if false, anyone can be an operator
     bool public allowListEnabled;
 
     // mapping of whitelisted operator addresses
-    mapping(address => bool) public operators;
-
-    // mapping of fee receivers for operators
-    mapping(address => address) public operatorFeeReceiver;
+    mapping(address => Operator) public operators;
 
     event UpdateOperator(address indexed operator, address feeReceiver, bool allowed);
     event UpdateAllowListEnabled(bool enabled);
@@ -91,16 +98,16 @@ contract AllowListOperatorManager is IOperatorManager, Ownable {
      */
     function setFeeReceiver(address _feeReceiver) external {
         require(isOperator(msg.sender), "OperatorManager: operator not allowed");
-        operatorFeeReceiver[msg.sender] = _feeReceiver;
+        operators[msg.sender].feeReceiver = _feeReceiver;
         emit UpdateOperator(msg.sender, _feeReceiver, true);
     }
 
     function _setOperator(address _operator, bool _allowed, address _feeReceiver) internal nonZeroAddress(_operator) {
-        operators[_operator] = _allowed;
+        operators[_operator].allowed = _allowed;
         if (_allowed) {
-            operatorFeeReceiver[_operator] = _feeReceiver;
+            operators[_operator].feeReceiver = _feeReceiver;
         }
-        emit UpdateOperator(_operator, operatorFeeReceiver[_operator], _allowed);
+        emit UpdateOperator(_operator, operators[_operator].feeReceiver, _allowed);
     }
 
     /**
@@ -108,7 +115,7 @@ contract AllowListOperatorManager is IOperatorManager, Ownable {
      * @param _addr address to check.
      */
     function isOperator(address _addr) public view override returns (bool) {
-        return operators[_addr] || !allowListEnabled;
+        return operators[_addr].allowed || !allowListEnabled;
     }
 
     /**
@@ -117,6 +124,6 @@ contract AllowListOperatorManager is IOperatorManager, Ownable {
      * @param _addr address to check.
      */
     function isOperatorFeeReceiver(address _operator, address _addr) external view override returns (bool) {
-        return operatorFeeReceiver[_operator] == _addr;
+        return operators[_operator].feeReceiver == _addr;
     }
 }
