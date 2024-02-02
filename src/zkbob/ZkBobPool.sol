@@ -73,11 +73,6 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     Queue.CommitmentQueue internal pendingCommitments;
 
     /**
-     * @dev Timestamp of the last tree update.
-     */
-    uint64 public lastTreeUpdateTimestamp;
-
-    /**
      * @dev The duration of the grace period within which only the prover who submitted the transaction
      * can submit the tree update proof.
      */
@@ -190,8 +185,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     {
         PendingCommitment memory op = pendingCommitments.front();
         require(op.commitment != 0, "ZkBobPool: no pending commitment");
-        uint64 gracePeriodStart = op.timestamp > lastTreeUpdateTimestamp ? op.timestamp : lastTreeUpdateTimestamp;
-        gracePeriodEnd = gracePeriodStart + gracePeriod;
+        gracePeriodEnd = op.timestamp + gracePeriod;
         return (op.commitment, op.prover, op.fee, op.timestamp, gracePeriodEnd);
     }
 
@@ -445,7 +439,6 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         pool_index += 128;
         roots[pool_index] = _rootAfter;
         accumulatedFee[msg.sender] += commitment.fee;
-        lastTreeUpdateTimestamp = uint64(block.timestamp);
 
         emit RootUpdated(pool_index, _rootAfter, _commitment);
     }
@@ -505,14 +498,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      * is the prover who submitted this commitment.
      */
     function _validateGracePeriod(uint64 commitmentTimestamp, address privilegedProver) internal view {
-        // We calculate the beggining of the grace period either from the timestamp of the last tree update,
-        // or from the timestamp of the commitment, whichever is greater.
-        uint64 timestamp = commitmentTimestamp;
-        if (timestamp < lastTreeUpdateTimestamp) {
-            timestamp = lastTreeUpdateTimestamp;
-        }
         require(
-            block.timestamp > timestamp + gracePeriod || msg.sender == privilegedProver,
+            block.timestamp > commitmentTimestamp + gracePeriod || msg.sender == privilegedProver,
             "ZkBobPool: prover is not allowed to submit the proof yet"
         );
     }

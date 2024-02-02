@@ -76,7 +76,7 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
         _proveTreeUpdateExpectRevert(notAllowedProver, "ZkBobPool: not an operator");
     }
 
-    function testGracePeriodStartsOnlyAfterTreeUpdatingIfNewTransactSendedBeforeOldTreeUpdate() public {
+    function testGracePeriodsMayIntersect() public {
         deal(token, user1, 100 ether / D);
 
         bytes memory data1 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, prover1);
@@ -88,8 +88,8 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
         vm.warp(block.timestamp + pool.gracePeriod());
         _proveTreeUpdate(prover1);
 
-        vm.warp(block.timestamp + pool.gracePeriod());
-        _proveTreeUpdate(prover2);
+        vm.warp(block.timestamp + 1);
+        _proveTreeUpdate(prover1);
     }
 
     function testFeeDistribution() public {
