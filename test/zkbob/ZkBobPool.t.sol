@@ -889,7 +889,7 @@ abstract contract AbstractZkBobPoolTest is AbstractZkBobPoolTestBase {
                 addr = address(new UniswapV3Seller(uniV3Router, uniV3Quoter, token, 100, tempToken, 500));
             }
             pool.setTokenSeller(addr);
-            assertEq(address(uint160(uint256(vm.load(address(pool), bytes32(uint256(11)))))), addr);
+            assertEq(address(uint160(uint256(vm.load(address(pool), bytes32(uint256(66)))))), addr);
         }
 
         vm.deal(user1, 0);

@@ -61,11 +61,10 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
     mapping(address => uint256) public accumulatedFee;
 
-    // TODO:
-    // Is it safe to just add deprecated gap here and
-    // call setTokenSeller() again after upgrade to fix storage layout?
-    // Additionally, it makes sense to add __gap as well.
-    // address private __deprecatedGap2;
+    /**
+     * @dev It is the slot where tokenSeller was stored. 
+     */ 
+    address private __deprecatedGap2;
 
     /**
      * @dev Queue of pending commitments to be included in the Merkle Tree.
@@ -85,7 +84,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      */
     uint64 public minTreeUpdateFee;
 
-    // uint256[50] __gap;
+    uint256[50] __gap;
 
     event UpdateOperatorManager(address manager);
     event UpdateAccounting(address accounting);
