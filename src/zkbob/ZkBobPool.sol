@@ -62,8 +62,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     mapping(address => uint256) public accumulatedFee;
 
     /**
-     * @dev It is the slot where tokenSeller was stored. 
-     */ 
+     * @dev It is the slot where tokenSeller was stored.
+     */
     address private __deprecatedGap2;
 
     /**
