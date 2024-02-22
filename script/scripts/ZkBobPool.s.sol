@@ -7,7 +7,7 @@ import "./Env.s.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueueETH.sol";
-import "../../src/zkbob/manager/MutableOperatorManager.sol";
+import {AllowListOperatorManager} from "../../src/zkbob/manager/AllowListOperatorManager.sol";
 import "../../src/zkbob/ZkBobPoolBOB.sol";
 import "../../src/zkbob/ZkBobPoolETH.sol";
 import "../../src/zkbob/ZkBobPoolUSDC.sol";
@@ -97,29 +97,65 @@ contract DeployZkBobPool is Script {
         vars.queueProxy.upgradeTo(address(queueImpl));
         ZkBobDirectDepositQueue queue = ZkBobDirectDepositQueue(address(vars.queueProxy));
 
-        IOperatorManager operatorManager =
-            new MutableOperatorManager(zkBobRelayer, zkBobRelayerFeeReceiver, zkBobRelayerURL);
-        pool.setOperatorManager(operatorManager);
-        queue.setOperatorManager(operatorManager);
+        AllowListOperatorManager operatorManager;
+        {
+            address[] memory operators = new address[](1);
+            operators[0] = zkBobRelayer;
+
+            address[] memory feeReceivers = new address[](1);
+            feeReceivers[0] = zkBobRelayerFeeReceiver;
+
+            operatorManager = new AllowListOperatorManager(operators, feeReceivers, allowListEnabled);
+            pool.setOperatorManager(operatorManager);
+            queue.setOperatorManager(operatorManager);
+        }
+
         queue.setDirectDepositFee(uint64(zkBobDirectDepositFee));
         queue.setDirectDepositTimeout(uint40(zkBobDirectDepositTimeout));
 
         ZkBobAccounting accounting = new ZkBobAccounting(address(pool), vars.precision);
+        if (kycManager != address(0)) {
+            accounting.setKycProvidersManager(IKycProvidersManager(kycManager));
+        }
         accounting.setLimits(
             0,
-            zkBobPoolCap,
-            zkBobDailyDepositCap,
-            zkBobDailyWithdrawalCap,
-            zkBobDailyUserDepositCap,
-            zkBobDepositCap,
-            zkBobDailyUserDirectDepositCap,
-            zkBobDirectDepositCap
+            tier0TvlCap,
+            tier0DailyDepositCap,
+            tier0DailyWithdrawalCap,
+            tier0DailyUserDepositCap,
+            tier0DepositCap,
+            tier0DailyUserDirectDepositCap,
+            tier0DirectDepositCap
+        );
+        accounting.setLimits(
+            1,
+            tier1TvlCap,
+            tier1DailyDepositCap,
+            tier1DailyWithdrawalCap,
+            tier1DailyUserDepositCap,
+            tier1DepositCap,
+            tier1DailyUserDirectDepositCap,
+            tier1DirectDepositCap
+        );
+        accounting.setLimits(
+            254,
+            tier254TvlCap,
+            tier254DailyDepositCap,
+            tier254DailyWithdrawalCap,
+            tier254DailyUserDepositCap,
+            tier254DepositCap,
+            tier254DailyUserDirectDepositCap,
+            tier254DirectDepositCap
         );
         pool.setAccounting(accounting);
+
+        pool.setGracePeriod(gracePeriod);
+        pool.setMinTreeUpdateFee(minTreeUpdateFee);
 
         if (owner != address(0)) {
             pool.transferOwnership(owner);
             queue.transferOwnership(owner);
+            operatorManager.transferOwnership(owner);
         }
 
         if (admin != tx.origin) {
@@ -138,12 +174,18 @@ contract DeployZkBobPool is Script {
         require(pool.transfer_verifier() == transferVerifier, "Transfer verifier is not configured");
         require(pool.tree_verifier() == treeVerifier, "Tree verifier is not configured");
         require(pool.batch_deposit_verifier() == batchDepositVerifier, "Batch deposit verifier is not configured");
+        require(pool.gracePeriod() == gracePeriod, "Grace period is not configured");
+        require(pool.minTreeUpdateFee() == minTreeUpdateFee, "Min tree update fee is not configured");
+        require(address(pool.accounting()) == address(accounting), "Accounting is not configured");
+        require(address(pool.operatorManager()) == address(operatorManager), "Operator manager is not configured");
+        require(address(queue.operatorManager()) == address(operatorManager), "Operator manager is not configured");
 
         console2.log("ZkBobPool:", address(pool));
         console2.log("ZkBobPool implementation:", address(vars.poolImpl));
         console2.log("ZkBobDirectDepositQueue:", address(queue));
         console2.log("ZkBobDirectDepositQueue implementation:", address(queueImpl));
         console2.log("ZkBobAccounting:", address(accounting));
+        console2.log("AllowListOperatorManager:", address(operatorManager));
         console2.log("TransferVerifier:", address(transferVerifier));
         console2.log("TreeUpdateVerifier:", address(treeVerifier));
         console2.log("BatchDepositVierifier:", address(batchDepositVerifier));
