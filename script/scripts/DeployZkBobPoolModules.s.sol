@@ -18,7 +18,7 @@ contract DummyDelegateCall {
 }
 
 contract Migrator {
-    function migrate(address _target, address _newImpl, address _accounting) external {
+    function migrate(address _target, address _newImpl, address _accounting, address _tokenSeller) external {
         address kycManager = address(ZkBobAccounting(_target).kycProvidersManager());
 
         EIP1967Proxy(payable(_target)).upgradeTo(_newImpl);
@@ -32,6 +32,11 @@ contract Migrator {
 
         ZkBobPool(_target).initializePoolIndex(txCount * 128);
         ZkBobPool(_target).setAccounting(IZkBobAccounting(_accounting));
+        ZkBobPool(_target).setGracePeriod(gracePeriod);
+        ZkBobPool(_target).setMinTreeUpdateFee(minTreeUpdateFee);
+        ZkBobPoolUSDC(_target).setTokenSeller(_tokenSeller);
+
+        // TODO: why are we using txCount + 1?
         ZkBobAccounting(_accounting).initialize(txCount + 1, tvl, cumTvl, maxWeeklyTxCount, maxWeeklyAvgTvl);
         ZkBobAccounting(_accounting).setKycProvidersManager(IKycProvidersManager(kycManager));
         ZkBobAccounting(_accounting).setLimits(
@@ -54,14 +59,20 @@ contract Migrator {
 
 contract DeployZkBobPoolModules is Script, Test {
     function run() external {
-        ZkBobPoolUSDC pool = ZkBobPoolUSDC(address(zkBobPool));
+        runWithPoolAddress(address(zkBobPool), true);
+    }
+
+    function runWithPoolAddress(address poolAddress, bool broadcast) public {
+        ZkBobPoolUSDC pool = ZkBobPoolUSDC(poolAddress);
         address owner = pool.owner();
         vm.etch(owner, type(DummyDelegateCall).runtimeCode);
 
         address tokenSeller = address(pool.tokenSeller());
         uint256 poolIndex = uint256(pool.pool_index());
 
-        vm.startBroadcast();
+        if (broadcast) {
+            vm.startBroadcast();
+        }
 
         ZkBobPoolUSDC impl = new ZkBobPoolUSDC(
             pool.pool_id(),
@@ -75,10 +86,13 @@ contract DeployZkBobPoolModules is Script, Test {
         ZkBobAccounting acc = new ZkBobAccounting(address(pool), 1_000_000_000);
         acc.transferOwnership(owner);
         DummyDelegateCall(owner).delegate(
-            address(mig), abi.encodeWithSelector(Migrator.migrate.selector, address(pool), address(impl), address(acc))
+            address(mig),
+            abi.encodeWithSelector(Migrator.migrate.selector, address(pool), address(impl), address(acc), tokenSeller)
         );
 
-        vm.stopBroadcast();
+        if (broadcast) {
+            vm.stopBroadcast();
+        }
 
         acc.slot0();
         acc.slot1();
