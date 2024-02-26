@@ -36,8 +36,7 @@ contract Migrator {
         ZkBobPool(_target).setMinTreeUpdateFee(minTreeUpdateFee);
         ZkBobPoolUSDC(_target).setTokenSeller(_tokenSeller);
 
-        // TODO: why are we using txCount + 1?
-        ZkBobAccounting(_accounting).initialize(txCount + 1, tvl, cumTvl, maxWeeklyTxCount, maxWeeklyAvgTvl);
+        ZkBobAccounting(_accounting).initialize(txCount, tvl, cumTvl, maxWeeklyTxCount, maxWeeklyAvgTvl);
         ZkBobAccounting(_accounting).setKycProvidersManager(IKycProvidersManager(kycManager));
         ZkBobAccounting(_accounting).setLimits(
             0, 2_000_000 gwei, 300_000 gwei, 300_000 gwei, 10_000 gwei, 10_000 gwei, 10_000 gwei, 1_000 gwei
@@ -57,6 +56,10 @@ contract Migrator {
     }
 }
 
+/**
+ * @dev This script assumes that pool.owner == proxyAdmin
+ * @dev This script uses gracePeriod and minTreeUpdateFee from Env.s.sol
+ */
 contract DeployZkBobPoolModules is Script, Test {
     function run() external {
         runWithPoolAddress(address(zkBobPool), true);

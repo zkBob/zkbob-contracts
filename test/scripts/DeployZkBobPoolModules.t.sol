@@ -28,8 +28,7 @@ contract DeployZkBobPoolModulesTest is AbstractOptimismForkTest {
 
         DeployZkBobPoolModules upgrade = new DeployZkBobPoolModules();
 
-        // It seems that DeployZkBobPoolModules assumes that proxyAdmin is the owner of the pool
-        // TODO: confirm it
+        // DeployZkBobPoolModules assumes that proxyAdmin is the owner of the pool
         address proxyAdmin = EIP1967Proxy(payable(address(pool))).admin();
         address owner = pool.owner();
         vm.prank(owner);
@@ -54,7 +53,7 @@ contract DeployZkBobPoolModulesTest is AbstractOptimismForkTest {
         vm.stopPrank();
 
         assertEq(poolState.owner, pool.owner());
-        assertEq(address(pool.redeemer()), address(0)); // TODO: energy redeemer will not be set by script
+        assertEq(address(pool.redeemer()), address(0)); // redeemer is not set by script
         assertNotEq(address(pool.accounting()), address(0));
         assertEq(poolState.poolIndex, uint256(pool.pool_index()));
         assertEq(poolState.operatorManager, address(pool.operatorManager()));
@@ -70,6 +69,9 @@ contract DeployZkBobPoolModulesTest is AbstractOptimismForkTest {
 
         checkSlot0(uint256(poolState.slot0), ZkBobAccounting(address(pool.accounting())));
         checkSlot1(uint256(poolState.slot1), ZkBobAccounting(address(pool.accounting())));
+
+        vm.expectRevert("ZkBobPool: queue is empty");
+        pool.pendingCommitment();
     }
 
     function checkSlot0(uint256 slot0, ZkBobAccounting accounting) internal {
