@@ -290,12 +290,12 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
 
         uint256 nullifier = _transfer_nullifier();
         {
-            require(msg.sender == _memo_prover_address(), "ZkBobPool: unauthorized");
+            require(msg.sender == _memo_proxy_address(), "ZkBobPool: unauthorized");
             require(nullifiers[nullifier] == 0, "ZkBobPool: doublespend detected");
             require(_transfer_index() <= poolIndex, "ZkBobPool: transfer index out of bounds");
             require(transfer_verifier.verifyProof(_transfer_pub(), _transfer_proof()), "ZkBobPool: bad transfer proof");
 
-            _appendCommitment(_transfer_out_commit(), uint64(_memo_tree_update_fee()), msg.sender);
+            _appendCommitment(_transfer_out_commit(), uint64(_memo_tree_update_fee()), _memo_prover_address());
 
             nullifiers[nullifier] = uint256(keccak256(abi.encodePacked(_transfer_out_commit(), _transfer_delta())));
 
@@ -373,7 +373,8 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     function appendDirectDeposits(
         uint256[] calldata _indices,
         uint256 _out_commit,
-        uint256[8] memory _batch_deposit_proof
+        uint256[8] memory _batch_deposit_proof,
+        address _prover
     )
         external
         onlyOperator
@@ -395,7 +396,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         require(totalFee >= minTreeUpdateFee, "ZkBobPool: tree update fee is too low");
         uint64 ddFee = uint64(totalFee) - minTreeUpdateFee;
 
-        _appendCommitment(_out_commit, minTreeUpdateFee, msg.sender);
+        _appendCommitment(_out_commit, minTreeUpdateFee, _prover);
 
         bytes32 message_hash = keccak256(message);
         bytes32 _all_messages_hash = keccak256(abi.encodePacked(all_messages_hash, message_hash));
@@ -493,12 +494,12 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     }
 
     /**
-     * @dev Validates either the grace period has passed or the caller
-     * is the prover who submitted this commitment.
+     * @dev Validates that the prover is allowed to submit the tree update proof now.
      */
     function _validateGracePeriod(uint64 commitmentTimestamp, address privilegedProver) internal view {
         require(
-            block.timestamp > commitmentTimestamp + gracePeriod || msg.sender == privilegedProver,
+            msg.sender == privilegedProver || privilegedProver == address(0)
+                || block.timestamp > commitmentTimestamp + gracePeriod,
             "ZkBobPool: prover is not allowed to submit the proof yet"
         );
     }

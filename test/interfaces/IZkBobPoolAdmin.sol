@@ -38,7 +38,8 @@ interface IZkBobPoolAdmin {
     function appendDirectDeposits(
         uint256[] calldata _indices,
         uint256 _out_commit,
-        uint256[8] memory _batch_deposit_proof
+        uint256[8] memory _batch_deposit_proof,
+        address _prover
     )
         external;
 

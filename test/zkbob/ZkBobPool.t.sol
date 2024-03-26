@@ -206,7 +206,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         int256 _amount,
         uint256 _transactFee,
         uint256 _treeUpdateFee,
-        address prover
+        address _proxyAndProver
     )
         internal
         view
@@ -234,8 +234,9 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         data = abi.encodePacked(
             data,
             uint16(0),
-            uint16(84),
-            prover,
+            uint16(104),
+            _proxyAndProver,
+            _proxyAndProver,
             uint64(_transactFee / denominator),
             uint64(_treeUpdateFee / denominator),
             _memoMessageAndExtraData(bytes2(0))
@@ -248,7 +249,7 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         uint256 _amount,
         uint256 _nativeAmount,
         uint256 _energyAmount,
-        address prover
+        address _proxyAndProver
     )
         internal
         view
@@ -267,11 +268,12 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             data = abi.encodePacked(data, _randFR());
         }
 
-        data = abi.encodePacked(data, uint16(2), uint16(112));
+        data = abi.encodePacked(data, uint16(2), uint16(132));
 
         return abi.encodePacked(
             data,
-            prover,
+            _proxyAndProver,
+            _proxyAndProver,
             uint64(0.005 ether / D / denominator),
             uint64(0.005 ether / D / denominator),
             uint64(_nativeAmount / denominator),
@@ -283,19 +285,19 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
     function _encodeTransfer(
         uint256 _transactFee,
         uint256 _treeUpdateFee,
-        address _prover
+        address _proxyAndProver
     )
         internal
         view
         returns (bytes memory)
     {
-        return _encodeTransferWithPrefix(_transactFee, _treeUpdateFee, _prover, bytes2(0));
+        return _encodeTransferWithPrefix(_transactFee, _treeUpdateFee, _proxyAndProver, bytes2(0));
     }
 
     function _encodeTransferWithPrefix(
         uint256 _transactFee,
         uint256 _treeUpdateFee,
-        address _prover,
+        address _proxyAndProver,
         bytes2 _prefix
     )
         internal
@@ -317,8 +319,9 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         return abi.encodePacked(
             data,
             uint16(1),
-            uint16(84),
-            _prover,
+            uint16(104),
+            _proxyAndProver,
+            _proxyAndProver,
             uint64(_transactFee / denominator),
             uint64(_treeUpdateFee / denominator),
             _memoMessageAndExtraData(_prefix)
@@ -368,7 +371,20 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
         int256 _amount,
         uint256 _transactFee,
         uint256 _treeUpdateFee,
-        address prover
+        address _proxyAndProver
+    )
+        internal
+        returns (bytes memory)
+    {
+        return _encodePermitDeposit(_amount, _transactFee, _treeUpdateFee, _proxyAndProver, _proxyAndProver);
+    }
+
+    function _encodePermitDeposit(
+        int256 _amount,
+        uint256 _transactFee,
+        uint256 _treeUpdateFee,
+        address _proxy,
+        address _prover
     )
         internal
         returns (bytes memory)
@@ -413,24 +429,19 @@ abstract contract AbstractZkBobPoolTestBase is AbstractForkTest {
             signature = abi.encodePacked(r, uint256(s) + (v == 28 ? (1 << 255) : 0));
         }
 
-        bytes memory data = abi.encodePacked(
-            ZkBobPool.transactV2.selector,
-            uint8(2),
-            nullifier,
-            _randFR(),
-            uint48(0),
-            uint112(0),
-            int64(_amount / int256(denominator))
-        );
+        bytes memory data = abi.encodePacked(ZkBobPool.transactV2.selector, uint8(2));
+
+        data = abi.encodePacked(data, nullifier, _randFR(), uint48(0), uint112(0), int64(_amount / int256(denominator)));
         for (uint256 i = 0; i < 8; i++) {
             data = abi.encodePacked(data, _randFR());
         }
 
-        data = abi.encodePacked(data, uint16(3), uint16(112));
+        data = abi.encodePacked(data, uint16(3), uint16(132));
 
         data = abi.encodePacked(
             data,
-            prover,
+            _proxy,
+            _prover,
             uint64(_transactFee / denominator),
             uint64(_treeUpdateFee / denominator),
             uint64(expiry),
@@ -791,7 +802,7 @@ abstract contract AbstractZkBobPoolTest is AbstractZkBobPoolTestBase {
         vm.expectEmit(true, false, false, true);
         emit Message(128, bytes32(0), message);
         vm.prank(user2);
-        pool.appendDirectDeposits(indices, outCommitment, _randProof());
+        pool.appendDirectDeposits(indices, outCommitment, _randProof(), address(0));
     }
 
     function testRefundDirectDeposit() public {
@@ -1004,7 +1015,7 @@ abstract contract AbstractZkBobPoolTest is AbstractZkBobPoolTestBase {
 
     function testTransactMessageEvent() public {
         bytes memory data = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, user2);
-        bytes memory message = _slice(data, 423, 36);
+        bytes memory message = _slice(data, 443, 36);
         vm.expectEmit(true, false, false, true);
         emit Message(128, bytes32(0), message);
         _transact(data);
@@ -1014,21 +1025,21 @@ abstract contract AbstractZkBobPoolTest is AbstractZkBobPoolTestBase {
         IERC20(token).approve(address(pool), 0.11 ether / D);
 
         bytes memory data1 = _encodeDeposit(int256(0.1 ether / D), 0.005 ether / D, 0.005 ether / D, user2);
-        bytes memory message1 = _slice(data1, 395, 36);
+        bytes memory message1 = _slice(data1, 415, 36);
         vm.expectEmit(true, false, false, true);
         emit Message(256, bytes32(0), message1);
         _transact(data1);
         _proveTreeUpdate();
 
         bytes memory data2 = _encodeTransfer(0.005 ether / D, 0.005 ether / D, user2);
-        bytes memory message2 = _slice(data2, 395, 36);
+        bytes memory message2 = _slice(data2, 415, 36);
         vm.expectEmit(true, false, false, true);
         emit Message(384, bytes32(0), message2);
         _transact(data2);
         _proveTreeUpdate();
 
         bytes memory data3 = _encodeWithdrawal(user1, 0.1 ether / D, 0, 0, user2);
-        bytes memory message3 = _slice(data3, 423, 36);
+        bytes memory message3 = _slice(data3, 443, 36);
         vm.expectEmit(true, false, false, true);
         emit Message(512, bytes32(0), message3);
         _transact(data3);

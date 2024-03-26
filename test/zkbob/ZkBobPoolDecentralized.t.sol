@@ -12,64 +12,80 @@ import "../shared/ForkTests.t.sol";
 abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBase {
     AllowListOperatorManager manager;
 
+    address proxy1 = makeAddr("Proxy #1");
     address prover1 = makeAddr("Prover #1");
     address feeReceiver1 = makeAddr("Fee Receiver #1");
 
+    address proxy2 = makeAddr("Proxy #2");
     address prover2 = makeAddr("Prover #2");
     address feeReceiver2 = makeAddr("Fee Receiver #2");
 
+    address notAllowedProxy = makeAddr("Not Allowed Proxy");
     address notAllowedProver = makeAddr("Not Allowed Prover");
 
-    address[] provers = [prover1, prover2];
-    address[] feeReceivers = [feeReceiver1, feeReceiver2];
+    address[] operators = [prover1, prover2, proxy1, proxy2];
+    address[] feeReceivers = [feeReceiver1, feeReceiver2, feeReceiver1, feeReceiver2];
 
     function setUp() public override {
         super.setUp();
 
-        manager = new AllowListOperatorManager(provers, feeReceivers, true);
+        manager = new AllowListOperatorManager(operators, feeReceivers, true);
         pool.setOperatorManager(IOperatorManager(manager));
     }
 
-    function testOnlyAllowedProversCanTransact() public {
+    function testOnlyAllowedProxiesCanTransact() public {
         deal(token, user1, 100 ether / D);
 
-        bytes memory data1 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, prover1);
-        _transact(data1, prover1);
+        bytes memory data1 =
+            _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, proxy1, prover1);
+        _transact(data1, proxy1);
 
-        bytes memory data2 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, prover2);
-        _transact(data2, prover2);
+        bytes memory data2 =
+            _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, proxy2, prover2);
+        _transact(data2, proxy2);
 
         bytes memory data3 =
-            _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, notAllowedProver);
-        _transactExpectRevert(data3, notAllowedProver, "ZkBobPool: not an operator");
+            _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, notAllowedProxy);
+        _transactExpectRevert(data3, notAllowedProxy, "ZkBobPool: not an operator");
 
         manager.setAllowListEnabled(false);
-        _transact(data3, notAllowedProver);
+        _transact(data3, notAllowedProxy);
     }
 
     function testOnlyPrivilegedProverCanUpdateTreeWithinGracePeriod() public {
-        bytes memory data1 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, prover1);
-        _transact(data1, prover1);
+        bytes memory data1 =
+            _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, proxy1, prover1);
+        _transact(data1, proxy1);
 
         vm.warp(block.timestamp + pool.gracePeriod());
 
+        _proveTreeUpdateExpectRevert(proxy1, "ZkBobPool: prover is not allowed to submit the proof yet");
         _proveTreeUpdateExpectRevert(prover2, "ZkBobPool: prover is not allowed to submit the proof yet");
 
         _proveTreeUpdate(prover1);
     }
 
     function testAnyAllowedProverCanUpdateTreeAfterGracePeriod() public {
-        bytes memory data1 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, prover1);
-        _transact(data1, prover1);
+        bytes memory data1 =
+            _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, proxy1, prover1);
+        _transact(data1, proxy1);
 
         vm.warp(block.timestamp + pool.gracePeriod() + 1);
 
         _proveTreeUpdate(prover2);
     }
 
+    function testAnyAllowedProverCanUpdateTreeIfProverIsNotAssigned() public {
+        bytes memory data1 =
+            _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, proxy1, address(0));
+        _transact(data1, proxy1);
+        _proveTreeUpdate(prover2);
+    }
+
     function testNotAllowedProverCantUpdateTreeEvenAfterGracePeriod() public {
-        bytes memory data1 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, prover1);
-        _transact(data1, prover1);
+        bytes memory data1 =
+            _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, proxy1, address(0));
+        _transact(data1, proxy1);
 
         vm.warp(block.timestamp + pool.gracePeriod() + 1);
 
@@ -79,11 +95,13 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
     function testGracePeriodsMayIntersect() public {
         deal(token, user1, 100 ether / D);
 
-        bytes memory data1 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, prover1);
-        _transact(data1, prover1);
+        bytes memory data1 =
+            _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, proxy1, prover1);
+        _transact(data1, proxy1);
 
-        bytes memory data2 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, prover2);
-        _transact(data2, prover2);
+        bytes memory data2 =
+            _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, proxy2, prover2);
+        _transact(data2, proxy2);
 
         vm.warp(block.timestamp + pool.gracePeriod());
         _proveTreeUpdate(prover1);
@@ -93,14 +111,13 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
     }
 
     function testFeeDistribution() public {
-        bytes memory data1 = _encodePermitDeposit(int256(0.5 ether / D), 0.017 ether / D, 0.005 ether / D, prover1);
-        _transact(data1, prover1);
-        assertEq(pool.accumulatedFee(prover1), 0.017 ether / (D * denominator));
+        bytes memory data1 =
+            _encodePermitDeposit(int256(0.5 ether / D), 0.017 ether / D, 0.005 ether / D, proxy1, address(0));
+        _transact(data1, proxy1);
+        assertEq(pool.accumulatedFee(proxy1), 0.017 ether / (D * denominator));
 
         vm.prank(feeReceiver1);
-        pool.withdrawFee(prover1, feeReceiver1);
-
-        vm.warp(block.timestamp + pool.gracePeriod() + 1);
+        pool.withdrawFee(proxy1, feeReceiver1);
 
         _proveTreeUpdate(prover2);
         assertEq(pool.accumulatedFee(prover2), 0.005 ether / (D * denominator));
@@ -118,8 +135,9 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
     }
 
     function testCantSkipCommitments() public {
-        bytes memory data1 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, prover1);
-        _transact(data1, prover1);
+        bytes memory data1 =
+            _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, proxy1, prover1);
+        _transact(data1, proxy1);
 
         vm.expectRevert("ZkBobPool: commitment mismatch");
         vm.prank(prover1);
@@ -130,43 +148,46 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
         deal(token, user1, 100 ether / D);
         pool.setMinTreeUpdateFee(uint64(0.01 ether / (D * denominator)));
 
-        bytes memory data1 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.009 ether / D, prover1);
-        _transactExpectRevert(data1, prover1, "ZkBobPool: tree update fee is too low");
+        bytes memory data1 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.009 ether / D, proxy1);
+        _transactExpectRevert(data1, proxy1, "ZkBobPool: tree update fee is too low");
 
-        bytes memory data2 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.01 ether / D, prover1);
-        _transact(data2, prover1);
+        bytes memory data2 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.01 ether / D, proxy1);
+        _transact(data2, proxy1);
 
-        bytes memory data3 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.011 ether / D, prover1);
-        _transact(data3, prover1);
+        bytes memory data3 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.011 ether / D, proxy1);
+        _transact(data3, proxy1);
     }
 
     function testIndexInMessageEventIsConstructedCorrectly() public {
         uint256 index = pool.pool_index();
         deal(token, user1, 100 ether / D);
 
-        bytes memory data1 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, prover1);
+        bytes memory data1 =
+            _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, proxy1, prover1);
         vm.expectEmit(true, false, false, false);
         bytes memory message = new bytes(0);
         emit Message(index + 128, bytes32(0), message);
-        _transact(data1, prover1);
+        _transact(data1, proxy1);
 
-        bytes memory data2 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, prover2);
+        bytes memory data2 =
+            _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, proxy2, prover2);
         vm.expectEmit(true, false, false, false);
         emit Message(index + 2 * 128, bytes32(0), message);
-        _transact(data2, prover2);
+        _transact(data2, proxy2);
 
         (uint256[] memory indices, uint256 commitment, uint256[8] memory proof) = _prepareRandomDirectDeposits(0);
         vm.expectEmit(true, false, false, false);
         emit Message(index + 3 * 128, bytes32(0), message);
-        _appendDirectDeposits(indices, commitment, proof, prover1);
+        _appendDirectDeposits(indices, commitment, proof, proxy1, prover1);
 
         _proveTreeUpdate(prover1);
         _proveTreeUpdate(prover2);
 
-        bytes memory data3 = _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, prover2);
+        bytes memory data3 =
+            _encodePermitDeposit(int256(0.5 ether / D), 0.005 ether / D, 0.005 ether / D, proxy2, prover2);
         vm.expectEmit(true, false, false, false);
         emit Message(index + 4 * 128, bytes32(0), message);
-        _transact(data3, prover2);
+        _transact(data3, proxy2);
 
         _proveTreeUpdate(prover1);
         _proveTreeUpdate(prover2);
@@ -174,7 +195,7 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
         (indices, commitment, proof) = _prepareRandomDirectDeposits(2);
         vm.expectEmit(true, false, false, false);
         emit Message(index + 5 * 128, bytes32(0), message);
-        _appendDirectDeposits(indices, commitment, proof, prover2);
+        _appendDirectDeposits(indices, commitment, proof, proxy2, prover2);
 
         _proveTreeUpdate(prover2);
     }
@@ -196,9 +217,9 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
         indices[1] = 1;
 
         uint256 outCommitment = _randFR();
-        vm.prank(prover1);
+        vm.prank(proxy1);
         vm.expectRevert("ZkBobPool: tree update fee is too low");
-        pool.appendDirectDeposits(indices, outCommitment, _randProof());
+        pool.appendDirectDeposits(indices, outCommitment, _randProof(), prover1);
     }
 
     function testDirectDepositsTreeFeesAccrued() public {
@@ -220,13 +241,13 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
         indices[1] = 1;
 
         uint256 outCommitment = _randFR();
-        vm.prank(prover1);
-        pool.appendDirectDeposits(indices, outCommitment, _randProof());
+        vm.prank(proxy1);
+        pool.appendDirectDeposits(indices, outCommitment, _randProof(), prover1);
         uint64 expectedFee = uint64(singleDirectDepositFee * 2 - minTreeUpdateFee);
-        assertEq(expectedFee, pool.accumulatedFee(prover1));
+        assertEq(expectedFee, pool.accumulatedFee(proxy1));
 
-        vm.prank(prover1);
-        pool.withdrawFee(prover1, feeReceiver1);
+        vm.prank(proxy1);
+        pool.withdrawFee(proxy1, feeReceiver1);
         assertEq(IERC20(token).balanceOf(feeReceiver1), expectedFee * denominator);
 
         _proveTreeUpdate(prover1);
@@ -290,12 +311,13 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
         uint256[] memory indices,
         uint256 commitment,
         uint256[8] memory proof,
+        address proxy,
         address prover
     )
         internal
     {
-        vm.prank(prover);
-        pool.appendDirectDeposits(indices, commitment, proof);
+        vm.prank(proxy);
+        pool.appendDirectDeposits(indices, commitment, proof, prover);
     }
 }
 

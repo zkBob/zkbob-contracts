@@ -115,17 +115,17 @@ contract CustomABIDecoder {
     function _memo_fixed_size() internal pure returns (uint256 r) {
         uint256 t = _tx_type();
         if (t == 0 || t == 1) {
-            // prover address + transact fee + tree update fee
-            // 20 + 8 + 8
-            r = 36;
+            // proxy address + prover address + transact fee + tree update fee
+            // 20 + 20 + 8 + 8
+            r = 56;
         } else if (t == 2) {
-            // prover address + transact fee + tree update fee + native amount + recipient
-            // 20 + 8 + 8 + 8 + 20
-            r = 64;
+            // proxy address + prover address + transact fee + tree update fee + native amount + recipient
+            // 20 + 20 + 8 + 8 + 8 + 20
+            r = 84;
         } else if (t == 3) {
-            // prover address + transact fee + tree update fee + deadline + address
-            // 20 + 8 + 8 + 8 + 20
-            r = 64;
+            // proxy address + prover address + transact fee + tree update fee + deadline + address
+            // 20 + 20 + 8 + 8 + 8 + 20
+            r = 84;
         } else {
             revert();
         }
@@ -145,7 +145,14 @@ contract CustomABIDecoder {
         }
     }
 
-    uint256 constant memo_prover_address_pos = memo_data_pos;
+    uint256 constant memo_proxy_address_pos = memo_data_pos;
+    uint256 constant memo_proxy_address_size = 20;
+
+    function _memo_proxy_address() internal pure returns (address r) {
+        r = address(uint160(_loaduint256(memo_proxy_address_pos + memo_proxy_address_size - uint256_size)));
+    }
+
+    uint256 constant memo_prover_address_pos = memo_proxy_address_pos + memo_proxy_address_size;
     uint256 constant memo_prover_address_size = 20;
 
     function _memo_prover_address() internal pure returns (address r) {
