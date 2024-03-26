@@ -99,11 +99,13 @@ contract DeployZkBobPool is Script {
 
         AllowListOperatorManager operatorManager;
         {
-            address[] memory operators = new address[](1);
-            operators[0] = zkBobRelayer;
+            address[] memory operators = new address[](2);
+            operators[0] = zkBobProxy;
+            operators[1] = zkBobProver;
 
-            address[] memory feeReceivers = new address[](1);
-            feeReceivers[0] = zkBobRelayerFeeReceiver;
+            address[] memory feeReceivers = new address[](2);
+            feeReceivers[0] = zkBobProxyFeeReceiver;
+            feeReceivers[1] = zkBobProverFeeReceiver;
 
             operatorManager = new AllowListOperatorManager(operators, feeReceivers, allowListEnabled);
             pool.setOperatorManager(operatorManager);
