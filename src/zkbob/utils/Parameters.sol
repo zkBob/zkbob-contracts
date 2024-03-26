@@ -20,12 +20,6 @@ abstract contract Parameters is CustomABIDecoder {
         r[4] = uint256(keccak256(_memo_data())) % R;
     }
 
-    function _tree_pub(uint256 _root_before) internal view returns (uint256[3] memory r) {
-        r[0] = _root_before;
-        r[1] = _tree_root_after();
-        r[2] = _transfer_out_commit();
-    }
-
     // NOTE only valid in the context of normal deposit (tx_type=0)
     function _deposit_spender() internal pure returns (address) {
         (bytes32 r, bytes32 vs) = _sign_r_vs();

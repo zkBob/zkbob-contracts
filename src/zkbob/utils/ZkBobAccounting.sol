@@ -294,11 +294,6 @@ contract ZkBobAccounting is IZkBobAccounting, Ownable {
             _recordDirectDeposit(_user, uint256(_txAmount));
             return;
         }
-        if (_txType == IZkBobAccounting.TxType.ForcedExit) {
-            require(_txAmount > 0, "ZkBobAccounting: negative amount");
-            slot1.tvl -= uint72(uint256(_txAmount));
-            return;
-        }
 
         Slot0 memory s0 = slot0;
         Slot1 memory s1 = slot1;
