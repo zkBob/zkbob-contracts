@@ -3,8 +3,6 @@
 pragma solidity 0.8.15;
 
 contract CustomABIDecoder {
-    uint256 constant transfer_nullifier_pos = 4;
-    uint256 constant transfer_nullifier_size = 32;
     uint256 constant uint256_size = 32;
 
     function _loaduint256(uint256 pos) internal pure returns (uint256 r) {
@@ -12,6 +10,16 @@ contract CustomABIDecoder {
             r := calldataload(pos)
         }
     }
+
+    uint256 constant version_pos = 4;
+    uint256 constant version_size = 1;
+
+    function _version() internal pure returns (uint8 r) {
+        r = uint8(_loaduint256(version_pos) >> (8 * (uint256_size - version_size)));
+    }
+
+    uint256 constant transfer_nullifier_pos = version_pos + version_size;
+    uint256 constant transfer_nullifier_size = 32;
 
     function _transfer_nullifier() internal pure returns (uint256 r) {
         r = _loaduint256(transfer_nullifier_pos);
@@ -55,24 +63,7 @@ contract CustomABIDecoder {
         }
     }
 
-    uint256 constant tree_root_after_pos = transfer_proof_pos + transfer_proof_size;
-    uint256 constant tree_root_after_size = 32;
-
-    function _tree_root_after() internal pure returns (uint256 r) {
-        r = _loaduint256(tree_root_after_pos);
-    }
-
-    uint256 constant tree_proof_pos = tree_root_after_pos + tree_root_after_size;
-    uint256 constant tree_proof_size = 256;
-
-    function _tree_proof() internal pure returns (uint256[8] calldata r) {
-        uint256 pos = tree_proof_pos;
-        assembly {
-            r := pos
-        }
-    }
-
-    uint256 constant tx_type_pos = tree_proof_pos + tree_proof_size;
+    uint256 constant tx_type_pos = transfer_proof_pos + transfer_proof_size;
     uint256 constant tx_type_size = 2;
     uint256 constant tx_type_mask = (1 << (tx_type_size * 8)) - 1;
 
@@ -124,43 +115,70 @@ contract CustomABIDecoder {
     function _memo_fixed_size() internal pure returns (uint256 r) {
         uint256 t = _tx_type();
         if (t == 0 || t == 1) {
-            // fee
-            // 8
-            r = 8;
+            // proxy address + prover address + transact fee + tree update fee
+            // 20 + 20 + 8 + 8
+            r = 56;
         } else if (t == 2) {
-            // fee + native amount + recipient
-            // 8 + 8 + 20
-            r = 36;
+            // proxy address + prover address + transact fee + tree update fee + native amount + recipient
+            // 20 + 20 + 8 + 8 + 8 + 20
+            r = 84;
         } else if (t == 3) {
-            // fee + deadline + address
-            // 8 + 8 + 20
-            r = 36;
+            // proxy address + prover address + transact fee + tree update fee + deadline + address
+            // 20 + 20 + 8 + 8 + 8 + 20
+            r = 84;
         } else {
             revert();
         }
     }
 
+    uint256 constant memo_message_size_size = 2;
+    uint256 constant memo_message_size_mask = (1 << (memo_message_size_size * 8)) - 1;
+
     function _memo_message() internal pure returns (bytes calldata r) {
         uint256 memo_fixed_size = _memo_fixed_size();
         uint256 offset = memo_data_pos + memo_fixed_size;
-        uint256 length = _memo_data_size() - memo_fixed_size;
+        uint256 length = _loaduint256(offset + memo_message_size_size - uint256_size) & memo_message_size_mask;
+        offset += memo_message_size_size;
         assembly {
             r.offset := offset
             r.length := length
         }
     }
 
-    uint256 constant memo_fee_pos = memo_data_pos;
-    uint256 constant memo_fee_size = 8;
-    uint256 constant memo_fee_mask = (1 << (memo_fee_size * 8)) - 1;
+    uint256 constant memo_proxy_address_pos = memo_data_pos;
+    uint256 constant memo_proxy_address_size = 20;
 
-    function _memo_fee() internal pure returns (uint256 r) {
-        r = _loaduint256(memo_fee_pos + memo_fee_size - uint256_size) & memo_fee_mask;
+    function _memo_proxy_address() internal pure returns (address r) {
+        r = address(uint160(_loaduint256(memo_proxy_address_pos + memo_proxy_address_size - uint256_size)));
+    }
+
+    uint256 constant memo_prover_address_pos = memo_proxy_address_pos + memo_proxy_address_size;
+    uint256 constant memo_prover_address_size = 20;
+
+    function _memo_prover_address() internal pure returns (address r) {
+        r = address(uint160(_loaduint256(memo_prover_address_pos + memo_prover_address_size - uint256_size)));
+    }
+
+    uint256 constant memo_transact_fee_pos = memo_prover_address_pos + memo_prover_address_size;
+    uint256 constant memo_transact_fee_size = 8;
+    uint256 constant memo_transact_fee_mask = (1 << (memo_transact_fee_size * 8)) - 1;
+
+    function _memo_transact_fee() internal pure returns (uint256 r) {
+        r = _loaduint256(memo_transact_fee_pos + memo_transact_fee_size - uint256_size) & memo_transact_fee_mask;
+    }
+
+    uint256 constant memo_tree_update_fee_pos = memo_transact_fee_pos + memo_transact_fee_size;
+    uint256 constant memo_tree_update_fee_size = 8;
+    uint256 constant memo_tree_update_fee_mask = (1 << (memo_tree_update_fee_size * 8)) - 1;
+
+    function _memo_tree_update_fee() internal pure returns (uint256 r) {
+        r = _loaduint256(memo_tree_update_fee_pos + memo_tree_update_fee_size - uint256_size)
+            & memo_tree_update_fee_mask;
     }
 
     // Withdraw specific data
 
-    uint256 constant memo_native_amount_pos = memo_fee_pos + memo_fee_size;
+    uint256 constant memo_native_amount_pos = memo_tree_update_fee_pos + memo_tree_update_fee_size;
     uint256 constant memo_native_amount_size = 8;
     uint256 constant memo_native_amount_mask = (1 << (memo_native_amount_size * 8)) - 1;
 
@@ -177,7 +195,7 @@ contract CustomABIDecoder {
 
     // Permittable token deposit specific data
 
-    uint256 constant memo_permit_deadline_pos = memo_fee_pos + memo_fee_size;
+    uint256 constant memo_permit_deadline_pos = memo_tree_update_fee_pos + memo_tree_update_fee_size;
     uint256 constant memo_permit_deadline_size = 8;
 
     function _memo_permit_deadline() internal pure returns (uint64 r) {

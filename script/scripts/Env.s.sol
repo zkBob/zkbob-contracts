@@ -12,9 +12,9 @@ enum PoolType {
 }
 
 // common
-address constant deployer = 0x39F0bD56c1439a22Ee90b4972c16b7868D161981;
-address constant admin = 0xd4a3D9Ca00fa1fD8833D560F9217458E61c446d8;
-address constant owner = 0xd4a3D9Ca00fa1fD8833D560F9217458E61c446d8;
+address constant deployer = 0x37493bFe9c8c31fAbe8615C988e83D59D1a667a9;
+address constant admin = 0x37493bFe9c8c31fAbe8615C988e83D59D1a667a9;
+address constant owner = 0x37493bFe9c8c31fAbe8615C988e83D59D1a667a9;
 address constant mockImpl = address(0xdead);
 
 // bob
@@ -23,24 +23,50 @@ address constant bobVanityAddr = address(0xB0B195aEFA3650A6908f15CdaC7D92F8a5791
 bytes32 constant bobSalt = bytes32(uint256(285834900769));
 
 // zkbob
-uint256 constant zkBobPoolId = 0; // 0 is reserved for Polygon MVP pool, do not use for other deployments
+uint256 constant zkBobPoolId = 0xffff0a; // 0 is reserved for Polygon MVP pool, do not use for other deployments
 PoolType constant zkBobPoolType = PoolType.BOB;
-string constant zkBobVerifiers = "prodV1";
-address constant zkBobToken = 0xB0B195aEFA3650A6908f15CdaC7D92F8a5791B0B;
+string constant zkBobVerifiers = "stageV2";
+address constant zkBobToken = 0x2C74B18e2f84B78ac67428d0c7a9898515f0c46f;
 uint256 constant zkBobInitialRoot = 11469701942666298368112882412133877458305516134926649826543144744382391691533;
-address constant zkBobRelayer = 0xc2c4AD59B78F4A0aFD0CDB8133E640Db08Fa5b90;
-address constant zkBobRelayerFeeReceiver = 0x758768EC473279c4B1Aa61FA5450745340D4B17d;
-string constant zkBobRelayerURL = "https://relayer-mvp.zkbob.com";
-uint256 constant zkBobPoolCap = 1_000_000 ether;
-uint256 constant zkBobDailyDepositCap = 100_000 ether;
-uint256 constant zkBobDailyWithdrawalCap = 100_000 ether;
-uint256 constant zkBobDailyUserDepositCap = 10_000 ether;
-uint256 constant zkBobDepositCap = 10_000 ether;
-uint256 constant zkBobDailyUserDirectDepositCap = 0;
-uint256 constant zkBobDirectDepositCap = 0;
+address constant zkBobProxy = 0xFec49782FE8e11De9Fb3Ba645a76FE914FFfe3cb;
+address constant zkBobProxyFeeReceiver = 0xFec49782FE8e11De9Fb3Ba645a76FE914FFfe3cb;
+address constant zkBobProver = 0x7D2D146a7AD3F0Dc398AA718a9bFCa2Bc873a5FD;
+address constant zkBobProverFeeReceiver = 0x7D2D146a7AD3F0Dc398AA718a9bFCa2Bc873a5FD;
 uint256 constant zkBobDirectDepositFee = 0.1 gwei;
 uint256 constant zkBobDirectDepositTimeout = 1 days;
 address constant permit2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
+
+// decentralized
+uint64 constant gracePeriod = 3 minutes; // TODO
+uint64 constant minTreeUpdateFee = 0.1 gwei;
+bool constant allowListEnabled = true;
+
+// accounting
+address constant kycManager = address(0);
+
+uint256 constant tier0TvlCap = 2_000_000 gwei;
+uint256 constant tier0DailyDepositCap = 300_000 gwei;
+uint256 constant tier0DailyWithdrawalCap = 300_000 gwei;
+uint256 constant tier0DailyUserDepositCap = 10_000 gwei;
+uint256 constant tier0DepositCap = 10_000 gwei;
+uint256 constant tier0DailyUserDirectDepositCap = 10_000 gwei;
+uint256 constant tier0DirectDepositCap = 1_000 gwei;
+
+uint256 constant tier1TvlCap = 2_000_000 gwei;
+uint256 constant tier1DailyDepositCap = 300_000 gwei;
+uint256 constant tier1DailyWithdrawalCap = 300_000 gwei;
+uint256 constant tier1DailyUserDepositCap = 100_000 gwei;
+uint256 constant tier1DepositCap = 100_000 gwei;
+uint256 constant tier1DailyUserDirectDepositCap = 10_000 gwei;
+uint256 constant tier1DirectDepositCap = 1_000 gwei;
+
+uint256 constant tier254TvlCap = 2_000_000 gwei;
+uint256 constant tier254DailyDepositCap = 300_000 gwei;
+uint256 constant tier254DailyWithdrawalCap = 300_000 gwei;
+uint256 constant tier254DailyUserDepositCap = 20_000 gwei;
+uint256 constant tier254DepositCap = 20_000 gwei;
+uint256 constant tier254DailyUserDirectDepositCap = 10_000 gwei;
+uint256 constant tier254DirectDepositCap = 1_000 gwei;
 
 // new zkbob impl
 address constant zkBobPool = 0x72e6B59D4a90ab232e55D4BB7ed2dD17494D62fB;
