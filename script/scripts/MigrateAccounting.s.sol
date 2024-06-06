@@ -94,6 +94,9 @@ contract UpgradeTest is Test {
     }
 }
 
+/**
+ * @dev Don't forget to set ZkBobPool.TOKEN_NUMERATOR to 1000 for USDC pools.
+ */
 contract MigrateAccounting is Script, UpgradeTest {
     function run() external {
         ZkBobPoolUSDC pool = ZkBobPoolUSDC(address(zkBobPool));

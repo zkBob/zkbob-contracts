@@ -38,7 +38,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     uint256 internal constant FORCED_EXIT_MAX_DELAY = 24 hours;
 
     uint256 internal immutable TOKEN_DENOMINATOR;
-    uint256 internal constant TOKEN_NUMERATOR = 1000;
+    uint256 internal constant TOKEN_NUMERATOR = 1;
 
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;
