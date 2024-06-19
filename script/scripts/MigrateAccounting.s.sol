@@ -7,22 +7,25 @@ import {Test} from "forge-std/Test.sol";
 import {ZkBobPool, ZkBobPoolUSDC} from "../../src/zkbob/ZkBobPoolUSDC.sol";
 import {IZkBobAccounting, IKycProvidersManager, ZkBobAccounting} from "../../src/zkbob/utils/ZkBobAccounting.sol";
 import {EIP1967Proxy} from "../../src/proxy/EIP1967Proxy.sol";
+import {AccountingMigrator} from "./helpers/AccountingMigrator.sol";
+
+// WARN: Update this values before running the script
+address constant newZkBobPoolImpl = 0xD217AEf4aB37F7CeE7462d25cbD91f46c1E688a9;
+address constant zkBobAccounting = 0xFd5a6a67D768d5BF1A8c7724387CA8786Bd4DD91;
+address constant accountingMigrator = 0x0114Bf30d9f5A7f503D3DFC65534F2B5AC302c85;
+address constant accountingOwner = 0x14fc6a1a996A2EB889cF86e5c8cD17323bC85290;
 
 /**
  * @dev OP-USDC pool proxy address.
  */
 address constant zkBobPool = 0x1CA8C2B9B20E18e86d5b9a72370fC6c91814c97C;
 
-/**
- * @dev This address will become an owner of the the new ZkBobAccounting contract.
- */
-address constant accountingOwner = 0x14fc6a1a996A2EB889cF86e5c8cD17323bC85290;
-
 // Used to check that the relayer fee is correctly migrated
 address constant relayer = 0xb9CD01c0b417b4e9095f620aE2f849A84a9B1690;
 
 contract UpgradeTest is Test {
     struct PoolSnapshot {
+        address proxyAdmin;
         address owner;
         bytes32 slot0;
         bytes32 slot1;
@@ -37,6 +40,7 @@ contract UpgradeTest is Test {
 
     function makeSnapshot(ZkBobPoolUSDC _pool) internal view returns (PoolSnapshot memory) {
         return PoolSnapshot({
+            proxyAdmin: EIP1967Proxy(payable(address(_pool))).admin(),
             owner: _pool.owner(),
             slot0: vm.load(address(_pool), bytes32(uint256(1))),
             slot1: vm.load(address(_pool), bytes32(uint256(2))),
@@ -51,6 +55,7 @@ contract UpgradeTest is Test {
     }
 
     function postCheck(ZkBobPoolUSDC _pool, PoolSnapshot memory _snapshot) internal {
+        assertEq(_snapshot.proxyAdmin, EIP1967Proxy(payable(address(_pool))).admin());
         assertEq(_snapshot.owner, _pool.owner());
         assertEq(address(_pool.redeemer()), address(0)); // redeemer is not set by script
         assertNotEq(address(_pool.accounting()), address(0));
@@ -94,77 +99,31 @@ contract UpgradeTest is Test {
     }
 }
 
-/**
- * @dev Don't forget to set ZkBobPool.TOKEN_NUMERATOR to 1000 for USDC pools.
- */
 contract MigrateAccounting is Script, UpgradeTest {
     function run() external {
         ZkBobPoolUSDC pool = ZkBobPoolUSDC(address(zkBobPool));
+        AccountingMigrator migrator = AccountingMigrator(accountingMigrator);
         PoolSnapshot memory snapshot = makeSnapshot(pool);
 
         vm.startBroadcast();
+        
+        EIP1967Proxy(payable(address(pool))).upgradeTo(address(newZkBobPoolImpl));
+        
+        EIP1967Proxy(payable(address(pool))).setAdmin(accountingMigrator);
+        
+        ZkBobAccounting(zkBobAccounting).transferOwnership(accountingMigrator);
 
-        // 1. Deploy new ZkBobPoolUSDC implementation
-        ZkBobPoolUSDC newImpl = new ZkBobPoolUSDC(
-            pool.pool_id(),
-            pool.token(),
-            pool.transfer_verifier(),
-            pool.tree_verifier(),
-            pool.batch_deposit_verifier(),
-            address(pool.direct_deposit_queue())
+        migrator.migrate(
+            address(pool),
+            zkBobAccounting,
+            snapshot.kycManager,
+            accountingOwner,
+            snapshot.proxyAdmin
         );
-
-        // 2. Upgrade proxy to new implementation
-        EIP1967Proxy(payable(address(pool))).upgradeTo(address(newImpl));
-
-        migrateAccounting(address(pool), address(snapshot.kycManager));
 
         vm.stopBroadcast();
 
         postCheck(ZkBobPoolUSDC(address(pool)), snapshot);
     }
-
-    // TODO: Check limits
-    function migrateAccounting(address _pool, address _kycManager) internal {
-        // 3. Deploy new ZkBobAccounting implementation
-        ZkBobAccounting accounting = new ZkBobAccounting(address(_pool), 1_000_000_000);
-
-        bytes memory dump = ZkBobPool(_pool).extsload(bytes32(uint256(1)), 2);
-        uint32 txCount = uint32(_load(dump, 0, 4));
-        uint88 cumTvl = uint88(_load(dump, 4, 11));
-        uint32 maxWeeklyTxCount = uint32(_load(dump, 21, 4));
-        uint56 maxWeeklyAvgTvl = uint56(_load(dump, 25, 7));
-        uint72 tvl = uint72(_load(dump, 55, 9));
-
-        // 4. Initialize pool index
-        ZkBobPool(_pool).initializePoolIndex(txCount * 128);
-        // 5. Set accounting
-        ZkBobPool(_pool).setAccounting(IZkBobAccounting(accounting));
-
-        // 6. Initialize accounting
-        ZkBobAccounting(accounting).initialize(txCount, tvl, cumTvl, maxWeeklyTxCount, maxWeeklyAvgTvl);
-        // 7. Set kyc providers manager
-        ZkBobAccounting(accounting).setKycProvidersManager(IKycProvidersManager(_kycManager));
-        // 8. Set limits for tier 0
-        ZkBobAccounting(accounting).setLimits(
-            0, 2_000_000 gwei, 300_000 gwei, 300_000 gwei, 10_000 gwei, 10_000 gwei, 10_000 gwei, 1_000 gwei
-        );
-        // 9. Set limits for tier 1
-        ZkBobAccounting(accounting).setLimits(
-            1, 2_000_000 gwei, 300_000 gwei, 300_000 gwei, 100_000 gwei, 100_000 gwei, 10_000 gwei, 1_000 gwei
-        );
-        // 10. Set limits for tier 254
-        ZkBobAccounting(accounting).setLimits(
-            254, 2_000_000 gwei, 300_000 gwei, 300_000 gwei, 20_000 gwei, 20_000 gwei, 10_000 gwei, 1_000 gwei
-        );
-
-        // 11. Transfer accounting accounting ownership to the owner
-        accounting.transferOwnership(accountingOwner);
-    }
-
-    function _load(bytes memory _dump, uint256 _from, uint256 _len) internal pure returns (uint256 res) {
-        assembly {
-            res := shr(sub(256, shl(3, _len)), mload(add(_dump, add(32, _from))))
-        }
-    }
 }
+
