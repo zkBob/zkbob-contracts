@@ -2,9 +2,10 @@
 
 pragma solidity 0.8.15;
 
-import {ZkBobPool} from "../../../src/zkbob/ZkBobPoolUSDC.sol";
-import {IZkBobAccounting, IKycProvidersManager, ZkBobAccounting} from "../../../src/zkbob/utils/ZkBobAccounting.sol";
-import {EIP1967Proxy} from "../../../src/proxy/EIP1967Proxy.sol";
+import {console, Script} from "forge-std/Script.sol";
+import {ZkBobPool, ZkBobPoolUSDC} from "../../src/zkbob/ZkBobPoolUSDC.sol";
+import {IZkBobAccounting, IKycProvidersManager, ZkBobAccounting} from "../../src/zkbob/utils/ZkBobAccounting.sol";
+import {EIP1967Proxy} from "../../src/proxy/EIP1967Proxy.sol";
 
 contract AccountingMigrator {
     constructor() {}
@@ -51,5 +52,15 @@ contract AccountingMigrator {
         assembly {
             res := shr(sub(256, shl(3, _len)), mload(add(_dump, add(32, _from))))
         }
+    }
+}
+
+contract DeployAccountingMigrator is Script {
+    function run() external {
+        vm.startBroadcast();
+        AccountingMigrator migrator = new AccountingMigrator();
+        vm.stopBroadcast();
+
+        console.log("AccountingMigrator: ", address(migrator));
     }
 }

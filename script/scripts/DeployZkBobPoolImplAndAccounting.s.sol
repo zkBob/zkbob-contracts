@@ -6,7 +6,6 @@ import {console, Script} from "forge-std/Script.sol";
 import {ZkBobPoolUSDC} from "../../src/zkbob/ZkBobPoolUSDC.sol";
 import {ZkBobAccounting} from "../../src/zkbob/utils/ZkBobAccounting.sol";
 import {EIP1967Proxy} from "../../src/proxy/EIP1967Proxy.sol";
-import {AccountingMigrator} from "./helpers/AccountingMigrator.sol";
 
 /**
  * @dev OP-USDC pool proxy address.
@@ -21,7 +20,7 @@ address constant zkBobTimelock = 0xbe7D4E55D80fC3e67D80ebf988eB0E551cCA4eB7;
 /**
  * @dev Don't forget to set ZkBobPool.TOKEN_NUMERATOR to 1000 for USDC pools.
  */
-contract PreMigrateAccounting is Script {
+contract DeployZkBobPoolImplAndAccounting is Script {
     function run() external {
         ZkBobPoolUSDC pool = ZkBobPoolUSDC(address(zkBobPool));
 
@@ -43,15 +42,11 @@ contract PreMigrateAccounting is Script {
         // 3. Set timelock as the owner of the accounting
         accounting.transferOwnership(zkBobTimelock);
 
-        // 4. Deploy one-time Migrator
-        AccountingMigrator migrator = new AccountingMigrator();
-
         vm.stopBroadcast();
 
         assert(accounting.owner() == zkBobTimelock);
 
         console.log("ZkBobPool implementation:", address(newImpl));
         console.log("ZkBobAccounting: ", address(accounting));
-        console.log("AccountingMigrator: ", address(migrator));
     }
 }

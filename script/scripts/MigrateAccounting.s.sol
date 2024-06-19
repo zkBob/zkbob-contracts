@@ -7,7 +7,7 @@ import {Test} from "forge-std/Test.sol";
 import {ZkBobPool, ZkBobPoolUSDC} from "../../src/zkbob/ZkBobPoolUSDC.sol";
 import {IZkBobAccounting, IKycProvidersManager, ZkBobAccounting} from "../../src/zkbob/utils/ZkBobAccounting.sol";
 import {EIP1967Proxy} from "../../src/proxy/EIP1967Proxy.sol";
-import {AccountingMigrator} from "./helpers/AccountingMigrator.sol";
+import {AccountingMigrator} from "./DeployAccountingMigrator.s.sol";
 
 // WARN: Update this values before running the script
 address constant newZkBobPoolImpl = 0xD217AEf4aB37F7CeE7462d25cbD91f46c1E688a9;
