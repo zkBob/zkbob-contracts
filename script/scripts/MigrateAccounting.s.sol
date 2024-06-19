@@ -106,24 +106,17 @@ contract MigrateAccounting is Script, UpgradeTest {
         PoolSnapshot memory snapshot = makeSnapshot(pool);
 
         vm.startBroadcast();
-        
+
         EIP1967Proxy(payable(address(pool))).upgradeTo(address(newZkBobPoolImpl));
-        
+
         EIP1967Proxy(payable(address(pool))).setAdmin(accountingMigrator);
-        
+
         ZkBobAccounting(zkBobAccounting).transferOwnership(accountingMigrator);
 
-        migrator.migrate(
-            address(pool),
-            zkBobAccounting,
-            snapshot.kycManager,
-            accountingOwner,
-            snapshot.proxyAdmin
-        );
+        migrator.migrate(address(pool), zkBobAccounting, snapshot.kycManager, accountingOwner, snapshot.proxyAdmin);
 
         vm.stopBroadcast();
 
         postCheck(ZkBobPoolUSDC(address(pool)), snapshot);
     }
 }
-
