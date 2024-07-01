@@ -10,9 +10,9 @@ import {EIP1967Proxy} from "../../src/proxy/EIP1967Proxy.sol";
 import {AccountingMigrator} from "./DeployAccountingMigrator.s.sol";
 
 // WARN: Update this values before running the script
-address constant newZkBobPoolImpl = 0xD217AEf4aB37F7CeE7462d25cbD91f46c1E688a9;
-address constant zkBobAccounting = 0xFd5a6a67D768d5BF1A8c7724387CA8786Bd4DD91;
-address constant accountingMigrator = 0x0114Bf30d9f5A7f503D3DFC65534F2B5AC302c85;
+address constant newZkBobPoolImpl = 0x84605eA206A1d5b39f13dC7add690dbD1e038525;
+address constant zkBobAccounting = 0xbF3D58f026642951990C0421964179C83E2c9C1B;
+address constant accountingMigrator = 0xbfF0020638011357315302727eD55C5193a95F7b;
 address constant accountingOwner = 0x14fc6a1a996A2EB889cF86e5c8cD17323bC85290;
 
 /**
@@ -105,7 +105,7 @@ contract MigrateAccounting is Script, UpgradeTest {
         AccountingMigrator migrator = AccountingMigrator(accountingMigrator);
         PoolSnapshot memory snapshot = makeSnapshot(pool);
 
-        vm.startBroadcast();
+        vm.startBroadcast(snapshot.proxyAdmin);
 
         EIP1967Proxy(payable(address(pool))).upgradeTo(address(newZkBobPoolImpl));
 
@@ -113,7 +113,7 @@ contract MigrateAccounting is Script, UpgradeTest {
 
         ZkBobAccounting(zkBobAccounting).transferOwnership(accountingMigrator);
 
-        migrator.migrate(address(pool), zkBobAccounting, snapshot.kycManager, accountingOwner, snapshot.proxyAdmin);
+        migrator.migrate(address(pool), zkBobAccounting, accountingOwner, snapshot.proxyAdmin);
 
         vm.stopBroadcast();
 

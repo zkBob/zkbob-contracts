@@ -10,16 +10,7 @@ import {EIP1967Proxy} from "../../src/proxy/EIP1967Proxy.sol";
 contract AccountingMigrator {
     constructor() {}
 
-    // TODO: Check limits
-    function migrate(
-        address _pool,
-        address _accounting,
-        address _kycManager,
-        address _accountingOwner,
-        address _proxyAdmin
-    )
-        external
-    {
+    function migrate(address _pool, address _accounting, address _accountingOwner, address _proxyAdmin) external {
         ZkBobAccounting accounting = ZkBobAccounting(_accounting);
 
         bytes memory dump = ZkBobPool(_pool).extsload(bytes32(uint256(1)), 2);
@@ -33,15 +24,11 @@ contract AccountingMigrator {
         ZkBobPool(_pool).setAccounting(IZkBobAccounting(accounting));
 
         accounting.initialize(txCount, tvl, cumTvl, maxWeeklyTxCount, maxWeeklyAvgTvl);
-        accounting.setKycProvidersManager(IKycProvidersManager(_kycManager));
         accounting.setLimits(
-            0, 2_000_000 gwei, 300_000 gwei, 300_000 gwei, 10_000 gwei, 10_000 gwei, 10_000 gwei, 1_000 gwei
+            0, 10_000_000 gwei, 300_000 gwei, 300_000 gwei, 10_000 gwei, 10_000 gwei, 10_000 gwei, 1_000 gwei
         );
         accounting.setLimits(
-            1, 2_000_000 gwei, 300_000 gwei, 300_000 gwei, 100_000 gwei, 100_000 gwei, 10_000 gwei, 1_000 gwei
-        );
-        accounting.setLimits(
-            254, 2_000_000 gwei, 300_000 gwei, 300_000 gwei, 20_000 gwei, 20_000 gwei, 10_000 gwei, 1_000 gwei
+            1, 10_000_000 gwei, 300_000 gwei, 300_000 gwei, 100_000 gwei, 100_000 gwei, 10_000 gwei, 1_000 gwei
         );
 
         accounting.transferOwnership(_accountingOwner);
