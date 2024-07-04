@@ -9,15 +9,14 @@ import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/utils/ZkBobAccounting.sol";
 import "../../src/zkbob/manager/AllowListOperatorManager.sol";
 
+// TODO: update this parameters before running the script
+address constant newZkBobPoolImpl = 0x0114Bf30d9f5A7f503D3DFC65534F2B5AC302c85;
+address constant newOperatorManager = 0xFd5a6a67D768d5BF1A8c7724387CA8786Bd4DD91;
+
 /**
  * @dev OP-USDC pool proxy address.
  */
 address constant zkBobPool = 0x1CA8C2B9B20E18e86d5b9a72370fC6c91814c97C;
-
-/**
- * @dev This address will become an owner of the new ZkBobAccounting and AllowListOperatorManager contracts.
- */
-address constant operatorManagerOwner = 0x14fc6a1a996A2EB889cF86e5c8cD17323bC85290;
 
 /**
  * @dev This value should be sufficient for dedicated prover to update the tree
@@ -29,20 +28,6 @@ uint64 constant gracePeriod = 3 minutes;
  * @dev This value should cover the cost of the tree update.
  */
 uint64 constant minTreeUpdateFee = 0.1 gwei;
-
-/**
- * @dev AllowListOperatorManager related parameters.
- */
-bool constant allowListEnabled = true;
-// TODO: Update this addresses before deployment
-address constant zkBobProxy1 = 0x7D2D146a7AD3F0Dc398AA718a9bFCa2Bc873a5FD;
-address constant zkBobProxyFeeReceiver1 = 0x7D2D146a7AD3F0Dc398AA718a9bFCa2Bc873a5FD;
-address constant zkBobProxy2 = 0xFec49782FE8e11De9Fb3Ba645a76FE914FFfe3cb;
-address constant zkBobProxyFeeReceiver2 = 0xFec49782FE8e11De9Fb3Ba645a76FE914FFfe3cb;
-address constant zkBobProver1 = 0x33a0b018340d6424870cfC686a4d02e1df792254;
-address constant zkBobProverFeeReceiver1 = 0x33a0b018340d6424870cfC686a4d02e1df792254;
-address constant zkBobProver2 = 0x63A88E69fa7adEf036fc6ED94394CC9295de2f99;
-address constant zkBobProverFeeReceiver2 = 0x63A88E69fa7adEf036fc6ED94394CC9295de2f99;
 
 // Only for checks:
 address constant relayer = 0xb9CD01c0b417b4e9095f620aE2f849A84a9B1690;
@@ -101,54 +86,20 @@ contract MigrateDecentralization is Script, UpgradeTest {
 
         vm.startBroadcast();
 
-        // 1. Deploy new ZkBobPoolUSDC implementation
-        ZkBobPoolUSDC newImpl = new ZkBobPoolUSDC(
-            pool.pool_id(),
-            pool.token(),
-            pool.transfer_verifier(),
-            pool.tree_verifier(),
-            pool.batch_deposit_verifier(),
-            address(pool.direct_deposit_queue())
-        );
+        // 1. Upgrade proxy to new implementation
+        EIP1967Proxy(payable(address(pool))).upgradeTo(address(newZkBobPoolImpl));
 
-        // 2. Upgrade proxy to new implementation
-        EIP1967Proxy(payable(address(pool))).upgradeTo(address(newImpl));
-
-        migrateDecentralization(address(pool), address(snapshot.tokenSeller));
+        // 2. Set grace period
+        ZkBobPool(pool).setGracePeriod(gracePeriod);
+        // 3. Set min tree update fee
+        ZkBobPool(pool).setMinTreeUpdateFee(minTreeUpdateFee);
+        // 4. Set token seller
+        ZkBobPoolUSDC(pool).setTokenSeller(snapshot.tokenSeller);
+        // 5. Set operator manager
+        ZkBobPool(pool).setOperatorManager(AllowListOperatorManager(newOperatorManager));
 
         vm.stopBroadcast();
 
         postCheck(ZkBobPoolUSDC(address(pool)), snapshot);
-    }
-
-    function migrateDecentralization(address _pool, address _tokenSeller) internal {
-        // 3. Set grace period
-        ZkBobPool(_pool).setGracePeriod(gracePeriod);
-        // 4. Set min tree update fee
-        ZkBobPool(_pool).setMinTreeUpdateFee(minTreeUpdateFee);
-        // 5. Set token seller
-        ZkBobPoolUSDC(_pool).setTokenSeller(_tokenSeller);
-
-        // 6. Deploy AllowListOperatorManager
-        address[] memory operators = new address[](4);
-        operators[0] = zkBobProxy1;
-        operators[1] = zkBobProver1;
-        operators[2] = zkBobProxy2;
-        operators[3] = zkBobProver2;
-
-        address[] memory feeReceivers = new address[](4);
-        feeReceivers[0] = zkBobProxyFeeReceiver1;
-        feeReceivers[1] = zkBobProverFeeReceiver1;
-        feeReceivers[2] = zkBobProxyFeeReceiver2;
-        feeReceivers[3] = zkBobProverFeeReceiver2;
-
-        AllowListOperatorManager operatorManager =
-            new AllowListOperatorManager(operators, feeReceivers, allowListEnabled);
-
-        // 7. Set operator manager
-        ZkBobPool(_pool).setOperatorManager(operatorManager);
-
-        // 8. Transfer operator manager ownership to the owner
-        operatorManager.transferOwnership(operatorManagerOwner);
     }
 }
