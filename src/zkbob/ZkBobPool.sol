@@ -72,7 +72,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     Queue.CommitmentQueue internal pendingCommitments;
 
     /**
-     * @dev The duration of the grace period during which only the privileged prover 
+     * @dev The duration of the grace period during which only the privileged prover
      * can submit the tree update proof.
      */
     uint64 public gracePeriod;
