@@ -19,6 +19,6 @@ bytes32 constant bobSalt = bytes32(uint256(285834900769));
 uint256 constant forkBlockMainnet = 16200000;
 string constant forkRpcUrlMainnet = "https://eth.llamarpc.com";
 uint256 constant forkBlockPolygon = 37000000;
-string constant forkRpcUrlPolygon = "https://polygon.llamarpc.com";
+string constant forkRpcUrlPolygon = "https://polygon-rpc.com";
 uint256 constant forkBlockOptimism = 52000000;
 string constant forkRpcUrlOptimism = "https://optimism.llamarpc.com";

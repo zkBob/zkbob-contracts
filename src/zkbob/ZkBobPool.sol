@@ -72,7 +72,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     Queue.CommitmentQueue internal pendingCommitments;
 
     /**
-     * @dev The duration of the grace period within which only the prover who submitted the transaction
+     * @dev The duration of the grace period during which only the privileged prover 
      * can submit the tree update proof.
      */
     uint64 public gracePeriod;
@@ -183,7 +183,6 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
         returns (uint256 commitment, address privilegedProver, uint64 fee, uint64 timestamp, uint64 gracePeriodEnd)
     {
         PendingCommitment memory op = pendingCommitments.front();
-        require(op.commitment != 0, "ZkBobPool: no pending commitment");
         gracePeriodEnd = op.timestamp + gracePeriod;
         return (op.commitment, op.prover, op.fee, op.timestamp, gracePeriodEnd);
     }
@@ -369,6 +368,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
      * @param _indices list of indices for queued pending deposits.
      * @param _out_commit out commitment for output notes serialized from direct deposits.
      * @param _batch_deposit_proof snark proof for batch deposit verifier.
+     * @param _prover address of the privileged prover
      */
     function appendDirectDeposits(
         uint256[] calldata _indices,
@@ -415,7 +415,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Ex
     /**
      * @dev Updates pool index and merkle tree root if the provided proof is valid and
      * the proof corresponds to the pending commitment.
-     * A prover that submitted the transfer proof has the grace period to submit the tree update proof.
+     * A prover specified in the pending commitment has a grace period to submit the tree update proof.
      * @param _commitment pending commitment to be proven.
      * @param _proof snark proof for tree update verifier.
      * @param _rootAfter new merkle tree root.
