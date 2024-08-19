@@ -288,7 +288,9 @@ abstract contract AbstractZkBobPoolDecentralizedTest is AbstractZkBobPoolTestBas
         pool.proveTreeUpdate(commitment, _randProof(), _randFR());
     }
 
-    function _prepareRandomDirectDeposits(uint256 offset)
+    function _prepareRandomDirectDeposits(
+        uint256 offset
+    )
         internal
         returns (uint256[] memory indices, uint256 commitment, uint256[8] memory proof)
     {
