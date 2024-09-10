@@ -8,6 +8,7 @@ interface IZkBobDirectDeposits {
         Pending, // requested deposit was submitted and is pending in the queue
         Completed, // requested deposit was successfully processed
         Refunded // requested deposit was refunded to the fallback receiver
+
     }
 
     struct DirectDeposit {

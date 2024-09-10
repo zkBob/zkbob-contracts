@@ -8,8 +8,7 @@ interface IZkBobAccounting {
     enum TxType {
         Common,
         DirectDeposit,
-        AppendDirectDeposits,
-        ForcedExit
+        AppendDirectDeposits
     }
 
     struct Limits {

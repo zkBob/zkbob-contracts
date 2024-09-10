@@ -11,6 +11,8 @@ interface IZkBobPoolAdmin {
 
     function pool_index() external view returns (uint256);
 
+    function pendingCommitment() external view returns (uint256, address, uint64, uint64, uint64);
+
     function initialize(uint256 _root) external;
 
     function setTokenSeller(address _tokenSeller) external;
@@ -23,40 +25,21 @@ interface IZkBobPoolAdmin {
 
     function setEnergyRedeemer(IEnergyRedeemer _redeemer) external;
 
+    function setGracePeriod(uint64 _gracePeriod) external;
+
+    function setMinTreeUpdateFee(uint64 _minTreeUpdateFee) external;
+
     function accounting() external view returns (address);
 
     function transact() external;
 
-    function committedForcedExits(uint256 _nullifier) external view returns (bytes32);
-
-    function commitForcedExit(
-        address _operator,
-        address _to,
-        uint256 _amount,
-        uint256 _index,
-        uint256 _nullifier,
-        uint256 _out_commit,
-        uint256[8] memory _transfer_proof
-    )
-        external;
-
-    function executeForcedExit(
-        uint256 _nullifier,
-        address _operator,
-        address _to,
-        uint256 _amount,
-        uint256 _exitStart,
-        uint256 _exitEnd,
-        bool _cancel
-    )
-        external;
+    function proveTreeUpdate(uint256, uint256[8] memory, uint256) external;
 
     function appendDirectDeposits(
-        uint256 _root_after,
         uint256[] calldata _indices,
         uint256 _out_commit,
         uint256[8] memory _batch_deposit_proof,
-        uint256[8] memory _tree_proof
+        address _prover
     )
         external;
 
@@ -85,4 +68,6 @@ interface IZkBobPoolAdmin {
     function direct_deposit_queue() external view returns (address);
 
     function pool_id() external view returns (uint256);
+
+    function gracePeriod() external view returns (uint64);
 }

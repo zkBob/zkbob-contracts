@@ -8,7 +8,7 @@ import "../../test/shared/EIP2470.t.sol";
 import "../../src/BobToken.sol";
 import "../../src/proxy/EIP1967Proxy.sol";
 import "../../src/zkbob/ZkBobPoolBOB.sol";
-import "../../src/zkbob/manager/MutableOperatorManager.sol";
+import {AllowListOperatorManager} from "../../src/zkbob/manager/AllowListOperatorManager.sol";
 import "../../src/zkbob/ZkBobDirectDepositQueue.sol";
 import "../../src/zkbob/utils/ZkBobAccounting.sol";
 
@@ -45,12 +45,7 @@ contract DeployLocal is Script {
         EIP1967Proxy queueProxy = new EIP1967Proxy(tx.origin, mockImpl, "");
 
         ZkBobPoolBOB poolImpl = new ZkBobPoolBOB(
-            zkBobPoolId,
-            address(bob),
-            transferVerifier,
-            treeVerifier,
-            batchDepositVerifier,
-            address(queueProxy)
+            zkBobPoolId, address(bob), transferVerifier, treeVerifier, batchDepositVerifier, address(queueProxy)
         );
         {
             bytes memory initData = abi.encodeWithSelector(ZkBobPool.initialize.selector, zkBobInitialRoot);
@@ -64,26 +59,61 @@ contract DeployLocal is Script {
 
         {
             ZkBobAccounting accounting = new ZkBobAccounting(address(pool), 1_000_000_000);
+            if (kycManager != address(0)) {
+                accounting.setKycProvidersManager(IKycProvidersManager(kycManager));
+            }
             accounting.setLimits(
                 0,
-                zkBobPoolCap,
-                zkBobDailyDepositCap,
-                zkBobDailyWithdrawalCap,
-                zkBobDailyUserDepositCap,
-                zkBobDepositCap,
-                zkBobDailyUserDirectDepositCap,
-                zkBobDirectDepositCap
+                tier0TvlCap,
+                tier0DailyDepositCap,
+                tier0DailyWithdrawalCap,
+                tier0DailyUserDepositCap,
+                tier0DepositCap,
+                tier0DailyUserDirectDepositCap,
+                tier0DirectDepositCap
+            );
+            accounting.setLimits(
+                1,
+                tier1TvlCap,
+                tier1DailyDepositCap,
+                tier1DailyWithdrawalCap,
+                tier1DailyUserDepositCap,
+                tier1DepositCap,
+                tier1DailyUserDirectDepositCap,
+                tier1DirectDepositCap
+            );
+            accounting.setLimits(
+                254,
+                tier254TvlCap,
+                tier254DailyDepositCap,
+                tier254DailyWithdrawalCap,
+                tier254DailyUserDepositCap,
+                tier254DepositCap,
+                tier254DailyUserDirectDepositCap,
+                tier254DirectDepositCap
             );
             pool.setAccounting(accounting);
         }
 
         {
-            IOperatorManager operatorManager =
-                new MutableOperatorManager(zkBobRelayer, zkBobRelayerFeeReceiver, zkBobRelayerURL);
+            address[] memory operators = new address[](2);
+            operators[0] = zkBobProxy;
+            operators[1] = zkBobProver;
+
+            address[] memory feeReceivers = new address[](2);
+            feeReceivers[0] = zkBobProxyFeeReceiver;
+            feeReceivers[1] = zkBobProverFeeReceiver;
+
+            IOperatorManager operatorManager = new AllowListOperatorManager(operators, feeReceivers, allowListEnabled);
             pool.setOperatorManager(operatorManager);
             queue.setOperatorManager(operatorManager);
             queue.setDirectDepositFee(uint64(zkBobDirectDepositFee));
             queue.setDirectDepositTimeout(uint40(zkBobDirectDepositTimeout));
+        }
+
+        {
+            pool.setGracePeriod(gracePeriod);
+            pool.setMinTreeUpdateFee(minTreeUpdateFee);
         }
 
         {
