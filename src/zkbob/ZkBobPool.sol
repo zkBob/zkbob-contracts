@@ -18,6 +18,7 @@ import "../interfaces/IERC20Permit.sol";
 import "../interfaces/ITokenSeller.sol";
 import "../interfaces/IZkBobDirectDepositQueue.sol";
 import "../interfaces/IZkBobPool.sol";
+import "../interfaces/IUSDC.sol";
 import "./utils/Parameters.sol";
 import "./utils/ZkBobAccounting.sol";
 import "../utils/Ownable.sol";
@@ -34,7 +35,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
     bytes4 internal constant MESSAGE_PREFIX_COMMON_V1 = 0x00000000;
 
     uint256 internal immutable TOKEN_DENOMINATOR;
-    uint256 internal constant TOKEN_NUMERATOR = 1;
+    uint256 internal constant TOKEN_NUMERATOR = 1000;
 
     uint256 public immutable pool_id;
     ITransferVerifier public immutable transfer_verifier;
@@ -50,6 +51,20 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
     bytes32 public all_messages_hash;
 
     mapping(address => uint256) public accumulatedFee;
+
+    struct WithdrawalClaim {
+        address user;
+        uint96 amount;
+    }
+
+    WithdrawalClaim[] public withdrawalClaims;
+    address public redemptionOperator;
+    bool public withdrawalQueueDisabled;
+    uint256 public nextRedeemIndex;
+    uint256 public totalPendingClaims;
+
+    event AddWithdrawalClaim(uint256 indexed index, address indexed user, uint256 amount);
+    event RedeemWithdrawalClaim(uint256 indexed index, address indexed user, uint256 amount);
 
     event UpdateOperatorManager(address manager);
     event WithdrawFee(address indexed operator, uint256 fee);
@@ -194,10 +209,12 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         address user = msg.sender;
         uint256 txType = _tx_type();
         if (txType == 0) {
+            revert("ZkBobPool: deposits disabled");
             user = _deposit_spender();
         } else if (txType == 2) {
             user = _memo_receiver();
         } else if (txType == 3) {
+            revert("ZkBobPool: deposits disabled");
             user = _memo_permit_holder();
         }
         int256 transfer_token_delta = _transfer_token_amount();
@@ -255,11 +272,19 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
             uint256 withdraw_amount = uint256(-token_amount) * TOKEN_DENOMINATOR / TOKEN_NUMERATOR;
 
             if (native_amount > 0) {
+                revert("ZkBobPool: native withdrawals disabled");
                 withdraw_amount -= _withdrawNative(user, native_amount);
             }
 
             if (withdraw_amount > 0) {
-                IERC20(token).safeTransfer(user, withdraw_amount);
+                if (withdrawalQueueDisabled) {
+                    IERC20(token).safeTransfer(user, withdraw_amount);
+                } else {
+                    require(!IUSDC(token).isBlacklisted(user), "ZkBobPool: user is blacklisted");
+                    withdrawalClaims.push(WithdrawalClaim({user: user, amount: uint96(withdraw_amount)}));
+                    totalPendingClaims += withdraw_amount;
+                    emit AddWithdrawalClaim(withdrawalClaims.length - 1, user, withdraw_amount);
+                }
             }
 
             // energy withdrawals are not yet implemented, any transaction with non-zero energy_amount will revert
@@ -278,6 +303,36 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         if (fee > 0) {
             accumulatedFee[msg.sender] += fee;
         }
+    }
+
+    function setRedemptionOperator(address _redemptionOperator) external {
+        require(msg.sender == redemptionOperator || msg.sender == owner() || msg.sender == _admin(), "ZkBobPool: not authorized");
+        redemptionOperator = _redemptionOperator;
+    }
+
+    function withdrawalClaimsCount() external view returns (uint256) {
+        return withdrawalClaims.length;
+    }
+
+    function disableWithdrawalQueue() external {
+        require(!withdrawalQueueDisabled && msg.sender == redemptionOperator, "ZkBobPool: not authorized");
+        require(withdrawalClaims.length == nextRedeemIndex && totalPendingClaims == 0, "ZkBobPool: withdrawal queue not empty");
+        withdrawalQueueDisabled = true;
+    }
+
+    function redeemUpTo(uint256 _index) external {
+        require(!withdrawalQueueDisabled && msg.sender == redemptionOperator, "ZkBobPool: not authorized");
+        require(nextRedeemIndex <= _index && _index < withdrawalClaims.length, "ZkBobPool: no claims to redeem");
+
+        uint256 totalAmount = 0;
+        for (uint256 i = nextRedeemIndex; i <= _index; ++i) {
+            WithdrawalClaim memory claim = withdrawalClaims[i];
+            totalAmount += claim.amount;
+            IERC20(token).safeTransfer(claim.user, claim.amount);
+            emit RedeemWithdrawalClaim(i, claim.user, claim.amount);
+        }
+        nextRedeemIndex = _index + 1;
+        totalPendingClaims -= totalAmount;
     }
 
     /**
@@ -299,6 +354,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
         external
         onlyOperator
     {
+        revert("ZkBobPool: deposits disabled");
         (uint256 total, uint256 totalFee, uint256 hashsum, bytes memory message) =
             direct_deposit_queue.collect(_indices, _out_commit);
 
@@ -333,6 +389,7 @@ abstract contract ZkBobPool is IZkBobPool, EIP1967Admin, Ownable, Parameters, Zk
      * @param _amount direct deposit amount in zkBOB units.
      */
     function recordDirectDeposit(address _sender, uint256 _amount) external {
+        revert("ZkBobPool: deposits disabled");
         require(msg.sender == address(direct_deposit_queue), "ZkBobPool: not authorized");
         _checkDirectDepositLimits(_sender, _amount);
     }
