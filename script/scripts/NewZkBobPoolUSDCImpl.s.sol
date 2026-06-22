@@ -16,10 +16,16 @@ contract DeployNewZkBobPoolUSDCImpl is Script {
 
         vm.startBroadcast();
 
+        ITransferVerifier transferVerifier;
+        bytes memory code1 = vm.getCode(string.concat("out/prodV3/TransferVerifier.sol/TransferVerifier.json"));
+        assembly {
+            transferVerifier := create(0, add(code1, 0x20), mload(code1))
+        }
+
         ZkBobPoolUSDC newImpl = new ZkBobPoolUSDC(
             pool.pool_id(),
             pool.token(),
-            pool.transfer_verifier(),
+            transferVerifier,
             pool.tree_verifier(),
             pool.batch_deposit_verifier(),
             address(pool.direct_deposit_queue())
@@ -27,6 +33,7 @@ contract DeployNewZkBobPoolUSDCImpl is Script {
 
         vm.stopBroadcast();
 
+        console2.log("TransferVerifier:", address(transferVerifier));
         console2.log("ZkBobPoolUSDC implementation:", address(newImpl));
     }
 }
