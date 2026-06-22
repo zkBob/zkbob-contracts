@@ -12,10 +12,16 @@ contract DeployNewZkBobPoolETHImpl is Script {
 
         ZkBobPoolETH pool = ZkBobPoolETH(payable(zkBobPool));
 
+        ITransferVerifier transferVerifier;
+        bytes memory code1 = vm.getCode(string.concat("out/prodV3/TransferVerifier.sol/TransferVerifier.json"));
+        assembly {
+            transferVerifier := create(0, add(code1, 0x20), mload(code1))
+        }
+
         ZkBobPoolETH impl = new ZkBobPoolETH(
             pool.pool_id(),
             pool.token(),
-            pool.transfer_verifier(),
+            transferVerifier,
             pool.tree_verifier(),
             pool.batch_deposit_verifier(),
             address(pool.direct_deposit_queue()),
@@ -24,6 +30,7 @@ contract DeployNewZkBobPoolETHImpl is Script {
 
         vm.stopBroadcast();
 
+        console2.log("TransferVerifier:", address(transferVerifier));
         console2.log("ZkBobPoolETH implementation:", address(impl));
     }
 }
