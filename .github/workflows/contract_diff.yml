@@ -33,10 +33,6 @@ on:
         description: 'Source contract address'
         type: string
         required: false
-      etherscan_api_key:
-        description: 'Etherscan API key'
-        type: string
-        required: false
 env:
   FOUNDRY_PROFILE: ci
 
@@ -54,13 +50,13 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: stable
         id: init
 
       - name: Fetch target contract source code from Etherscan
         run: |
           mkdir -p tmp/
-          cast etherscan-source -c ${{ inputs.chain }} ${{ inputs.target_contract_address }} --etherscan-api-key ${{ inputs.etherscan_api_key }} -d tmp/target
+          cast source -c ${{ inputs.chain }} ${{ inputs.target_contract_address }} --etherscan-api-key ${{ secrets.ETHERSCAN_API_KEY }} -d tmp/target
 
       - name: Fetch source contract from local sources
         if: inputs.source == 'source_code'
@@ -72,7 +68,7 @@ jobs:
         if: inputs.source == 'deployed_contract'
         run: |
           mkdir -p tmp/
-          cast etherscan-source -c ${{ inputs.chain }} ${{ inputs.source_contract_address }} --etherscan-api-key ${{ inputs.etherscan_api_key }} -d tmp/source
+          cast source -c ${{ inputs.chain }} ${{ inputs.source_contract_address }} --etherscan-api-key ${{ secrets.ETHERSCAN_API_KEY }} -d tmp/source
 
       - name: Eval diff between two deployed verified contracts
         if: inputs.source == 'deployed_contract'
@@ -88,14 +84,14 @@ jobs:
           git diff --no-index --diff-filter=ACM -- tmp/source/* tmp/target/* > diff.txt || true
           cat diff.txt
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v7
         with:
-          name: contract.diff
+          name: ${{ inputs.chain }}_${{ inputs.source_contract_address }}_${{ inputs.target_contract_address }}.diff
           path: diff.txt
 
-      - name: Publish diff
+      - name: Publish diff to Gist
+        env:
+          GH_TOKEN: ${{ secrets.GIST_TOKEN }}
         run: |
-          DIFF=$(jq --null-input --arg diff "$(cat diff.txt)" '{"diff": $diff}')
-          RESPONSE=$(curl -X PUT https://diffy.org/api/diff/ -H "content-type: application/json" -d "$DIFF")
-          ID=$(echo $RESPONSE | grep -o '"id":"[^,}]*"' | sed 's/.*://' | sed 's/"//g')
-          echo "https://diffy.org/diff/$ID"
+          mv diff.txt ${{ inputs.chain }}_${{ inputs.source_contract_address }}_${{ inputs.target_contract_address }}.diff
+          gh gist create ${{ inputs.chain }}_${{ inputs.source_contract_address }}_${{ inputs.target_contract_address }}.diff
